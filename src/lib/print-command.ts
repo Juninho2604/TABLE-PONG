@@ -101,11 +101,11 @@ export function printReceipt(data: ReceiptData) {
 <body>
     <div class="header text-center">
         <!-- Puedes reemplazar esto con una imagen <img> tag base64 si tienes el logo -->
-        <div class="logo-font">Shanklish</div>
-        <div style="font-size: 10px;">- Caracas -</div>
+        <div class="logo-font">TABLE PONG</div>
+        <div style="font-size: 10px;">- Santa Paula -</div>
         
-        <div class="bold upppercase" style="margin-top: 5px;">SHANKLISH CARACAS, C.A</div>
-        <div class="bold">J-41308727-8</div>
+        <div class="bold upppercase" style="margin-top: 5px;">TABLE PONG SANTA PAULA</div>
+        <div class="bold">RIF</div>
         <div class="bold" style="margin-top: 5px;">RECIBO DE PAGO</div>
     </div>
     

@@ -1,6 +1,23 @@
 # Deploy Table Pong ERP en Vercel
 
-## Variables de entorno en Vercel
+## 1. Subir a GitHub
+
+Si aún no creaste el repositorio:
+
+1. Ve a [github.com/new](https://github.com/new)
+2. Nombre sugerido: `tablepong-erp`
+3. Crea el repo **sin** README ni .gitignore (ya existen)
+4. Ejecuta en tu proyecto:
+
+```bash
+git remote add origin https://github.com/TU_USUARIO/tablepong-erp.git
+git branch -M main
+git push -u origin main
+```
+
+(Reemplaza `TU_USUARIO` por tu usuario de GitHub)
+
+## 2. Variables de entorno en Vercel
 
 En **Vercel Dashboard** → tu proyecto → **Settings** → **Environment Variables**, agrega:
 

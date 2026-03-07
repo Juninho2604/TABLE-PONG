@@ -42,25 +42,20 @@ async function main() {
     });
     console.log('✅ Usuarios creados');
 
-    // 2. Áreas
-    await prisma.area.upsert({
-        where: { id: 'area-almacen-tp' },
-        update: {},
-        create: {
-            id: 'area-almacen-tp',
-            name: 'Almacén Principal',
-            description: 'Almacén de insumos',
-        },
-    });
-    await prisma.area.upsert({
-        where: { id: 'area-barra-tp' },
-        update: {},
-        create: {
-            id: 'area-barra-tp',
-            name: 'Barra Principal',
-            description: 'Área de descarga POS',
-        },
-    });
+    // 2. Áreas / Almacenes
+    const areas = [
+        { id: 'area-oficina-tp', name: 'OFICINA', description: 'Oficina principal' },
+        { id: 'area-barra-tp', name: 'BARRA', description: 'Barra principal' },
+        { id: 'area-deposito-barra-tp', name: 'DEPOSITO BARRA', description: 'Depósito de barra' },
+        { id: 'area-deposito-store-tp', name: 'DEPOSITO STORE', description: 'Depósito tienda' },
+    ];
+    for (const a of areas) {
+        await prisma.area.upsert({
+            where: { id: a.id },
+            update: { name: a.name, description: a.description },
+            create: a,
+        });
+    }
     console.log('✅ Áreas creadas');
 
     // 3. Menús - Categorías e ítems

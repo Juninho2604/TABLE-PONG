@@ -47,7 +47,6 @@ export async function createQuickItem(data: {
         revalidatePath('/dashboard/inventario/entrada');
         revalidatePath('/dashboard/transferencias');
         revalidatePath('/dashboard/compras');
-        revalidatePath('/dashboard/proteinas');
 
         return { success: true, message: 'Item creado exitosamente', item };
     } catch (error) {
