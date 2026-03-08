@@ -113,12 +113,12 @@ const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data, exchan
                             <span className="mr-2">X</span>
                             <span className="mr-2">$ {item.unitPrice.toFixed(2)}</span>
                             <span className="mr-2">=</span>
-                            <span className="w-14 text-right">
-                                $ {item.lineTotal.toFixed(2)}
+                            <div className="w-14 text-right">
+                                <div>$ {item.lineTotal.toFixed(2)}</div>
                                 {exchangeRate && exchangeRate > 0 && (
-                                    <span className="block text-[10px] text-gray-600">{formatBs(usdToBs(item.lineTotal, exchangeRate))}</span>
+                                    <div className="text-[10px] text-gray-600">{formatBs(usdToBs(item.lineTotal, exchangeRate))}</div>
                                 )}
-                            </span>
+                            </div>
                         </div>
                         {/* Modificadores */}
                         {item.modifiers.length > 0 && (
@@ -148,12 +148,12 @@ const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data, exchan
 
                 <div className="flex justify-between w-48 font-bold text-[14px] mt-1">
                     <span>Total:</span>
-                    <span>
-                        $ {data.total.toFixed(2)}
+                    <div className="text-right">
+                        <div>$ {data.total.toFixed(2)}</div>
                         {exchangeRate && exchangeRate > 0 && (
-                            <span className="block text-[10px] font-normal text-gray-600">{formatBs(usdToBs(data.total, exchangeRate))}</span>
+                            <div className="text-[10px] font-normal text-gray-600">{formatBs(usdToBs(data.total, exchangeRate))}</div>
                         )}
-                    </span>
+                    </div>
                 </div>
 
                 {/* Servicio (Simulado o real, en la imagen sale) */}
@@ -163,12 +163,12 @@ const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data, exchan
                 </div>
                 <div className="flex justify-between w-48 font-bold mt-1 text-[12px]">
                     <span>Total Sugerido:</span>
-                    <span>
-                        $ {(data.total * 1.10).toFixed(2)}
+                    <div className="text-right">
+                        <div>$ {(data.total * 1.10).toFixed(2)}</div>
                         {exchangeRate && exchangeRate > 0 && (
-                            <span className="block text-[10px] font-normal text-gray-600">{formatBs(usdToBs(data.total * 1.10, exchangeRate))}</span>
+                            <div className="text-[10px] font-normal text-gray-600">{formatBs(usdToBs(data.total * 1.10, exchangeRate))}</div>
                         )}
-                    </span>
+                    </div>
                 </div>
 
                 <div className="flex justify-between w-48 mt-2 text-[10px] italic">
