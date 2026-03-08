@@ -1,4 +1,6 @@
-import { getExchangeRateForDisplay, getExchangeRateHistory, BCV_URL } from '@/app/actions/exchange.actions';
+import { getExchangeRateForDisplay, getExchangeRateHistory } from '@/app/actions/exchange.actions';
+
+const BCV_URL = 'https://www.bcv.org.ve/';
 import { TasaCambioView } from './tasa-cambio-view';
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';

@@ -4,8 +4,6 @@ import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 
-const BCV_URL = 'https://www.bcv.org.ve/';
-
 export async function getCurrentExchangeRate() {
     const rate = await prisma.exchangeRate.findFirst({
         orderBy: { effectiveDate: 'desc' },
@@ -60,5 +58,3 @@ export async function getExchangeRateHistory(limit = 10) {
         take: limit,
     });
 }
-
-export { BCV_URL };

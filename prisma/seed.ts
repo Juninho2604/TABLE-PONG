@@ -391,8 +391,8 @@ async function main() {
                 id: `cat-${cat.sortOrder}`,
                 name: cat.name,
                 sortOrder: cat.sortOrder,
-            },
-        });
+        },
+    });
 
         for (const item of cat.items) {
             await prisma.menuItem.upsert({
@@ -402,15 +402,15 @@ async function main() {
                     price: item.price,
                     serviceCategory: item.serviceCategory || null,
                 },
-                create: {
+        create: {
                     sku: item.sku,
                     name: item.name,
                     categoryId: category.id,
                     price: item.price,
                     serviceCategory: item.serviceCategory || null,
                     kitchenRouting: item.serviceCategory === 'FOOD' ? 'KITCHEN' : item.serviceCategory === 'COCKTAIL' ? 'BAR' : 'NONE',
-                },
-            });
+        },
+    });
         }
     }
 
