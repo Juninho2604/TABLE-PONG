@@ -97,6 +97,69 @@ export async function toggleUserStatus(userId: string, isActive: boolean) {
 }
 
 /**
+ * Crear nuevo usuario (solo OWNER y ADMIN_MANAGER)
+ */
+export async function createUserAction(data: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    password: string;
+    pin?: string;
+}) {
+    const session = await getSession();
+
+    if (!session) {
+        return { success: false, message: 'No autenticado' };
+    }
+
+    if (!hasPermission(session.role, PERMISSIONS.MANAGE_USERS)) {
+        return { success: false, message: 'No tienes permisos para crear usuarios' };
+    }
+
+    const { email, firstName, lastName, role, password, pin } = data;
+    const emailTrim = email.trim().toLowerCase();
+    if (!emailTrim || !firstName?.trim() || !lastName?.trim() || !role || !password) {
+        return { success: false, message: 'Completa todos los campos obligatorios' };
+    }
+
+    if (password.length < 6) {
+        return { success: false, message: 'La contraseña debe tener al menos 6 caracteres' };
+    }
+
+    if (!emailTrim.endsWith('@tablepong.com')) {
+        return { success: false, message: 'El email debe ser @tablepong.com' };
+    }
+
+    try {
+        const existing = await prisma.user.findUnique({
+            where: { email: emailTrim },
+        });
+        if (existing) {
+            return { success: false, message: 'Ya existe un usuario con ese email' };
+        }
+
+        await prisma.user.create({
+            data: {
+                email: emailTrim,
+                firstName: firstName.trim(),
+                lastName: lastName.trim(),
+                role: role as any,
+                passwordHash: password,
+                pin: pin?.trim() || null,
+            },
+        });
+
+        revalidatePath('/dashboard/usuarios');
+        revalidatePath('/dashboard/config/roles');
+        return { success: true, message: 'Usuario creado correctamente' };
+    } catch (error) {
+        console.error('Error creating user:', error);
+        return { success: false, message: 'Error al crear el usuario' };
+    }
+}
+
+/**
  * Cambiar contraseña del usuario actual
  */
 export async function changePasswordAction(currentPassword: string, newPassword: string) {

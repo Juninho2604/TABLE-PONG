@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { UserRole } from '@/types';
 import { ROLE_INFO } from '@/lib/constants/roles';
-import { updateUserRole, toggleUserStatus } from '@/app/actions/user.actions';
+import { updateUserRole, toggleUserStatus, createUserAction } from '@/app/actions/user.actions';
 import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth.store';
@@ -21,6 +21,8 @@ export default function UsersView({ initialUsers }: UsersViewProps) {
     const [users, setUsers] = useState(initialUsers);
     const [editingUser, setEditingUser] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [showCreateForm, setShowCreateForm] = useState(false);
+    const [createForm, setCreateForm] = useState({ email: '', firstName: '', lastName: '', role: 'CASHIER_RESTAURANT', password: '', pin: '' });
 
     // Filter sensitive users (like other OWNERS) if not OWNER?
     // Requirement: "claro cada quien con su debido limite de informacion a excepcion de los dueños"
@@ -65,6 +67,26 @@ export default function UsersView({ initialUsers }: UsersViewProps) {
         }
     };
 
+    const handleCreateUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        try {
+            const res = await createUserAction(createForm);
+            if (res.success) {
+                toast.success(res.message);
+                setShowCreateForm(false);
+                setCreateForm({ email: '', firstName: '', lastName: '', role: 'CASHIER_RESTAURANT', password: '', pin: '' });
+                window.location.reload();
+            } else {
+                toast.error(res.message);
+            }
+        } catch {
+            toast.error('Error al crear usuario');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <div className="space-y-6 animate-in">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -76,7 +98,96 @@ export default function UsersView({ initialUsers }: UsersViewProps) {
                         {users.length} usuarios registrados
                     </p>
                 </div>
+                {canManageUsers && (
+                    <button
+                        onClick={() => setShowCreateForm(!showCreateForm)}
+                        className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90"
+                    >
+                        {showCreateForm ? 'Cancelar' : '+ Nuevo Usuario'}
+                    </button>
+                )}
             </div>
+
+            {showCreateForm && canManageUsers && (
+                <form onSubmit={handleCreateUser} className="rounded-xl border border-gray-200 bg-white p-6 dark:border-gray-700 dark:bg-gray-800">
+                    <h3 className="mb-4 font-semibold">Crear usuario</h3>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email *</label>
+                            <input
+                                type="email"
+                                value={createForm.email}
+                                onChange={e => setCreateForm(f => ({ ...f, email: e.target.value }))}
+                                placeholder="usuario@tablepong.com"
+                                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Contraseña *</label>
+                            <input
+                                type="password"
+                                value={createForm.password}
+                                onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))}
+                                placeholder="Mínimo 6 caracteres"
+                                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                                required
+                                minLength={6}
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nombre *</label>
+                            <input
+                                type="text"
+                                value={createForm.firstName}
+                                onChange={e => setCreateForm(f => ({ ...f, firstName: e.target.value }))}
+                                placeholder="Ej: Juan"
+                                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Apellido *</label>
+                            <input
+                                type="text"
+                                value={createForm.lastName}
+                                onChange={e => setCreateForm(f => ({ ...f, lastName: e.target.value }))}
+                                placeholder="Ej: Pérez"
+                                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Rol *</label>
+                            <select
+                                value={createForm.role}
+                                onChange={e => setCreateForm(f => ({ ...f, role: e.target.value }))}
+                                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                            >
+                                {Object.entries(ROLE_INFO).map(([key, info]) => (
+                                    <option key={key} value={key}>{info.labelEs}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">PIN (opcional)</label>
+                            <input
+                                type="text"
+                                value={createForm.pin}
+                                onChange={e => setCreateForm(f => ({ ...f, pin: e.target.value }))}
+                                placeholder="4-6 dígitos"
+                                maxLength={6}
+                                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-gray-600 dark:bg-gray-700"
+                            />
+                        </div>
+                    </div>
+                    <div className="mt-4">
+                        <button type="submit" disabled={isLoading} className="rounded-lg bg-primary px-4 py-2 text-white hover:bg-primary/90 disabled:opacity-50">
+                            {isLoading ? 'Creando...' : 'Crear usuario'}
+                        </button>
+                    </div>
+                </form>
+            )}
 
             <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div className="overflow-x-auto">

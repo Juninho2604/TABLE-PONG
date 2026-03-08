@@ -147,6 +147,7 @@ const secondaryNavigation: NavItem[] = [
         roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'HR_MANAGER', 'AUDITOR'],
     },
     { label: 'Roles y Permisos', href: '/dashboard/config/roles', icon: '⚙️', roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] },
+    { label: 'Almacenes', href: '/dashboard/almacenes', icon: '📦', roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] },
 ];
 
 
