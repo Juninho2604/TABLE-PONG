@@ -1,0 +1,64 @@
+'use server';
+
+import prisma from '@/server/db';
+import { getSession } from '@/lib/auth';
+import { revalidatePath } from 'next/cache';
+
+const BCV_URL = 'https://www.bcv.org.ve/';
+
+export async function getCurrentExchangeRate() {
+    const rate = await prisma.exchangeRate.findFirst({
+        orderBy: { effectiveDate: 'desc' },
+    });
+    return rate;
+}
+
+export async function getExchangeRateForDisplay() {
+    const rate = await getCurrentExchangeRate();
+    if (!rate) return null;
+    return {
+        rate: rate.rate,
+        effectiveDate: rate.effectiveDate,
+        source: rate.source,
+        formatted: `1 USD = ${rate.rate.toLocaleString('es-VE', { minimumFractionDigits: 2 })} Bs`,
+    };
+}
+
+/** Para uso en client components (POS, etc.) - devuelve solo el número de la tasa o null */
+export async function getExchangeRateValue(): Promise<number | null> {
+    const rate = await getCurrentExchangeRate();
+    return rate ? rate.rate : null;
+}
+
+export async function setExchangeRateAction(rate: number, effectiveDate: Date) {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' };
+    if (session.role !== 'OWNER') return { success: false, message: 'Solo el dueño puede actualizar la tasa' };
+
+    if (rate <= 0) return { success: false, message: 'La tasa debe ser mayor a 0' };
+
+    try {
+        await prisma.exchangeRate.create({
+            data: {
+                rate,
+                effectiveDate,
+                source: 'BCV',
+            },
+        });
+        revalidatePath('/dashboard/config/tasa-cambio');
+        revalidatePath('/dashboard');
+        return { success: true, message: 'Tasa actualizada correctamente' };
+    } catch (error) {
+        console.error('Error setting exchange rate:', error);
+        return { success: false, message: 'Error al guardar la tasa' };
+    }
+}
+
+export async function getExchangeRateHistory(limit = 10) {
+    return prisma.exchangeRate.findMany({
+        orderBy: { effectiveDate: 'desc' },
+        take: limit,
+    });
+}
+
+export { BCV_URL };

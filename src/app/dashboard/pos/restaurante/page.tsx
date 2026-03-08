@@ -4,7 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 
 import PrintTicket from '@/components/pos/PrintTicket';
 import { createSalesOrderAction, getMenuForPOSAction, validateManagerPinAction, type CartItem } from '@/app/actions/pos.actions';
+import { getExchangeRateValue } from '@/app/actions/exchange.actions';
 import { printReceipt, printKitchenCommand } from '@/lib/print-command';
+import { PriceDisplay } from '@/components/pos/PriceDisplay';
 
 // ============================================================================
 
@@ -149,6 +151,7 @@ export default function POSRestaurantPage() {
     const [categories, setCategories] = useState<any[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+    const [exchangeRate, setExchangeRate] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     const [cart, setCart] = useState<CartItem[]>([]);
@@ -188,13 +191,17 @@ export default function POSRestaurantPage() {
     useEffect(() => {
         async function loadMenu() {
             try {
-                const result = await getMenuForPOSAction();
-                if (result.success && result.data) {
-                    setCategories(result.data);
-                    if (result.data.length > 0) {
-                        setSelectedCategory(result.data[0].id);
+                const [menuResult, rate] = await Promise.all([
+                    getMenuForPOSAction(),
+                    getExchangeRateValue(),
+                ]);
+                if (menuResult.success && menuResult.data) {
+                    setCategories(menuResult.data);
+                    if (menuResult.data.length > 0) {
+                        setSelectedCategory(menuResult.data[0].id);
                     }
                 }
+                setExchangeRate(rate);
             } catch (error) {
                 console.error('Error cargando menú:', error);
             } finally {
@@ -448,7 +455,9 @@ export default function POSRestaurantPage() {
                             {menuItems.map(item => (
                                 <button key={item.id} onClick={() => handleAddToCart(item)} className="bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-amber-500/50 rounded-2xl p-5 text-left transition-all hover:scale-[1.01] h-40 flex flex-col justify-between shadow-lg">
                                     <div className="font-bold text-lg leading-tight line-clamp-2">{item.name}</div>
-                                    <div className="text-3xl font-black text-amber-500">${item.price.toFixed(2)}</div>
+                                    <div className="text-3xl font-black text-amber-500">
+                                        <PriceDisplay usd={item.price} rate={exchangeRate} size="lg" />
+                                    </div>
                                 </button>
                             ))}
                         </div>
@@ -476,7 +485,9 @@ export default function POSRestaurantPage() {
                                             {item.notes && <div className="text-xs text-amber-300 mt-1 pl-7 italic">"{item.notes}"</div>}
                                         </div>
                                         <div className="text-right">
-                                            <div className="font-bold text-amber-400">${item.lineTotal.toFixed(2)}</div>
+                                            <div className="font-bold text-amber-400">
+                                                <PriceDisplay usd={item.lineTotal} rate={exchangeRate} size="sm" />
+                                            </div>
                                             <button onClick={() => removeFromCart(i)} className="text-red-400 text-xs hover:underline mt-1">Quitar</button>
                                         </div>
                                     </div>
@@ -504,7 +515,7 @@ export default function POSRestaurantPage() {
                                     <input type="number" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded p-1 text-right text-white font-bold" />
                                 </div>
                             )}
-                            <div className="flex justify-between text-lg font-bold"><span>Total</span> <span>${finalTotal.toFixed(2)}</span></div>
+                            <div className="flex justify-between text-lg font-bold"><span>Total</span> <span><PriceDisplay usd={finalTotal} rate={exchangeRate} size="md" /></span></div>
                             {paymentMethod === 'CASH' && changeAmount > 0 && <div className="flex justify-between text-green-400 text-sm"><span>Cambio</span> <span>${changeAmount.toFixed(2)}</span></div>}
                         </div>
                         <button onClick={handleCheckout} disabled={cart.length === 0 || isProcessing} className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-black text-xl shadow-lg disabled:opacity-50">
@@ -526,7 +537,7 @@ export default function POSRestaurantPage() {
                         <div className="p-5 border-b border-gray-700 flex justify-between items-start bg-gray-850">
                             <div>
                                 <h3 className="text-2xl font-bold text-white leading-none">{selectedItemForModifier.name}</h3>
-                                <p className="text-amber-500 font-bold text-xl mt-1">${selectedItemForModifier.price.toFixed(2)}</p>
+                                <p className="text-amber-500 font-bold text-xl mt-1"><PriceDisplay usd={selectedItemForModifier.price} rate={exchangeRate} size="md" /></p>
                             </div>
                             <button onClick={() => setShowModifierModal(false)} className="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
                         </div>
@@ -672,6 +683,7 @@ export default function POSRestaurantPage() {
                 <div style={{ display: 'none' }}>
                     <PrintTicket
                         ref={ticketRef}
+                        exchangeRate={exchangeRate}
                         data={{
                             orderNumber: lastOrder.orderNumber,
                             orderType: 'RESTAURANT', // Siempre es restaurant aqui

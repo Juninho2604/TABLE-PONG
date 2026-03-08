@@ -1,6 +1,7 @@
 'use client';
 
 import { forwardRef } from 'react';
+import { usdToBs, formatBs } from '@/lib/currency';
 
 interface TicketItem {
     name: string;
@@ -28,9 +29,10 @@ interface TicketData {
 
 interface PrintTicketProps {
     data: TicketData;
+    exchangeRate?: number | null;
 }
 
-const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data }, ref) => {
+const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data, exchangeRate }, ref) => {
     const formatDate = (date: Date) => {
         return date.toLocaleDateString('es-VE', {
             weekday: 'long',
@@ -111,7 +113,12 @@ const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data }, ref)
                             <span className="mr-2">X</span>
                             <span className="mr-2">$ {item.unitPrice.toFixed(2)}</span>
                             <span className="mr-2">=</span>
-                            <span className="w-14 text-right">$ {item.lineTotal.toFixed(2)}</span>
+                            <span className="w-14 text-right">
+                                $ {item.lineTotal.toFixed(2)}
+                                {exchangeRate && exchangeRate > 0 && (
+                                    <span className="block text-[10px] text-gray-600">{formatBs(usdToBs(item.lineTotal, exchangeRate))}</span>
+                                )}
+                            </span>
                         </div>
                         {/* Modificadores */}
                         {item.modifiers.length > 0 && (
@@ -141,7 +148,12 @@ const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data }, ref)
 
                 <div className="flex justify-between w-48 font-bold text-[14px] mt-1">
                     <span>Total:</span>
-                    <span>$ {data.total.toFixed(2)}</span>
+                    <span>
+                        $ {data.total.toFixed(2)}
+                        {exchangeRate && exchangeRate > 0 && (
+                            <span className="block text-[10px] font-normal text-gray-600">{formatBs(usdToBs(data.total, exchangeRate))}</span>
+                        )}
+                    </span>
                 </div>
 
                 {/* Servicio (Simulado o real, en la imagen sale) */}
@@ -151,7 +163,12 @@ const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data }, ref)
                 </div>
                 <div className="flex justify-between w-48 font-bold mt-1 text-[12px]">
                     <span>Total Sugerido:</span>
-                    <span>$ {(data.total * 1.10).toFixed(2)}</span>
+                    <span>
+                        $ {(data.total * 1.10).toFixed(2)}
+                        {exchangeRate && exchangeRate > 0 && (
+                            <span className="block text-[10px] font-normal text-gray-600">{formatBs(usdToBs(data.total * 1.10, exchangeRate))}</span>
+                        )}
+                    </span>
                 </div>
 
                 <div className="flex justify-between w-48 mt-2 text-[10px] italic">

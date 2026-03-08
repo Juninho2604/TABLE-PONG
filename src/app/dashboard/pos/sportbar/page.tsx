@@ -10,7 +10,9 @@ import {
     registerOpenTabPaymentAction,
     type CartItem,
 } from '@/app/actions/pos.actions';
+import { getExchangeRateValue } from '@/app/actions/exchange.actions';
 import { printKitchenCommand } from '@/lib/print-command';
+import { PriceDisplay } from '@/components/pos/PriceDisplay';
 
 interface ModifierOption {
     id: string;
@@ -122,6 +124,7 @@ export default function POSSportBarPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
 
+    const [exchangeRate, setExchangeRate] = useState<number | null>(null);
     const [showModifierModal, setShowModifierModal] = useState(false);
     const [selectedItemForModifier, setSelectedItemForModifier] = useState<MenuItem | null>(null);
     const [currentModifiers, setCurrentModifiers] = useState<SelectedModifier[]>([]);
@@ -146,6 +149,9 @@ export default function POSSportBarPage() {
                 setLayout(nextLayout);
                 setSelectedZoneId(prev => prev || nextLayout.serviceZones[0]?.id || '');
             }
+
+            const rate = await getExchangeRateValue();
+            setExchangeRate(rate);
         } catch (error) {
             console.error('Error loading sport bar data:', error);
         } finally {
@@ -472,7 +478,7 @@ export default function POSSportBarPage() {
                                     </div>
                                     {tab && (
                                         <div className="mt-3 text-sm font-semibold text-primary">
-                                            ${tab.balanceDue.toFixed(2)}
+                                            <PriceDisplay usd={tab.balanceDue} rate={exchangeRate} size="sm" />
                                         </div>
                                     )}
                                 </button>
@@ -545,7 +551,9 @@ export default function POSSportBarPage() {
                                 className="flex h-36 flex-col justify-between rounded-2xl border border-slate-700 bg-slate-900 p-4 text-left shadow-lg transition hover:border-primary/60 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                                 <div className="line-clamp-2 text-lg font-bold">{item.name}</div>
-                                <div className="text-3xl font-black text-primary">${item.price.toFixed(2)}</div>
+                                <div className="text-3xl font-black text-primary">
+                                    <PriceDisplay usd={item.price} rate={exchangeRate} size="lg" />
+                                </div>
                             </button>
                         ))}
                     </div>
@@ -568,7 +576,9 @@ export default function POSSportBarPage() {
                                     </div>
                                     <div className="text-right">
                                         <div className="text-xs uppercase tracking-wide text-slate-400">Saldo</div>
-                                        <div className="text-2xl font-black text-primary">${activeTab.balanceDue.toFixed(2)}</div>
+                                        <div className="text-2xl font-black text-primary">
+                                            <PriceDisplay usd={activeTab.balanceDue} rate={exchangeRate} size="lg" />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -576,7 +586,9 @@ export default function POSSportBarPage() {
                             <div className="mb-4 rounded-2xl border border-slate-700 bg-slate-800 p-4">
                                 <div className="mb-3 flex items-center justify-between">
                                     <h3 className="font-bold">Carrito temporal</h3>
-                                    <span className="text-sm font-semibold text-primary">${cartTotal.toFixed(2)}</span>
+                                    <span className="text-sm font-semibold text-primary">
+                                        <PriceDisplay usd={cartTotal} rate={exchangeRate} size="md" />
+                                    </span>
                                 </div>
 
                                 <div className="max-h-64 space-y-3 overflow-y-auto">
@@ -605,7 +617,7 @@ export default function POSSportBarPage() {
                                                 </button>
                                             </div>
                                             <div className="mt-2 text-right text-sm font-bold text-primary">
-                                                ${item.lineTotal.toFixed(2)}
+                                                <PriceDisplay usd={item.lineTotal} rate={exchangeRate} size="sm" />
                                             </div>
                                         </div>
                                     ))}

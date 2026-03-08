@@ -1427,3 +1427,17 @@ model QueueTicket {
   @@index([branchId, status])
   @@index([gameStationId, requestedAt])
 }
+
+// ============================================================================
+// TASA DE CAMBIO USD / BOLÍVARES (BCV)
+// ============================================================================
+// Los fines de semana se usa la tasa oficial del lunes anterior (BCV)
+model ExchangeRate {
+  id            String   @id @default(cuid())
+  rate          Float    // Bs por 1 USD (ej: 433.16)
+  effectiveDate DateTime // Fecha valor (ej: Lunes 9 Marzo 2026)
+  source        String   @default("BCV") // BCV = Banco Central de Venezuela
+  createdAt     DateTime @default(now())
+
+  @@index([effectiveDate])
+}

@@ -454,6 +454,21 @@ async function main() {
     }
 
     console.log('✅ Menús y artículos creados');
+
+    // Tasa de cambio BCV (1 USD = 433.16 Bs, Fecha Valor: Lunes 9 Marzo 2026)
+    const mondayMarch9 = new Date('2026-03-09T12:00:00.000Z');
+    await prisma.exchangeRate.upsert({
+        where: { id: 'seed-rate-bcv-2026' },
+        update: { rate: 433.16, effectiveDate: mondayMarch9 },
+        create: {
+            id: 'seed-rate-bcv-2026',
+            rate: 433.16,
+            effectiveDate: mondayMarch9,
+            source: 'BCV',
+        },
+    });
+    console.log('✅ Tasa de cambio BCV configurada (1 USD = 433.16 Bs)');
+
     console.log('🎉 Seed Table Pong completado!');
     console.log('   Login: admin@tablepong.com / tablepong123');
 }
