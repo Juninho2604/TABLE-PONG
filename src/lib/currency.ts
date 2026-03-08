@@ -5,7 +5,8 @@
  */
 
 export function usdToBs(usd: number, rate: number): number {
-    return Math.round(usd * rate * 100) / 100;
+    const roundedRate = Math.round(rate * 100) / 100;
+    return Math.round(usd * roundedRate * 100) / 100;
 }
 
 export function formatBs(value: number): string {

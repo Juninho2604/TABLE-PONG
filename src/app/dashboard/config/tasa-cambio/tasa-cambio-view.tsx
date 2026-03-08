@@ -74,7 +74,7 @@ export function TasaCambioView({ currentRate, history, canEdit }: TasaCambioView
                 {currentRate ? (
                     <div className="mt-4">
                         <p className="text-3xl font-bold text-primary">
-                            1 USD = {currentRate.rate.toLocaleString('es-VE', { minimumFractionDigits: 2 })} Bs
+                            1 USD = {currentRate.rate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs
                         </p>
                         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                             Fecha valor: {formatDate(currentRate.effectiveDate)}
@@ -154,7 +154,7 @@ export function TasaCambioView({ currentRate, history, canEdit }: TasaCambioView
                                 {history.map((h) => (
                                     <tr key={h.id} className="border-b border-gray-100 dark:border-gray-700">
                                         <td className="py-2 text-gray-900 dark:text-white">{formatDate(h.effectiveDate)}</td>
-                                        <td className="py-2 text-right font-mono">{h.rate.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
+                                        <td className="py-2 text-right font-mono">{h.rate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                         <td className="py-2 text-gray-500 dark:text-gray-400">
                                             {new Date(h.createdAt).toLocaleString('es-VE')}
                                         </td>
