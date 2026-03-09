@@ -378,8 +378,23 @@ export default function POSRestaurantPage() {
     const paidAmount = parseFloat(amountReceived) || 0;
     const changeAmount = paidAmount - finalTotal;
 
+    // Validaciones estrictas para cobrar
+    const canCheckout = cart.length > 0;
+    const needsAmountReceived = paymentMethod === 'CASH' && finalTotal > 0;
+    const amountValid = !needsAmountReceived || (paidAmount >= finalTotal);
+    const checkoutBlocked = !canCheckout || !amountValid;
+    const checkoutBlockReason = !canCheckout ? 'Agregue productos al carrito' : (needsAmountReceived && paidAmount < finalTotal ? `Ingrese al menos $${finalTotal.toFixed(2)}` : null);
+
     const handleCheckout = async () => {
-        if (cart.length === 0) return;
+        if (checkoutBlocked) {
+            if (checkoutBlockReason) alert(checkoutBlockReason);
+            return;
+        }
+        if (discountType !== 'NONE' && !authorizedManager && (discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT')) {
+            alert('Cortesía requiere autorización de gerente');
+            return;
+        }
+        if (discountType !== 'NONE' && !confirm(`¿Confirmar venta con descuento ${discountType === 'DIVISAS_33' ? '33%' : cortesiaPercent + '%'}?`)) return;
         setIsProcessing(true);
         try {
             const result = await createSalesOrderAction({
@@ -477,10 +492,10 @@ export default function POSRestaurantPage() {
         <div className="min-h-screen bg-gray-900 text-white relative">
             <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-6 py-4 fixed top-0 w-full z-30 flex justify-between items-center shadow-md">
                 <div className="flex items-center gap-3">
-                    <span className="text-3xl">🧀</span>
+                    <span className="text-3xl">🏓</span>
                     <div>
-                        <h1 className="text-2xl font-bold">Shanklish POS</h1>
-                        <p className="text-amber-100 text-sm">Restaurante</p>
+                        <h1 className="text-2xl font-bold">Table Pong POS</h1>
+                        <p className="text-amber-100 text-sm">Restaurante · Ventas</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -523,7 +538,7 @@ export default function POSRestaurantPage() {
                         )}
                         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                             {displayItems.map((item: MenuItem & { categoryName?: string }) => (
-                                <button key={item.id} onClick={() => handleAddToCart(item)} className="bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-amber-500/50 rounded-2xl p-5 text-left transition-all hover:scale-[1.01] h-40 flex flex-col justify-between shadow-lg">
+                                <button key={item.id} onClick={() => handleAddToCart(item)} className="bg-gray-800 hover:bg-gray-700 active:scale-[0.98] border-2 border-gray-700 hover:border-amber-500 rounded-2xl p-5 text-left transition-all min-h-[140px] flex flex-col justify-between shadow-lg touch-manipulation">
                                     <div>
                                         {item.categoryName && productSearch && (
                                             <span className="text-[10px] mb-1 block text-amber-400/80">{item.categoryName}</span>
@@ -549,7 +564,11 @@ export default function POSRestaurantPage() {
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-3">
                         {cart.length === 0 ? (
-                            <div className="text-center text-gray-500 mt-10">Vacío 🛒</div>
+                            <div className="text-center py-12">
+                                <div className="text-6xl mb-3 opacity-50">🛒</div>
+                                <p className="text-gray-500 font-medium">Carrito vacío</p>
+                                <p className="text-gray-600 text-sm mt-1">Agregue productos para cobrar</p>
+                            </div>
                         ) : (
                             cart.map((item, i) => (
                                 <div key={i} className="bg-gray-700 p-3 rounded-lg border border-gray-600 relative group">
@@ -570,44 +589,96 @@ export default function POSRestaurantPage() {
                             ))
                         )}
                     </div>
-                    <div className="p-4 bg-gray-800 border-t border-gray-700 space-y-3">
-                        <div className="flex gap-2">
-                            <button onClick={() => handleDiscountSelect('NONE')} className={`flex-1 py-2 text-xs font-bold rounded ${discountType === 'NONE' ? 'bg-gray-500 text-white' : 'bg-gray-700'}`}>Normal</button>
-                            <button
-                                onClick={() => handleDiscountSelect('DIVISAS_33')}
-                                disabled={!isPagoDivisas}
-                                title={!isPagoDivisas ? 'Solo disponible con pago en divisas (Efectivo, Tarjeta, Transferencia)' : 'Descuento 33% pago en divisas'}
-                                className={`flex-1 py-2 text-xs font-bold rounded ${discountType === 'DIVISAS_33' ? 'bg-blue-600 text-white' : isPagoDivisas ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-800 text-gray-500 cursor-not-allowed opacity-60'}`}
-                            >
-                                -33% Divisas
-                            </button>
-                            <button onClick={() => handleDiscountSelect('CORTESIA_100')} className={`flex-1 py-2 text-xs font-bold rounded ${(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT') ? 'bg-purple-600 text-white' : 'bg-gray-700'}`}>Cortesía</button>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                            {[
-                                { id: 'CASH', label: 'Efectivo', icon: '💵' },
-                                { id: 'CARD', label: 'Tarjeta', icon: '💳' },
-                                { id: 'MOBILE_PAY', label: 'Pago Móvil', icon: '📱' },
-                                { id: 'TRANSFER', label: 'Transferencia', icon: '🏦' },
-                            ].map(({ id, label, icon }) => (
-                                <button key={id} onClick={() => setPaymentMethod(id as any)} className={`py-2.5 px-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${paymentMethod === id ? 'bg-amber-500 text-black shadow-lg' : 'bg-gray-700 hover:bg-gray-600'}`}>
-                                    <span>{icon}</span>
-                                    <span>{label}</span>
+                    <div className="p-4 bg-gray-800 border-t border-gray-700 space-y-4">
+                        {/* PASO 1: Descuento */}
+                        <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase mb-2">1. Descuento</p>
+                            <div className="flex gap-2">
+                                <button onClick={() => handleDiscountSelect('NONE')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${discountType === 'NONE' ? 'bg-gray-500 text-white ring-2 ring-white' : 'bg-gray-700 hover:bg-gray-600'}`}>Normal</button>
+                                <button
+                                    onClick={() => handleDiscountSelect('DIVISAS_33')}
+                                    disabled={!isPagoDivisas}
+                                    title={!isPagoDivisas ? 'Solo con Efectivo, Tarjeta o Transferencia' : ''}
+                                    className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${discountType === 'DIVISAS_33' ? 'bg-blue-600 text-white ring-2 ring-white' : isPagoDivisas ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-800 text-gray-500 cursor-not-allowed opacity-50'}`}
+                                >
+                                    -33%
                                 </button>
-                            ))}
+                                <button onClick={() => handleDiscountSelect('CORTESIA_100')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT') ? 'bg-purple-600 text-white ring-2 ring-white' : 'bg-gray-700 hover:bg-gray-600'}`}>Cortesía</button>
+                            </div>
+                            {(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT') && authorizedManager && (
+                                <p className="text-xs text-purple-300 mt-1">✓ Autorizado: {authorizedManager.name}</p>
+                            )}
                         </div>
-                        <div className="bg-gray-900 p-3 rounded-lg border border-gray-700">
+
+                        {/* PASO 2: Método de pago */}
+                        <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase mb-2">2. Forma de pago</p>
+                            <div className="grid grid-cols-2 gap-2">
+                                {[
+                                    { id: 'CASH', label: 'Efectivo', icon: '💵' },
+                                    { id: 'CARD', label: 'Tarjeta', icon: '💳' },
+                                    { id: 'MOBILE_PAY', label: 'Pago Móvil', icon: '📱' },
+                                    { id: 'TRANSFER', label: 'Transferencia', icon: '🏦' },
+                                ].map(({ id, label, icon }) => (
+                                    <button key={id} onClick={() => setPaymentMethod(id as any)} className={`py-3 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${paymentMethod === id ? 'bg-amber-500 text-black shadow-lg ring-2 ring-amber-300' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                        <span className="text-xl">{icon}</span>
+                                        <span>{label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* PASO 3: Monto y Total */}
+                        <div className="bg-gray-900 p-4 rounded-xl border-2 border-gray-700 space-y-2">
                             {paymentMethod === 'CASH' && (
-                                <div className="mb-2 border-b border-gray-700 pb-2">
-                                    <label className="text-xs text-gray-400">Recibido:</label>
-                                    <input type="number" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded p-1 text-right text-white font-bold" />
+                                <div>
+                                    <label className="text-sm font-bold text-gray-400 block mb-1">Monto recibido ($)</label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="0"
+                                        value={amountReceived}
+                                        onChange={e => setAmountReceived(e.target.value)}
+                                        placeholder={`Mín. $${finalTotal.toFixed(2)}`}
+                                        className={`w-full bg-gray-800 border-2 rounded-lg p-3 text-right text-xl font-bold text-white focus:outline-none ${!amountValid && needsAmountReceived ? 'border-red-500' : 'border-gray-600 focus:border-amber-500'}`}
+                                    />
+                                    {!amountValid && needsAmountReceived && paidAmount > 0 && (
+                                        <p className="text-red-400 text-xs mt-1">Faltan ${(finalTotal - paidAmount).toFixed(2)}</p>
+                                    )}
                                 </div>
                             )}
-                            <div className="flex justify-between text-lg font-bold"><span>Total</span> <span><PriceDisplay usd={finalTotal} rate={exchangeRate} size="md" showBs={false} /></span></div>
-                            {paymentMethod === 'CASH' && changeAmount > 0 && <div className="flex justify-between text-green-400 text-sm"><span>Cambio</span> <span>${changeAmount.toFixed(2)}</span></div>}
+                            <div className="flex justify-between text-sm text-gray-400">
+                                <span>Subtotal</span>
+                                <span>${cartTotal.toFixed(2)}</span>
+                            </div>
+                            {discountAmount > 0 && (
+                                <div className="flex justify-between text-sm text-amber-400">
+                                    <span>Descuento</span>
+                                    <span>-${discountAmount.toFixed(2)}</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between text-xl font-black pt-2 border-t border-gray-700">
+                                <span>TOTAL</span>
+                                <span className="text-amber-400">${finalTotal.toFixed(2)}</span>
+                            </div>
+                            {paymentMethod === 'CASH' && changeAmount > 0 && (
+                                <div className="flex justify-between text-green-400 font-bold">
+                                    <span>Cambio</span>
+                                    <span>${changeAmount.toFixed(2)}</span>
+                                </div>
+                            )}
                         </div>
-                        <button onClick={handleCheckout} disabled={cart.length === 0 || isProcessing} className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-black text-xl shadow-lg disabled:opacity-50">
-                            {isProcessing ? '...' : `COBRAR $${finalTotal.toFixed(2)}`}
+
+                        {/* BOTÓN COBRAR */}
+                        <button
+                            onClick={handleCheckout}
+                            disabled={checkoutBlocked || isProcessing}
+                            title={checkoutBlockReason || undefined}
+                            className={`w-full py-5 rounded-xl font-black text-xl shadow-lg transition-all flex flex-col items-center gap-1 ${checkoutBlocked || isProcessing ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white'}`}
+                        >
+                            {isProcessing ? 'Procesando...' : 'COBRAR'}
+                            <span className="text-2xl font-black">${finalTotal.toFixed(2)}</span>
+                            {checkoutBlockReason && <span className="text-xs font-normal opacity-80">{checkoutBlockReason}</span>}
                         </button>
                     </div>
                 </div>

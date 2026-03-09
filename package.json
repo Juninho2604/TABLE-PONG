@@ -15,6 +15,9 @@
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
     "db:clean": "tsx scripts/clean-transactions.ts",
+    "db:seed-inventario": "tsx scripts/seed-inventario-licores-comida.ts",
+    "db:seed-inventario-real": "tsx scripts/seed-inventario-real.ts",
+    "db:reset-inventario": "tsx scripts/reset-inventario-completo.ts",
     "vercel-build": "prisma generate && next build"
   },
   "dependencies": {
