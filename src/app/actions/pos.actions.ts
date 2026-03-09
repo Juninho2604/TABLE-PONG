@@ -41,7 +41,8 @@ export interface CreateOrderData {
     paymentMethod?: POSPaymentMethod;
     amountPaid?: number;
     notes?: string;
-    discountType?: string; // 'DIVISAS_33', 'CORTESIA_100', 'NONE'
+    discountType?: string; // 'DIVISAS_33', 'CORTESIA_100', 'CORTESIA_PERCENT', 'NONE'
+    discountPercent?: number; // Para CORTESIA_PERCENT (ej: 20 = 20%)
     authorizedById?: string; // ID del gerente que autorizó
 }
 
@@ -265,7 +266,7 @@ async function resolveSalesAreaForBranch(branchId?: string) {
     return ensureBaseSalesArea();
 }
 
-function calculateCartTotals(data: Pick<CreateOrderData, 'items' | 'discountType' | 'amountPaid'>) {
+function calculateCartTotals(data: Pick<CreateOrderData, 'items' | 'discountType' | 'discountPercent' | 'amountPaid'>) {
     const subtotal = data.items.reduce((sum, item) => sum + item.lineTotal, 0);
 
     let discount = 0;
@@ -277,6 +278,10 @@ function calculateCartTotals(data: Pick<CreateOrderData, 'items' | 'discountType
     } else if (data.discountType === 'CORTESIA_100') {
         discount = subtotal;
         discountReason = 'Cortesía Autorizada (100%)';
+    } else if (data.discountType === 'CORTESIA_PERCENT' && data.discountPercent != null) {
+        const pct = Math.min(100, Math.max(0, data.discountPercent)) / 100;
+        discount = subtotal * pct;
+        discountReason = `Cortesía Autorizada (${data.discountPercent}%)`;
     }
 
     if (discount > subtotal) discount = subtotal;

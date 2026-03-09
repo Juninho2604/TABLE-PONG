@@ -30,9 +30,10 @@ interface TicketData {
 interface PrintTicketProps {
     data: TicketData;
     exchangeRate?: number | null;
+    showBs?: boolean; // false = solo USD en la nota (por defecto false para POS Restaurante)
 }
 
-const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data, exchangeRate }, ref) => {
+const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data, exchangeRate, showBs = false }, ref) => {
     const formatDate = (date: Date) => {
         return date.toLocaleDateString('es-VE', {
             weekday: 'long',
@@ -54,6 +55,7 @@ const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data, exchan
             case 'CASH': return 'Efectivo';
             case 'CARD': return 'Tarjeta';
             case 'TRANSFER': return 'Transferencia';
+            case 'MOBILE_PAY': return 'Pago Móvil';
             default: return method;
         }
     };
@@ -115,7 +117,7 @@ const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data, exchan
                             <span className="mr-2">=</span>
                             <div className="w-14 text-right">
                                 <div>$ {item.lineTotal.toFixed(2)}</div>
-                                {exchangeRate && exchangeRate > 0 && (
+                                {showBs && exchangeRate && exchangeRate > 0 && (
                                     <div className="text-[10px] text-gray-600">{formatBs(usdToBs(item.lineTotal, exchangeRate))}</div>
                                 )}
                             </div>
@@ -150,7 +152,7 @@ const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data, exchan
                     <span>Total:</span>
                     <div className="text-right">
                         <div>$ {data.total.toFixed(2)}</div>
-                        {exchangeRate && exchangeRate > 0 && (
+                        {showBs && exchangeRate && exchangeRate > 0 && (
                             <div className="text-[10px] font-normal text-gray-600">{formatBs(usdToBs(data.total, exchangeRate))}</div>
                         )}
                     </div>
@@ -165,7 +167,7 @@ const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data, exchan
                     <span>Total Sugerido:</span>
                     <div className="text-right">
                         <div>$ {(data.total * 1.10).toFixed(2)}</div>
-                        {exchangeRate && exchangeRate > 0 && (
+                        {showBs && exchangeRate && exchangeRate > 0 && (
                             <div className="text-[10px] font-normal text-gray-600">{formatBs(usdToBs(data.total * 1.10, exchangeRate))}</div>
                         )}
                     </div>

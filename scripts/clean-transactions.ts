@@ -1,4 +1,4 @@
-
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import * as readline from 'readline';
 
@@ -25,15 +25,21 @@ async function main() {
             console.log('\nIniciando limpieza...');
 
             // Usamos transacción para asegurar consistencia
+            // IMPORTANTE: Orden de eliminación por dependencias FK
             await prisma.$transaction(async (tx) => {
 
-                // 1. Eliminar modificadores de items de venta
+                // 1. Eliminar primero registros que referencian a ventas (evitar errores FK)
+                console.log('Eliminando movimientos de inventario vinculados a ventas...');
+                await tx.inventoryMovement.deleteMany({});
+
+                console.log('Eliminando enlaces de cuentas abiertas y splits de pago...');
+                await tx.openTabOrder.deleteMany({});
+                await tx.paymentSplit.deleteMany({});
+
+                // 2. Eliminar modificadores y items de venta
                 console.log('Eliminando detalles de venta...');
                 await tx.salesOrderItemModifier.deleteMany({});
                 await tx.salesOrderItem.deleteMany({});
-
-                // 2. Eliminar movimientos de inventario vinculados a ventas
-                // (Prisma debería manejar esto si hay cascade, pero aseguramos)
 
                 // 3. Eliminar ventas
                 console.log('Eliminando órdenes de venta...');
@@ -53,15 +59,11 @@ async function main() {
                 await tx.dailyInventoryItem.deleteMany({});
                 await tx.dailyInventory.deleteMany({});
 
-                // 7. Eliminar TODOS los movimientos de inventario
-                console.log('Eliminando historial de movimientos...');
-                await tx.inventoryMovement.deleteMany({});
-
-                // 8. Eliminar historial de costos (Opcional, pero recomendado para empezar fresh)
+                // 7. Eliminar historial de costos (recomendado para empezar fresh)
                 console.log('Eliminando historial de costos...');
                 await tx.costHistory.deleteMany({});
 
-                // 9. Resetear stock actual a 0 en todas las ubicaciones
+                // 8. Resetear stock actual a 0 en todas las ubicaciones
                 console.log('Reseteando niveles de stock a 0...');
                 await tx.inventoryLocation.updateMany({
                     data: {

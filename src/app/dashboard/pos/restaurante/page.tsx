@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 import PrintTicket from '@/components/pos/PrintTicket';
 import { createSalesOrderAction, getMenuForPOSAction, validateManagerPinAction, type CartItem } from '@/app/actions/pos.actions';
@@ -151,6 +151,7 @@ export default function POSRestaurantPage() {
     const [categories, setCategories] = useState<any[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+    const [productSearch, setProductSearch] = useState('');
     const [exchangeRate, setExchangeRate] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -164,6 +165,9 @@ export default function POSRestaurantPage() {
         total: number;
         subtotal: number;
         discount: number;
+        paymentMethod: string;
+        amountPaid: number;
+        change: number;
         itemsSnapshot: any[];
     } | null>(null);
 
@@ -179,11 +183,21 @@ export default function POSRestaurantPage() {
     const [amountReceived, setAmountReceived] = useState('');
 
     // DISCOUNT STATE
-    const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33' | 'CORTESIA_100'>('NONE');
+    const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33' | 'CORTESIA_100' | 'CORTESIA_PERCENT'>('NONE');
+    const [cortesiaPercent, setCortesiaPercent] = useState<number>(100);
     const [authorizedManager, setAuthorizedManager] = useState<{ id: string, name: string } | null>(null);
     const [showPinModal, setShowPinModal] = useState(false);
+    const [showCortesiaPercentModal, setShowCortesiaPercentModal] = useState(false);
     const [pinInput, setPinInput] = useState('');
     const [pinError, setPinError] = useState('');
+
+    const isPagoDivisas = paymentMethod === 'CASH' || paymentMethod === 'CARD' || paymentMethod === 'TRANSFER';
+
+    useEffect(() => {
+        if (paymentMethod === 'MOBILE_PAY' && discountType === 'DIVISAS_33') {
+            setDiscountType('NONE');
+        }
+    }, [paymentMethod, discountType]);
 
     // RESPONSIVE STATE
     const [showMobileCart, setShowMobileCart] = useState(false);
@@ -220,6 +234,28 @@ export default function POSRestaurantPage() {
         }
     }, [selectedCategory, categories]);
 
+    // Productos planos con categoría para búsqueda
+    const allProductsWithCategory = useMemo(() => {
+        return categories.flatMap(cat =>
+            (cat.items || []).map((item: MenuItem) => ({
+                ...item,
+                categoryName: cat.name,
+                categoryId: cat.id,
+            }))
+        );
+    }, [categories]);
+
+    const filteredBySearch = useMemo(() => {
+        if (!productSearch.trim()) return menuItems;
+        const q = productSearch.toLowerCase().trim();
+        return allProductsWithCategory.filter(
+            (p: MenuItem & { categoryName?: string; categoryId?: string }) =>
+                p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q))
+        );
+    }, [productSearch, menuItems, allProductsWithCategory]);
+
+    const displayItems = productSearch.trim() ? filteredBySearch : menuItems;
+
     const getCategoryIcon = (name: string) => {
         if (name.includes('Tabla') || name.includes('Combo')) return '🍱';
         if (name.includes('Queso')) return '🧀';
@@ -233,7 +269,8 @@ export default function POSRestaurantPage() {
         return '🍽️';
     };
 
-    const handleAddToCart = (item: MenuItem) => {
+    const handleAddToCart = (item: MenuItem & { categoryName?: string; categoryId?: string }) => {
+        if (item.categoryId) setSelectedCategory(item.categoryId);
         setSelectedItemForModifier(item);
         setCurrentModifiers([]);
         setItemQuantity(1);
@@ -335,7 +372,8 @@ export default function POSRestaurantPage() {
 
     // Totales
     const cartTotal = cart.reduce((sum, item) => sum + item.lineTotal, 0);
-    const discountAmount = discountType === 'DIVISAS_33' ? cartTotal * 0.33 : (discountType === 'CORTESIA_100' ? cartTotal : 0);
+    const discountAmount = discountType === 'DIVISAS_33' ? cartTotal * 0.33
+        : (discountType === 'CORTESIA_100' ? cartTotal : (discountType === 'CORTESIA_PERCENT' ? cartTotal * (cortesiaPercent / 100) : 0));
     const finalTotal = cartTotal - discountAmount;
     const paidAmount = parseFloat(amountReceived) || 0;
     const changeAmount = paidAmount - finalTotal;
@@ -350,7 +388,8 @@ export default function POSRestaurantPage() {
                 items: cart,
                 paymentMethod,
                 amountPaid: paidAmount || finalTotal,
-                discountType,
+                discountType: discountType === 'CORTESIA_PERCENT' ? 'CORTESIA_PERCENT' : discountType,
+                discountPercent: discountType === 'CORTESIA_PERCENT' ? cortesiaPercent : undefined,
                 authorizedById: authorizedManager?.id,
                 notes: undefined
             });
@@ -374,6 +413,9 @@ export default function POSRestaurantPage() {
                     total: finalTotal,
                     subtotal: cartTotal,
                     discount: discountAmount,
+                    paymentMethod,
+                    amountPaid: paidAmount || finalTotal,
+                    change: changeAmount,
                     itemsSnapshot: cart.map(item => ({
                         sku: '00-000',
                         name: item.name,
@@ -388,6 +430,7 @@ export default function POSRestaurantPage() {
                 setCustomerName('');
                 setAmountReceived('');
                 setDiscountType('NONE');
+                setCortesiaPercent(100);
                 setAuthorizedManager(null);
                 setShowMobileCart(false);
             } else {
@@ -402,7 +445,8 @@ export default function POSRestaurantPage() {
     };
 
     const handleDiscountSelect = (type: string) => {
-        if (type === 'CORTESIA_100') {
+        if (type === 'DIVISAS_33' && !isPagoDivisas) return;
+        if (type === 'CORTESIA_100' || type === 'CORTESIA_PERCENT') {
             setPinInput(''); setPinError(''); setShowPinModal(true);
         } else {
             setDiscountType(type as any); setAuthorizedManager(null);
@@ -412,8 +456,14 @@ export default function POSRestaurantPage() {
         const res = await validateManagerPinAction(pinInput);
         if (res.success && res.data) {
             setAuthorizedManager({ id: res.data.managerId, name: res.data.managerName });
-            setDiscountType('CORTESIA_100'); setShowPinModal(false);
+            setShowPinModal(false);
+            setShowCortesiaPercentModal(true);
         } else setPinError('PIN inválido');
+    };
+    const handleCortesiaPercentSelect = (percent: number) => {
+        setCortesiaPercent(percent);
+        setDiscountType(percent === 100 ? 'CORTESIA_100' : 'CORTESIA_PERCENT');
+        setShowCortesiaPercentModal(false);
     };
     const handlePinKey = (k: string) => {
         if (k === 'back') setPinInput(p => p.slice(0, -1));
@@ -443,20 +493,45 @@ export default function POSRestaurantPage() {
 
             <div className="flex h-screen pt-[5rem]">
                 <div className="flex-1 flex flex-col overflow-hidden">
-                    <div className="flex gap-2 p-4 bg-gray-800 border-b border-gray-700 overflow-x-auto whitespace-nowrap snap-x">
+                    <div className="p-4 bg-gray-800 border-b border-gray-700 space-y-3">
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg">🔍</span>
+                            <input
+                                type="text"
+                                value={productSearch}
+                                onChange={e => setProductSearch(e.target.value)}
+                                placeholder="Buscar producto (ej: Cachapa, Shawarma...)"
+                                className="w-full pl-10 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:border-amber-500 focus:outline-none"
+                            />
+                            {productSearch && (
+                                <button onClick={() => setProductSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">✕</button>
+                            )}
+                        </div>
+                        <div className="flex gap-2 overflow-x-auto whitespace-nowrap snap-x pb-1">
                         {categories.map(cat => (
-                            <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={`flex-shrink-0 px-5 py-3 rounded-xl font-bold text-lg transition-all flex items-center gap-2 snap-start ${selectedCategory === cat.id ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'bg-gray-700 text-gray-300'}`}>
+                            <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setProductSearch(''); }} className={`flex-shrink-0 px-5 py-3 rounded-xl font-bold text-lg transition-all flex items-center gap-2 snap-start ${selectedCategory === cat.id && !productSearch ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'bg-gray-700 text-gray-300'}`}>
                                 <span>{getCategoryIcon(cat.name)}</span> {cat.name}
                             </button>
                         ))}
+                        </div>
                     </div>
                     <div className="flex-1 p-4 overflow-y-auto pb-24">
+                        {productSearch && (
+                            <p className="text-center text-amber-400 text-sm mb-3">
+                                {displayItems.length} resultado(s) en {productSearch ? 'todas las categorías' : 'esta categoría'}
+                            </p>
+                        )}
                         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                            {menuItems.map(item => (
+                            {displayItems.map((item: MenuItem & { categoryName?: string }) => (
                                 <button key={item.id} onClick={() => handleAddToCart(item)} className="bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-amber-500/50 rounded-2xl p-5 text-left transition-all hover:scale-[1.01] h-40 flex flex-col justify-between shadow-lg">
-                                    <div className="font-bold text-lg leading-tight line-clamp-2">{item.name}</div>
+                                    <div>
+                                        {item.categoryName && productSearch && (
+                                            <span className="text-[10px] mb-1 block text-amber-400/80">{item.categoryName}</span>
+                                        )}
+                                        <div className="font-bold text-lg leading-tight line-clamp-2">{item.name}</div>
+                                    </div>
                                     <div className="text-3xl font-black text-amber-500">
-                                        <PriceDisplay usd={item.price} rate={exchangeRate} size="lg" />
+                                        <PriceDisplay usd={item.price} rate={exchangeRate} size="lg" showBs={false} />
                                     </div>
                                 </button>
                             ))}
@@ -486,7 +561,7 @@ export default function POSRestaurantPage() {
                                         </div>
                                         <div className="text-right">
                                             <div className="font-bold text-amber-400">
-                                                <PriceDisplay usd={item.lineTotal} rate={exchangeRate} size="sm" />
+                                                <PriceDisplay usd={item.lineTotal} rate={exchangeRate} size="sm" showBs={false} />
                                             </div>
                                             <button onClick={() => removeFromCart(i)} className="text-red-400 text-xs hover:underline mt-1">Quitar</button>
                                         </div>
@@ -498,13 +573,26 @@ export default function POSRestaurantPage() {
                     <div className="p-4 bg-gray-800 border-t border-gray-700 space-y-3">
                         <div className="flex gap-2">
                             <button onClick={() => handleDiscountSelect('NONE')} className={`flex-1 py-2 text-xs font-bold rounded ${discountType === 'NONE' ? 'bg-gray-500 text-white' : 'bg-gray-700'}`}>Normal</button>
-                            <button onClick={() => handleDiscountSelect('DIVISAS_33')} className={`flex-1 py-2 text-xs font-bold rounded ${discountType === 'DIVISAS_33' ? 'bg-blue-600 text-white' : 'bg-gray-700'}`}>-33%</button>
-                            <button onClick={() => handleDiscountSelect('CORTESIA_100')} className={`flex-1 py-2 text-xs font-bold rounded ${discountType === 'CORTESIA_100' ? 'bg-purple-600 text-white' : 'bg-gray-700'}`}>Cortesía</button>
+                            <button
+                                onClick={() => handleDiscountSelect('DIVISAS_33')}
+                                disabled={!isPagoDivisas}
+                                title={!isPagoDivisas ? 'Solo disponible con pago en divisas (Efectivo, Tarjeta, Transferencia)' : 'Descuento 33% pago en divisas'}
+                                className={`flex-1 py-2 text-xs font-bold rounded ${discountType === 'DIVISAS_33' ? 'bg-blue-600 text-white' : isPagoDivisas ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-800 text-gray-500 cursor-not-allowed opacity-60'}`}
+                            >
+                                -33% Divisas
+                            </button>
+                            <button onClick={() => handleDiscountSelect('CORTESIA_100')} className={`flex-1 py-2 text-xs font-bold rounded ${(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT') ? 'bg-purple-600 text-white' : 'bg-gray-700'}`}>Cortesía</button>
                         </div>
-                        <div className="grid grid-cols-4 gap-2">
-                            {['CASH', 'CARD', 'MOBILE_PAY', 'TRANSFER'].map(m => (
-                                <button key={m} onClick={() => setPaymentMethod(m as any)} className={`py-2 rounded text-xs font-bold ${paymentMethod === m ? 'bg-amber-500 text-black' : 'bg-gray-700'}`}>
-                                    {m === 'CASH' ? '💵' : m === 'CARD' ? '💳' : m === 'MOBILE_PAY' ? '📱' : '🏦'}
+                        <div className="grid grid-cols-2 gap-2">
+                            {[
+                                { id: 'CASH', label: 'Efectivo', icon: '💵' },
+                                { id: 'CARD', label: 'Tarjeta', icon: '💳' },
+                                { id: 'MOBILE_PAY', label: 'Pago Móvil', icon: '📱' },
+                                { id: 'TRANSFER', label: 'Transferencia', icon: '🏦' },
+                            ].map(({ id, label, icon }) => (
+                                <button key={id} onClick={() => setPaymentMethod(id as any)} className={`py-2.5 px-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${paymentMethod === id ? 'bg-amber-500 text-black shadow-lg' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                    <span>{icon}</span>
+                                    <span>{label}</span>
                                 </button>
                             ))}
                         </div>
@@ -515,7 +603,7 @@ export default function POSRestaurantPage() {
                                     <input type="number" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded p-1 text-right text-white font-bold" />
                                 </div>
                             )}
-                            <div className="flex justify-between text-lg font-bold"><span>Total</span> <span><PriceDisplay usd={finalTotal} rate={exchangeRate} size="md" /></span></div>
+                            <div className="flex justify-between text-lg font-bold"><span>Total</span> <span><PriceDisplay usd={finalTotal} rate={exchangeRate} size="md" showBs={false} /></span></div>
                             {paymentMethod === 'CASH' && changeAmount > 0 && <div className="flex justify-between text-green-400 text-sm"><span>Cambio</span> <span>${changeAmount.toFixed(2)}</span></div>}
                         </div>
                         <button onClick={handleCheckout} disabled={cart.length === 0 || isProcessing} className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-black text-xl shadow-lg disabled:opacity-50">
@@ -537,7 +625,7 @@ export default function POSRestaurantPage() {
                         <div className="p-5 border-b border-gray-700 flex justify-between items-start bg-gray-850">
                             <div>
                                 <h3 className="text-2xl font-bold text-white leading-none">{selectedItemForModifier.name}</h3>
-                                <p className="text-amber-500 font-bold text-xl mt-1"><PriceDisplay usd={selectedItemForModifier.price} rate={exchangeRate} size="md" /></p>
+                                <p className="text-amber-500 font-bold text-xl mt-1"><PriceDisplay usd={selectedItemForModifier.price} rate={exchangeRate} size="md" showBs={false} /></p>
                             </div>
                             <button onClick={() => setShowModifierModal(false)} className="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
                         </div>
@@ -636,6 +724,7 @@ export default function POSRestaurantPage() {
                     <div className="bg-gray-800 p-6 rounded-2xl w-80">
                         <h3 className="text-center font-bold text-xl mb-4">PIN Gerente</h3>
                         <div className="bg-black p-4 rounded text-center text-3xl tracking-widest mb-4">{pinInput.replace(/./g, '*')}</div>
+                        {pinError && <p className="text-red-400 text-sm text-center mb-2">{pinError}</p>}
                         <div className="grid grid-cols-3 gap-2 mb-4">
                             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(n => <button key={n} onClick={() => handlePinKey(n.toString())} className="bg-gray-700 p-4 rounded font-bold text-xl">{n}</button>)}
                             <button onClick={() => handlePinKey('clear')} className="bg-red-900 text-red-200 rounded font-bold">C</button>
@@ -645,6 +734,23 @@ export default function POSRestaurantPage() {
                             <button onClick={() => setShowPinModal(false)} className="flex-1 py-3 bg-gray-700 rounded">Cancelar</button>
                             <button onClick={handlePinSubmit} className="flex-1 py-3 bg-amber-500 text-black rounded font-bold">OK</button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {showCortesiaPercentModal && (
+                <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60]">
+                    <div className="bg-gray-800 p-6 rounded-2xl w-80 max-w-sm">
+                        <h3 className="text-center font-bold text-xl mb-4">Seleccionar % Cortesía</h3>
+                        <p className="text-center text-gray-400 text-sm mb-4">Elija el porcentaje de descuento a aplicar</p>
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                            {[10, 20, 30, 50, 75, 100].map(p => (
+                                <button key={p} onClick={() => handleCortesiaPercentSelect(p)} className="py-3 rounded-lg font-bold bg-purple-600 hover:bg-purple-500 text-white">
+                                    {p}%
+                                </button>
+                            ))}
+                        </div>
+                        <button onClick={() => setShowCortesiaPercentModal(false)} className="w-full py-3 bg-gray-700 rounded font-bold">Cancelar</button>
                     </div>
                 </div>
             )}
@@ -683,22 +789,23 @@ export default function POSRestaurantPage() {
                 <div style={{ display: 'none' }}>
                     <PrintTicket
                         ref={ticketRef}
-                        exchangeRate={exchangeRate}
+                        exchangeRate={null}
+                        showBs={false}
                         data={{
                             orderNumber: lastOrder.orderNumber,
-                            orderType: 'RESTAURANT', // Siempre es restaurant aqui
+                            orderType: 'RESTAURANT',
                             items: lastOrder.itemsSnapshot.map(i => ({
                                 name: i.name,
                                 quantity: i.quantity,
                                 unitPrice: i.unitPrice,
                                 lineTotal: i.total,
-                                modifiers: i.modifiers.map((m: string) => ({ name: m, priceAdjustment: 0 })) // Snapshot simple
+                                modifiers: i.modifiers.map((m: string) => ({ name: m, priceAdjustment: 0 }))
                             })),
                             subtotal: lastOrder.subtotal,
                             total: lastOrder.total,
-                            paymentMethod: 'CASH', // TODO: Pasar método real si se guardó en lastOrder
-                            amountPaid: lastOrder.total, // fallback
-                            change: 0,
+                            paymentMethod: lastOrder.paymentMethod || 'CASH',
+                            amountPaid: lastOrder.amountPaid ?? lastOrder.total,
+                            change: lastOrder.change ?? 0,
                             date: new Date()
                         }}
                     />

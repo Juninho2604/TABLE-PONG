@@ -7,9 +7,10 @@ interface PriceDisplayProps {
     rate: number | null;
     size?: 'sm' | 'md' | 'lg';
     showBsOnly?: boolean;
+    showBs?: boolean; // false = solo USD (para nota de entrega)
 }
 
-export function PriceDisplay({ usd, rate, size = 'md', showBsOnly }: PriceDisplayProps) {
+export function PriceDisplay({ usd, rate, size = 'md', showBsOnly, showBs = true }: PriceDisplayProps) {
     const sizeClass = {
         sm: 'text-xs',
         md: 'text-sm',
@@ -24,6 +25,10 @@ export function PriceDisplay({ usd, rate, size = 'md', showBsOnly }: PriceDispla
 
     if (showBsOnly) {
         return <span className={sizeClass}>{formatBs(bs)}</span>;
+    }
+
+    if (!showBs) {
+        return <span className={sizeClass}>${usd.toFixed(2)}</span>;
     }
 
     return (

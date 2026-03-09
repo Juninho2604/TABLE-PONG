@@ -16,6 +16,7 @@ interface NavItem {
     href: string;
     icon: string;
     roles?: UserRole[]; // Si no se especifica, todos pueden ver
+    archived?: boolean; // Si true, no se muestra en el menú (para pruebas futuras)
 }
 
 const navigation: NavItem[] = [
@@ -93,13 +94,14 @@ const navigation: NavItem[] = [
     },
 ];
 
-// Navegación POS
+// Navegación POS (archived = oculto por ahora, para pruebas futuras)
 const posNavigation: NavItem[] = [
     {
         label: 'POS Sport Bar',
         href: '/dashboard/pos/sportbar',
         icon: '🍺',
         roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT'],
+        archived: true,
     },
     {
         label: 'POS Restaurante',
@@ -112,6 +114,7 @@ const posNavigation: NavItem[] = [
         href: '/dashboard/pos/delivery',
         icon: '🛵',
         roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_DELIVERY'],
+        archived: true,
     },
     {
         label: 'Cargar Ventas',
@@ -188,7 +191,7 @@ export function Sidebar({ initialUser }: SidebarProps) {
         item => !item.roles || (userRole && item.roles.includes(userRole))
     );
     const filteredPosNav = posNavigation.filter(
-        item => !item.roles || (userRole && item.roles.includes(userRole))
+        item => !item.archived && (!item.roles || (userRole && item.roles.includes(userRole)))
     );
     const filteredSecondaryNav = secondaryNavigation.filter(
         item => !item.roles || (userRole && item.roles.includes(userRole))
