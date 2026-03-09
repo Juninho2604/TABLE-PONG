@@ -8,12 +8,14 @@ import { getAreasForSelect } from '@/app/actions/entrada.actions';
 import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
+import WhatsAppInventoryParser from '@/components/whatsapp-inventory-parser';
 
 export default function ImportPage() {
     const { user } = useAuthStore();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [importType, setImportType] = useState<'ENTRADA_ALMACEN' | 'MERMA' | 'INVENTARIO_INICIAL'>('INVENTARIO_INICIAL');
+    const [inputMode, setInputMode] = useState<'excel' | 'whatsapp'>('excel');
     const [file, setFile] = useState<File | null>(null);
     const [preview, setPreview] = useState<ImportPreviewResult | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -164,7 +166,13 @@ export default function ImportPage() {
         if (e.target.files && e.target.files[0]) {
             setFile(e.target.files[0]);
             setPreview(null);
+            setInputMode('excel');
         }
+    };
+
+    const handleWhatsAppPreview = (result: ImportPreviewResult) => {
+        setPreview(result);
+        toast.success(result.message || `${result.items?.length ?? 0} líneas procesadas`);
     };
 
     const handleAnalyze = async () => {
@@ -233,7 +241,11 @@ export default function ImportPage() {
                             </label>
                             <select
                                 value={importType}
-                                onChange={(e) => setImportType(e.target.value as any)}
+                                onChange={(e) => {
+                                    setImportType(e.target.value as any);
+                                    setPreview(null);
+                                    if (e.target.value !== 'INVENTARIO_INICIAL') setInputMode('excel');
+                                }}
                                 className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-gray-900 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                             >
                                 <option value="INVENTARIO_INICIAL">Inventario Inicial (Planilla Orden de Compra)</option>
@@ -264,27 +276,89 @@ export default function ImportPage() {
                             </p>
                         </div>
 
-                        <div>
-                            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                                3. Sube tu archivo
-                            </label>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept=".xlsx, .xls"
-                                onChange={handleFileChange}
-                                className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-full file:border-0 file:bg-amber-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-amber-700 hover:file:bg-amber-100 dark:file:bg-amber-900/30 dark:file:text-amber-400"
-                            />
-                        </div>
+                        {importType === 'INVENTARIO_INICIAL' ? (
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    3. Origen de datos
+                                </label>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setInputMode('excel'); setPreview(null); setFile(null); }}
+                                        className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
+                                            inputMode === 'excel'
+                                                ? 'border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                                : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800'
+                                        }`}
+                                    >
+                                        📄 Excel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setInputMode('whatsapp'); setPreview(null); setFile(null); }}
+                                        className={`flex-1 rounded-lg border px-4 py-2.5 text-sm font-medium transition ${
+                                            inputMode === 'whatsapp'
+                                                ? 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800'
+                                        }`}
+                                    >
+                                        💬 WhatsApp
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    3. Sube tu archivo
+                                </label>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    onChange={handleFileChange}
+                                    className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-full file:border-0 file:bg-amber-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-amber-700 hover:file:bg-amber-100 dark:file:bg-amber-900/30 dark:file:text-amber-400"
+                                />
+                            </div>
+                        )}
                     </div>
 
-                    {file && !preview && (
+                    {importType === 'INVENTARIO_INICIAL' && inputMode === 'whatsapp' && (
+                        <WhatsAppInventoryParser onPreviewReady={handleWhatsAppPreview} />
+                    )}
+
+                    {importType !== 'INVENTARIO_INICIAL' && file && !preview && (
                         <Button
                             onClick={handleAnalyze}
                             isLoading={isProcessing}
                         >
                             {isProcessing ? 'Analizando...' : 'Analizar Archivo'}
                         </Button>
+                    )}
+
+                    {importType === 'INVENTARIO_INICIAL' && inputMode === 'excel' && (
+                        <>
+                            <div>
+                                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                                    Sube tu archivo Excel
+                                </label>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept=".xlsx, .xls"
+                                    onChange={handleFileChange}
+                                    className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-full file:border-0 file:bg-amber-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-amber-700 hover:file:bg-amber-100 dark:file:bg-amber-900/30 dark:file:text-amber-400"
+                                />
+                            </div>
+                            {file && !preview && (
+                                <Button
+                                    onClick={handleAnalyze}
+                                    isLoading={isProcessing}
+                                    className="mt-4"
+                                >
+                                    {isProcessing ? 'Analizando...' : 'Analizar Archivo'}
+                                </Button>
+                            )}
+                        </>
                     )}
                 </CardContent>
             </Card>
@@ -443,7 +517,11 @@ export default function ImportPage() {
                             </Button>
                             <Button
                                 onClick={handleImport}
-                                disabled={isProcessing || preview.items.filter(i => i.status === 'MATCHED').length === 0}
+                                disabled={isProcessing || (
+                                    importType === 'INVENTARIO_INICIAL'
+                                        ? preview.items.filter(i => i.quantity >= 0 || i.shouldRename).length === 0
+                                        : preview.items.filter(i => i.status === 'MATCHED').length === 0
+                                )}
                                 className="bg-green-600 hover:bg-green-700 text-white"
                                 isLoading={isProcessing}
                             >

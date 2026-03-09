@@ -258,6 +258,166 @@ export async function parseUploadAction(
     }
 }
 
+/**
+ * Parsea texto de WhatsApp (chat exportado o pegado) para inventario inicial.
+ * Formato esperado por línea: "cantidad producto" o "producto cantidad unidad"
+ * Ej: "2 cerveza corona", "5 harina kg", "TP-001 10"
+ */
+export async function parseWhatsAppInventoryAction(text: string): Promise<ImportPreviewResult> {
+    try {
+        if (!text || !text.trim()) {
+            return { success: false, message: 'Texto vacío', items: [], allItems: [] };
+        }
+
+        const dbItems = await prisma.inventoryItem.findMany({
+            select: { id: true, name: true, sku: true }
+        });
+
+        const normalize = (s: string) => s?.toString().trim().toLowerCase().replace(/\s+/g, ' ') || '';
+
+        // Strip WhatsApp metadata from each line
+        const lines = text.split('\n')
+            .map(line => {
+                const stripped = line
+                    .replace(/^\[?\d{1,2}\/\d{1,2}\/\d{2,4},?\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]\.?\s*m\.?)?\]?\s*[-–]?\s*/i, '')
+                    .replace(/^[^:]+:\s*/, '');
+                return stripped.trim();
+            })
+            .filter(l => l.length >= 2);
+
+        const items: NonNullable<ImportPreviewResult['items']> = [];
+        let rowNum = 0;
+
+        for (const line of lines) {
+            const parsed = parseInventoryLine(line);
+            if (!parsed) continue;
+
+            rowNum++;
+            const { quantity, productName, unit } = parsed;
+
+            // 1. Try exact match by name or SKU
+            let match = dbItems.find(
+                item => normalize(item.name) === normalize(productName) ||
+                    normalize(item.sku) === normalize(productName) ||
+                    normalize(item.sku) === normalize(productName.replace(/\s/g, ''))
+            );
+
+            let isFuzzy = false;
+            if (!match) {
+                let bestDist = Infinity;
+                let bestCandidate: typeof dbItems[0] | null = null;
+                const maxDist = 5;
+                for (const item of dbItems) {
+                    const dist = levenshteinDistance(normalize(productName), normalize(item.name));
+                    const distSku = levenshteinDistance(normalize(productName), normalize(item.sku));
+                    const d = Math.min(dist, distSku);
+                    if (d < bestDist && d <= maxDist) {
+                        bestDist = d;
+                        bestCandidate = item;
+                    }
+                }
+                if (bestCandidate) {
+                    match = bestCandidate;
+                    isFuzzy = true;
+                }
+            }
+
+            const isValidQty = !isNaN(quantity) && quantity >= 0;
+
+            items.push({
+                row: rowNum,
+                itemName: productName,
+                quantity: isValidQty ? quantity : 0,
+                unit: unit,
+                matchedItemId: match?.id,
+                status: match ? (isValidQty ? 'MATCHED' : 'INVALID') : 'NOT_FOUND',
+                isFuzzyMatch: isFuzzy,
+                category: 'GENERAL'
+            });
+        }
+
+        return {
+            success: true,
+            message: `Procesadas ${items.length} líneas`,
+            items,
+            allItems: dbItems.map(i => ({ id: i.id, name: i.name }))
+        };
+    } catch (error) {
+        console.error('[parseWhatsAppInventory]', error);
+        return {
+            success: false,
+            message: 'Error al procesar el texto',
+            items: [],
+            allItems: []
+        };
+    }
+}
+
+function parseInventoryLine(line: string): { quantity: number; productName: string; unit: string } | null {
+    let trimmed = line.trim();
+    if (!trimmed || trimmed.length < 2) return null;
+
+    // Ignore common non-product lines
+    const ignore = /^(hola|ok|listo|gracias|buenos|buenas|si|no|dale|perfecto|ahi|claro|menu|precio|cuanto)/i;
+    if (ignore.test(trimmed)) return null;
+
+    let quantity = 1;
+    let productName = trimmed;
+    let unit = 'UNI';
+
+    // Detect unit in text: "5 harina kg", "10 litros aceite", "aceite 10 L"
+    const unitPatterns: { regex: RegExp; unit: string }[] = [
+        { regex: /\b(\d+(?:[.,]\d+)?)\s*(?:kg|kilo|kilos|kilogramo)s?\b/i, unit: 'KG' },
+        { regex: /\b(\d+(?:[.,]\d+)?)\s*(?:g|gr|gramo|gramos)s?\b/i, unit: 'GR' },
+        { regex: /\b(\d+(?:[.,]\d+)?)\s*(?:l|lt|lts|litro|litros)s?\b/i, unit: 'LTS' },
+        { regex: /\b(\d+(?:[.,]\d+)?)\s*(?:ml|mililitro)s?\b/i, unit: 'ML' },
+        { regex: /\b(?:und|unidad|unidades|pza|pieza)s?\b/i, unit: 'UNI' },
+    ];
+
+    for (const { regex, unit: u } of unitPatterns) {
+        const m = productName.match(regex);
+        if (m) {
+            unit = u;
+            if (m[1]) quantity = parseFloat(m[1].replace(',', '.')) || quantity;
+            productName = productName.replace(regex, '').trim();
+            break;
+        }
+    }
+
+    // Quantity at start: "2 cerveza", "2x harina", "2 - producto"
+    const qtyStartPatterns = [
+        /^(\d+(?:[.,]\d+)?)\s*[xX×]\s*/,
+        /^(\d+(?:[.,]\d+)?)\s*[-–]?\s*/,
+        /^(\d+(?:[.,]\d+)?)\s+/,
+    ];
+    for (const p of qtyStartPatterns) {
+        const m = productName.match(p);
+        if (m) {
+            quantity = parseFloat(m[1].replace(',', '.')) || 1;
+            productName = productName.replace(p, '').trim();
+            break;
+        }
+    }
+
+    // Quantity at end: "harina 5", "producto 10"
+    const qtyEndMatch = productName.match(/\s(\d+(?:[.,]\d+)?)\s*$/);
+    if (qtyEndMatch && !productName.match(/\d+\s+\d/)) {
+        quantity = parseFloat(qtyEndMatch[1].replace(',', '.')) || quantity;
+        productName = productName.replace(/\s\d+(?:[.,]\d+)?\s*$/, '').trim();
+    }
+
+    // SKU-like at start: "TP-001 10", "SKU123 5"
+    const skuMatch = productName.match(/^([A-Za-z]{2,}[-]?\d+)\s+(\d+(?:[.,]\d+)?)/);
+    if (skuMatch) {
+        productName = skuMatch[1];
+        quantity = parseFloat(skuMatch[2].replace(',', '.')) || 1;
+    }
+
+    if (!productName || productName.length < 2) return null;
+
+    return { quantity, productName, unit };
+}
+
 function levenshteinDistance(a: string, b: string): number {
     if (a.length === 0) return b.length;
     if (b.length === 0) return a.length;
