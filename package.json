@@ -18,6 +18,7 @@
     "db:seed-inventario": "tsx scripts/seed-inventario-licores-comida.ts",
     "db:seed-inventario-real": "tsx scripts/seed-inventario-real.ts",
     "db:reset-inventario": "tsx scripts/reset-inventario-completo.ts",
+    "db:setup-recipes": "tsx scripts/setup-missing-recipes.ts",
     "db:backfill-sales": "tsx scripts/backfill-inventory-sales.ts",
     "vercel-build": "prisma generate && next build"
   },
