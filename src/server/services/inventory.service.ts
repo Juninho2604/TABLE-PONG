@@ -272,21 +272,27 @@ export async function registerSale(input: SaleInput): Promise<SaleResult> {
                     notes: input.notes,
                     reason: input.orderId ? `Venta - Orden: ${input.orderId}` : 'Venta directa',
                     createdById: input.userId,
+                    salesOrderId: input.orderId,
                 },
             });
 
-            // Decrementar stock
-            const stockLocation = await tx.inventoryLocation.update({
+            // Decrementar stock (upsert para crear el registro si no existe en esa área)
+            const stockLocation = await tx.inventoryLocation.upsert({
                 where: {
                     inventoryItemId_areaId: {
                         inventoryItemId: input.inventoryItemId,
                         areaId: input.areaId,
                     },
                 },
-                data: {
+                update: {
                     currentStock: {
                         decrement: input.quantity,
                     },
+                },
+                create: {
+                    inventoryItemId: input.inventoryItemId,
+                    areaId: input.areaId,
+                    currentStock: -input.quantity,
                 },
             });
 

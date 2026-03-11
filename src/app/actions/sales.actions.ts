@@ -30,7 +30,7 @@ export interface ZReportData {
     ordersByStatus: Record<string, number>;
 }
 
-export async function getSalesHistoryAction(limit = 50) {
+export async function getSalesHistoryAction(limit = 200) {
     try {
         const sales = await prisma.salesOrder.findMany({
             take: limit,
@@ -41,6 +41,15 @@ export async function getSalesHistoryAction(limit = 50) {
                 },
                 createdBy: {
                     select: { firstName: true, lastName: true }
+                },
+                items: {
+                    select: {
+                        itemName: true,
+                        quantity: true,
+                        unitPrice: true,
+                        lineTotal: true,
+                        notes: true,
+                    }
                 }
             }
         });

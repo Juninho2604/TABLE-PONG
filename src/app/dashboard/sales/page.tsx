@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getSalesHistoryAction, getDailyZReportAction, type ZReportData } from '@/app/actions/sales.actions';
+import * as XLSX from 'xlsx';
 
 export default function SalesHistoryPage() {
     const [sales, setSales] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [zReport, setZReport] = useState<ZReportData | null>(null);
     const [showZReport, setShowZReport] = useState(false);
+    const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
 
     useEffect(() => {
         loadData();
@@ -32,6 +34,96 @@ export default function SalesHistoryPage() {
         }
     };
 
+    const handleExportExcel = () => {
+        if (!sales.length) return;
+
+        // Hoja 1: Resumen de ventas (una fila por orden)
+        const summaryRows = sales.map(sale => ({
+            'Orden #': sale.orderNumber,
+            'Fecha': sale.createdAt ? new Date(sale.createdAt).toLocaleDateString('es-VE') : '',
+            'Hora': sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '',
+            'Cliente': sale.customerName || 'Cliente General',
+            'Tipo': sale.orderType === 'RESTAURANT' ? 'Restaurante' : sale.orderType === 'DELIVERY' ? 'Delivery' : sale.orderType,
+            'Canal': sale.sourceChannel || '',
+            'Método de Pago': getPaymentLabel(sale.paymentMethod),
+            'Subtotal ($)': Number(sale.subtotal).toFixed(2),
+            'Descuento ($)': Number(sale.discount).toFixed(2),
+            'Tipo Descuento': sale.discountType || '',
+            'Total ($)': Number(sale.total).toFixed(2),
+            'Estado': sale.status,
+            'Estado Pago': sale.paymentStatus,
+            'Registrado por': sale.createdBy ? `${sale.createdBy.firstName} ${sale.createdBy.lastName}` : '',
+            'Autorizado por': sale.authorizedBy ? `${sale.authorizedBy.firstName} ${sale.authorizedBy.lastName}` : '',
+            'Notas': sale.notes || '',
+        }));
+
+        // Hoja 2: Detalle de ítems (una fila por ítem vendido)
+        const itemRows: any[] = [];
+        for (const sale of sales) {
+            if (!sale.items || sale.items.length === 0) {
+                itemRows.push({
+                    'Orden #': sale.orderNumber,
+                    'Fecha': sale.createdAt ? new Date(sale.createdAt).toLocaleDateString('es-VE') : '',
+                    'Hora': sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '',
+                    'Producto': '(sin detalle)',
+                    'Cantidad': '',
+                    'Precio Unit. ($)': '',
+                    'Subtotal Ítem ($)': '',
+                    'Notas Ítem': '',
+                    'Método de Pago': getPaymentLabel(sale.paymentMethod),
+                    'Total Orden ($)': Number(sale.total).toFixed(2),
+                });
+            } else {
+                for (const item of sale.items) {
+                    itemRows.push({
+                        'Orden #': sale.orderNumber,
+                        'Fecha': sale.createdAt ? new Date(sale.createdAt).toLocaleDateString('es-VE') : '',
+                        'Hora': sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '',
+                        'Producto': item.itemName,
+                        'Cantidad': item.quantity,
+                        'Precio Unit. ($)': Number(item.unitPrice).toFixed(2),
+                        'Subtotal Ítem ($)': Number(item.lineTotal).toFixed(2),
+                        'Notas Ítem': item.notes || '',
+                        'Método de Pago': getPaymentLabel(sale.paymentMethod),
+                        'Total Orden ($)': Number(sale.total).toFixed(2),
+                    });
+                }
+            }
+        }
+
+        const wb = XLSX.utils.book_new();
+
+        const ws1 = XLSX.utils.json_to_sheet(summaryRows);
+        // Ajustar anchos de columna
+        ws1['!cols'] = [
+            { wch: 22 }, { wch: 12 }, { wch: 8 }, { wch: 20 }, { wch: 12 },
+            { wch: 16 }, { wch: 15 }, { wch: 12 }, { wch: 13 }, { wch: 15 },
+            { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 25 },
+        ];
+        XLSX.utils.book_append_sheet(wb, ws1, 'Resumen Ventas');
+
+        const ws2 = XLSX.utils.json_to_sheet(itemRows);
+        ws2['!cols'] = [
+            { wch: 22 }, { wch: 12 }, { wch: 8 }, { wch: 25 }, { wch: 10 },
+            { wch: 14 }, { wch: 16 }, { wch: 20 }, { wch: 15 }, { wch: 14 },
+        ];
+        XLSX.utils.book_append_sheet(wb, ws2, 'Detalle Ítems');
+
+        const today = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `historial_ventas_${today}.xlsx`);
+    };
+
+    const getPaymentLabel = (method: string) => {
+        switch (method) {
+            case 'CASH': return 'Efectivo';
+            case 'CARD': return 'Punto de Venta';
+            case 'TRANSFER': return 'Transferencia';
+            case 'MOBILE_PAY': return 'Pago Móvil';
+            case 'MULTIPLE': return 'Mixto';
+            default: return method || '-';
+        }
+    };
+
     const getPaymentBadge = (method: string) => {
         switch (method) {
             case 'CASH': return <span className="bg-green-900 text-green-300 px-2 py-1 rounded text-xs font-bold">EFECTIVO</span>;
@@ -53,14 +145,23 @@ export default function SalesHistoryPage() {
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">
                         Historial de Ventas
                     </h1>
-                    <p className="text-gray-400">Registro de transacciones y cierres</p>
+                    <p className="text-gray-400">Registro de transacciones y cierres · {sales.length} órdenes</p>
                 </div>
-                <button
-                    onClick={handleGenerateZReport}
-                    className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-red-500/20 flex items-center gap-2"
-                >
-                    🖨️ REPORTE "Z" (CIERRE)
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={handleExportExcel}
+                        disabled={!sales.length}
+                        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:opacity-50 text-white px-5 py-3 rounded-xl font-bold shadow-lg shadow-green-500/20 flex items-center gap-2"
+                    >
+                        📊 EXPORTAR EXCEL
+                    </button>
+                    <button
+                        onClick={handleGenerateZReport}
+                        className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-red-500/20 flex items-center gap-2"
+                    >
+                        🖨️ REPORTE "Z" (CIERRE)
+                    </button>
+                </div>
             </div>
 
             {/* Tabla de Ventas */}
@@ -74,42 +175,79 @@ export default function SalesHistoryPage() {
                             <th className="p-4">Método</th>
                             <th className="p-4 text-right">Total</th>
                             <th className="p-4">Descuento / Auth</th>
+                            <th className="p-4 text-center">Ítems</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700 font-mono text-sm">
                         {sales.map(sale => (
-                            <tr key={sale.id} className="hover:bg-gray-700/30 transition-colors">
-                                <td className="p-4 font-bold text-blue-300">{sale.orderNumber}</td>
-                                <td className="p-4 text-gray-400">
-                                    {sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
-                                </td>
-                                <td className="p-4 font-sans text-gray-300 truncate max-w-[150px]">
-                                    {sale.customerName || 'Cliente General'}
-                                </td>
-                                <td className="p-4">
-                                    {getPaymentBadge(sale.paymentMethod)}
-                                </td>
-                                <td className="p-4 text-right font-bold text-white text-base">
-                                    {formatMoney(sale.total)}
-                                </td>
-                                <td className="p-4 font-sans">
-                                    {sale.discount > 0 ? (
-                                        <div className="flex flex-col gap-1">
-                                            {sale.discountType === 'DIVISAS_33' && (
-                                                <span className="text-blue-400 text-xs">📉 Divisas (-{formatMoney(sale.discount)})</span>
-                                            )}
-                                            {sale.discountType === 'CORTESIA_100' && (
-                                                <span className="text-purple-400 text-xs font-bold">🎁 CORTESÍA</span>
-                                            )}
-                                            {sale.authorizedById && (
-                                                <span className="text-green-500 text-[10px] bg-green-900/30 px-1 rounded w-fit">
-                                                    Auth: {sale.authorizedBy?.firstName}
-                                                </span>
-                                            )}
-                                        </div>
-                                    ) : <span className="text-gray-600">-</span>}
-                                </td>
-                            </tr>
+                            <React.Fragment key={sale.id}>
+                                <tr
+                                    className="hover:bg-gray-700/30 transition-colors cursor-pointer"
+                                    onClick={() => setExpandedOrder(expandedOrder === sale.id ? null : sale.id)}
+                                >
+                                    <td className="p-4 font-bold text-blue-300">{sale.orderNumber}</td>
+                                    <td className="p-4 text-gray-400">
+                                        {sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                    </td>
+                                    <td className="p-4 font-sans text-gray-300 truncate max-w-[150px]">
+                                        {sale.customerName || 'Cliente General'}
+                                    </td>
+                                    <td className="p-4">
+                                        {getPaymentBadge(sale.paymentMethod)}
+                                    </td>
+                                    <td className="p-4 text-right font-bold text-white text-base">
+                                        {formatMoney(sale.total)}
+                                    </td>
+                                    <td className="p-4 font-sans">
+                                        {sale.discount > 0 ? (
+                                            <div className="flex flex-col gap-1">
+                                                {sale.discountType === 'DIVISAS_33' && (
+                                                    <span className="text-blue-400 text-xs">📉 Divisas (-{formatMoney(sale.discount)})</span>
+                                                )}
+                                                {sale.discountType === 'CORTESIA_100' && (
+                                                    <span className="text-purple-400 text-xs font-bold">🎁 CORTESÍA</span>
+                                                )}
+                                                {sale.authorizedById && (
+                                                    <span className="text-green-500 text-[10px] bg-green-900/30 px-1 rounded w-fit">
+                                                        Auth: {sale.authorizedBy?.firstName}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ) : <span className="text-gray-600">-</span>}
+                                    </td>
+                                    <td className="p-4 text-center">
+                                        <span className="text-gray-400 text-xs">
+                                            {sale.items?.length || 0} {expandedOrder === sale.id ? '▲' : '▼'}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {expandedOrder === sale.id && sale.items?.length > 0 && (
+                                    <tr className="bg-gray-900/60">
+                                        <td colSpan={7} className="px-8 py-3">
+                                            <table className="w-full text-xs font-sans">
+                                                <thead>
+                                                    <tr className="text-gray-500 uppercase">
+                                                        <th className="text-left pb-1">Producto</th>
+                                                        <th className="text-center pb-1">Cant.</th>
+                                                        <th className="text-right pb-1">P. Unit.</th>
+                                                        <th className="text-right pb-1">Subtotal</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {sale.items.map((item: any, i: number) => (
+                                                        <tr key={i} className="border-t border-gray-800">
+                                                            <td className="py-1 text-gray-300">{item.itemName}</td>
+                                                            <td className="py-1 text-center text-gray-400">×{item.quantity}</td>
+                                                            <td className="py-1 text-right text-gray-400">{formatMoney(item.unitPrice)}</td>
+                                                            <td className="py-1 text-right text-white font-bold">{formatMoney(item.lineTotal)}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </td>
+                                    </tr>
+                                )}
+                            </React.Fragment>
                         ))}
                     </tbody>
                 </table>
@@ -123,7 +261,7 @@ export default function SalesHistoryPage() {
 
                         <div className="text-center mb-6 border-b-2 border-dashed border-black pb-4">
                             <h2 className="text-2xl font-black">REPORTE Z</h2>
-                            <p className="text-sm">SHANKLISH CARACAS</p>
+                            <p className="text-sm">TABLE PONG</p>
                             <p className="text-sm">{new Date().toLocaleString()}</p>
                             <p className="text-sm mt-1 font-bold">CIERRE DE CAJA DIARIO</p>
                         </div>
