@@ -21,6 +21,10 @@ export default function SalesHistoryPage() {
     const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
     const [printingId, setPrintingId] = useState<string | null>(null);
     const [voidingId, setVoidingId] = useState<string | null>(null);
+    const [dateFilter, setDateFilter] = useState<string>(() => {
+        // Default: hoy en hora Caracas
+        return new Date().toLocaleDateString('sv-SE', { timeZone: CARACAS_TZ });
+    });
     const canPrint = user && MANAGER_ROLES.includes(user.role);
     const canVoid = user && VOID_ROLES.includes(user.role);
 
@@ -36,6 +40,15 @@ export default function SalesHistoryPage() {
         }
         setIsLoading(false);
     };
+
+    // Filtra las ventas en el cliente según la fecha seleccionada (zona Caracas)
+    const filteredSales = dateFilter
+        ? sales.filter(s => {
+            if (!s.createdAt) return false;
+            const d = new Date(s.createdAt).toLocaleDateString('sv-SE', { timeZone: CARACAS_TZ });
+            return d === dateFilter;
+          })
+        : sales;
 
     const handleGenerateZReport = async () => {
         const result = await getDailyZReportAction();
@@ -229,9 +242,23 @@ export default function SalesHistoryPage() {
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-indigo-500 bg-clip-text text-transparent">
                         Historial de Ventas
                     </h1>
-                    <p className="text-gray-400">Registro de transacciones y cierres · {sales.length} órdenes</p>
+                    <p className="text-gray-400">Registro de transacciones y cierres · {filteredSales.length} de {sales.length} órdenes</p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3 items-center">
+                    <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-400 font-medium">📅 Fecha:</label>
+                        <input
+                            type="date"
+                            value={dateFilter}
+                            onChange={e => setDateFilter(e.target.value)}
+                            className="bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:border-blue-500 outline-none"
+                        />
+                        {dateFilter && (
+                            <button onClick={() => setDateFilter('')} className="text-gray-400 hover:text-white text-xs bg-gray-700 px-2 py-2 rounded-lg">
+                                ✕ Todas
+                            </button>
+                        )}
+                    </div>
                     <button
                         onClick={handleExportExcel}
                         disabled={!sales.length}
@@ -248,12 +275,14 @@ export default function SalesHistoryPage() {
                 </div>
             </div>
 
+
             {/* Tabla de Ventas */}
             <div className="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden shadow-xl">
                 <table className="w-full text-left border-collapse">
                     <thead className="bg-gray-900/50 text-gray-400 uppercase text-xs font-bold">
                         <tr>
                             <th className="p-4">Orden #</th>
+                            <th className="p-4">Fecha</th>
                             <th className="p-4">Hora</th>
                             <th className="p-4">Cliente</th>
                             <th className="p-4">Método</th>
@@ -264,13 +293,16 @@ export default function SalesHistoryPage() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700 font-mono text-sm">
-                        {sales.map(sale => (
+                        {filteredSales.map(sale => (
                             <React.Fragment key={sale.id}>
                                 <tr
                                     className="hover:bg-gray-700/30 transition-colors cursor-pointer"
                                     onClick={() => setExpandedOrder(expandedOrder === sale.id ? null : sale.id)}
                                 >
                                     <td className="p-4 font-bold text-blue-300">{sale.orderNumber}</td>
+                                    <td className="p-4 text-gray-300 text-xs">
+                                        {sale.createdAt ? formatSaleDate(sale.createdAt) : '-'}
+                                    </td>
                                     <td className="p-4 text-gray-400">
                                         {sale.createdAt ? formatSaleTime(sale.createdAt) : '-'}
                                     </td>
@@ -335,7 +367,7 @@ export default function SalesHistoryPage() {
                                 </tr>
                                 {expandedOrder === sale.id && sale.items?.length > 0 && (
                                     <tr className="bg-gray-900/60">
-                                        <td colSpan={(canPrint || canVoid) ? 8 : 7} className="px-8 py-3">
+                                        <td colSpan={(canPrint || canVoid) ? 9 : 8} className="px-8 py-3">
                                             <table className="w-full text-xs font-sans">
                                                 <thead>
                                                     <tr className="text-gray-500 uppercase">

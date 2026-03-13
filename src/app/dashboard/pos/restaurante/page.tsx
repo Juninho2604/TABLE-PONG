@@ -557,9 +557,12 @@ export default function POSRestaurantPage() {
                 </div>
 
                 <div className={`fixed inset-0 z-40 bg-gray-900 flex flex-col transition-transform duration-300 lg:static lg:bg-gray-800 lg:w-96 lg:translate-x-0 lg:border-l lg:border-gray-700 ${showMobileCart ? 'translate-x-0' : 'translate-x-full'}`}>
-                    <div className="lg:hidden p-4 border-b border-gray-700 flex justify-between bg-gray-800">
+                    <div className="lg:hidden p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800">
                         <h2 className="font-bold text-xl">Carrito</h2>
-                        <button onClick={() => setShowMobileCart(false)}>✕</button>
+                        <div className="flex items-center gap-2">
+                            <CurrencyCalculator totalUsd={Number(finalTotal.toFixed(2))} onRateUpdated={setExchangeRate} />
+                            <button onClick={() => setShowMobileCart(false)}>✕</button>
+                        </div>
                     </div>
                     <div className="p-4 border-b border-gray-700 bg-gray-800/50">
                         <input type="text" value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Cliente / Mesa" className="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white focus:border-amber-500 outline-none" />
@@ -670,6 +673,9 @@ export default function POSRestaurantPage() {
                                 </div>
                             )}
                         </div>
+
+                        {/* CALCULADORA USD/Bs */}
+                        <CurrencyCalculator totalUsd={Number(finalTotal.toFixed(2))} onRateUpdated={setExchangeRate} className="w-full justify-center" />
 
                         {/* BOTÓN COBRAR */}
                         <button
