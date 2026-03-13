@@ -85,24 +85,37 @@ class POSActionError extends Error {
 }
 
 async function ensureBaseSalesArea() {
+    const whereActive = { isActive: true };
+
+    // 1. Restaurante
     let area = await prisma.area.findFirst({
-        where: { name: { contains: 'Restaurante', mode: 'insensitive' } },
+        where: { ...whereActive, name: { contains: 'Restaurante', mode: 'insensitive' } },
     });
-
     if (area) return area;
 
+    // 2. Barra (incluye BARRA, DEPOSITO BARRA)
     area = await prisma.area.findFirst({
-        where: { name: { contains: 'Barra', mode: 'insensitive' } },
+        where: { ...whereActive, name: { contains: 'Barra', mode: 'insensitive' } },
     });
-
     if (area) return area;
 
+    // 3. Oficina (Table Pong)
+    area = await prisma.area.findFirst({
+        where: { ...whereActive, name: { contains: 'Oficina', mode: 'insensitive' } },
+    });
+    if (area) return area;
+
+    // 4. Cualquier área activa
+    area = await prisma.area.findFirst({ where: whereActive });
+    if (area) return area;
+
+    // 5. Último recurso: cualquier área (incluso inactiva)
     area = await prisma.area.findFirst();
-
     if (area) return area;
 
+    // 6. Crear área por defecto
     return prisma.area.create({
-        data: { name: 'Barra Principal' }
+        data: { name: 'Barra Principal', isActive: true }
     });
 }
 
@@ -696,7 +709,13 @@ export async function createSalesOrderAction(
 
     } catch (error) {
         console.error('Error creando orden:', error);
-        return { success: false, message: 'Error al crear la orden. Verifique áreas.' };
+        const errMsg = error instanceof Error ? error.message : String(error);
+        return {
+            success: false,
+            message: errMsg.includes('area') || errMsg.includes('Area')
+                ? `Error de áreas: ${errMsg}. Verifique que existan áreas activas (BARRA, OFICINA, etc.) en Administración → Almacenes.`
+                : `Error al crear la orden: ${errMsg}`
+        };
     }
 }
 
