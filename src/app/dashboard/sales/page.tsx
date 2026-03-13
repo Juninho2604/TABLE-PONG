@@ -159,8 +159,8 @@ export default function SalesHistoryPage() {
                 orderType: o.orderType === 'DELIVERY' ? 'DELIVERY' : 'RESTAURANT',
                 date: o.createdAt,
                 cashierName,
-                customerName: o.customerName,
-                customerAddress: o.customerAddress,
+                customerName: o.customerName ?? undefined,
+                customerAddress: o.customerAddress ?? undefined,
                 items: o.items.map((i: any) => ({
                     name: i.itemName,
                     quantity: i.quantity,
