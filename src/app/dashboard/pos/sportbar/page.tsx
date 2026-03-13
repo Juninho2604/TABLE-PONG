@@ -433,7 +433,7 @@ export default function POSSportBarPage() {
                         <p className="text-sm text-slate-400">{layout?.name || 'Table Pong'} · cuentas abiertas y consumo incremental</p>
                     </div>
                     <div className="flex items-center gap-3">
-                        <CurrencyCalculator />
+                        <CurrencyCalculator totalUsd={activeTab ? Number(activeTab.balanceDue.toFixed(2)) : 0} onRateUpdated={setExchangeRate} />
                         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300">
                             Ruta nueva en paralelo al POS actual
                         </div>

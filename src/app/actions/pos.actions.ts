@@ -10,6 +10,7 @@ import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
 import { registerSale } from '@/server/services/inventory.service';
+import { getCaracasDateStamp, getCaracasDayRange } from '@/lib/datetime';
 
 // ============================================================================
 // TIPOS
@@ -580,21 +581,14 @@ export async function validateManagerPinAction(pin: string): Promise<ActionResul
 // ============================================================================
 
 async function generateOrderNumber(orderType: POSOrderType): Promise<string> {
-    const today = new Date();
-    // Usar fecha LOCAL (no UTC) para evitar que ventas nocturnas aparezcan al día siguiente
-    const y = today.getFullYear();
-    const m = String(today.getMonth() + 1).padStart(2, '0');
-    const d = String(today.getDate()).padStart(2, '0');
-    const dateStr = `${y}-${m}-${d}`;
+    const dateStr = getCaracasDateStamp();
     const prefix = orderType === 'RESTAURANT' ? 'REST' : 'DELV';
-
-    const startOfDay = new Date(y, today.getMonth(), today.getDate(), 0, 0, 0, 0);
-    const endOfDay = new Date(y, today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    const { start, end } = getCaracasDayRange();
 
     const count = await prisma.salesOrder.count({
         where: {
             orderType,
-            createdAt: { gte: startOfDay, lte: endOfDay },
+            createdAt: { gte: start, lte: end },
         },
     });
 

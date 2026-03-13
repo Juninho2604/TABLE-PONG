@@ -7,6 +7,8 @@ import { useAuthStore } from '@/stores/auth.store';
 import * as XLSX from 'xlsx';
 
 const MANAGER_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'];
+const CARACAS_TZ = 'America/Caracas';
+
 
 export default function SalesHistoryPage() {
     const { user } = useAuthStore();
@@ -41,14 +43,25 @@ export default function SalesHistoryPage() {
         }
     };
 
+
+    const formatSaleDate = (dateValue: string | Date | null | undefined) => {
+        if (!dateValue) return '';
+        return new Date(dateValue).toLocaleDateString('es-VE', { timeZone: CARACAS_TZ });
+    };
+
+    const formatSaleTime = (dateValue: string | Date | null | undefined) => {
+        if (!dateValue) return '';
+        return new Date(dateValue).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', timeZone: CARACAS_TZ });
+    };
+
     const handleExportExcel = () => {
         if (!sales.length) return;
 
         // Hoja 1: Resumen de ventas (una fila por orden)
         const summaryRows = sales.map(sale => ({
             'Orden #': sale.orderNumber,
-            'Fecha': sale.createdAt ? new Date(sale.createdAt).toLocaleDateString('es-VE') : '',
-            'Hora': sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '',
+            'Fecha': formatSaleDate(sale.createdAt),
+            'Hora': formatSaleTime(sale.createdAt),
             'Cliente': sale.customerName || 'Cliente General',
             'Tipo': sale.orderType === 'RESTAURANT' ? 'Restaurante' : sale.orderType === 'DELIVERY' ? 'Delivery' : sale.orderType,
             'Canal': sale.sourceChannel || '',
@@ -70,8 +83,8 @@ export default function SalesHistoryPage() {
             if (!sale.items || sale.items.length === 0) {
                 itemRows.push({
                     'Orden #': sale.orderNumber,
-                    'Fecha': sale.createdAt ? new Date(sale.createdAt).toLocaleDateString('es-VE') : '',
-                    'Hora': sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '',
+                    'Fecha': formatSaleDate(sale.createdAt),
+                    'Hora': formatSaleTime(sale.createdAt),
                     'Producto': '(sin detalle)',
                     'Cantidad': '',
                     'Precio Unit. ($)': '',
@@ -84,8 +97,8 @@ export default function SalesHistoryPage() {
                 for (const item of sale.items) {
                     itemRows.push({
                         'Orden #': sale.orderNumber,
-                        'Fecha': sale.createdAt ? new Date(sale.createdAt).toLocaleDateString('es-VE') : '',
-                        'Hora': sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '',
+                        'Fecha': formatSaleDate(sale.createdAt),
+                        'Hora': formatSaleTime(sale.createdAt),
                         'Producto': item.itemName,
                         'Cantidad': item.quantity,
                         'Precio Unit. ($)': Number(item.unitPrice).toFixed(2),
@@ -116,7 +129,7 @@ export default function SalesHistoryPage() {
         ];
         XLSX.utils.book_append_sheet(wb, ws2, 'Detalle Ítems');
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatSaleDate(new Date()).replaceAll('/', '-');
         XLSX.writeFile(wb, `historial_ventas_${today}.xlsx`);
     };
 
@@ -233,7 +246,7 @@ export default function SalesHistoryPage() {
                                 >
                                     <td className="p-4 font-bold text-blue-300">{sale.orderNumber}</td>
                                     <td className="p-4 text-gray-400">
-                                        {sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                        {sale.createdAt ? formatSaleTime(sale.createdAt) : '-'}
                                     </td>
                                     <td className="p-4 font-sans text-gray-300 truncate max-w-[150px]">
                                         {sale.customerName || 'Cliente General'}
