@@ -694,6 +694,8 @@ export async function createSalesOrderAction(
             }
         }
 
+        if (!newOrder) throw new Error('No se pudo crear la orden tras reintentos');
+
         // ====================================================================
         // GESTIÓN DE INVENTARIO (Descargo de Recetas)
         // ====================================================================
@@ -959,6 +961,8 @@ export async function addItemsToOpenTabAction(data: AddItemsToOpenTabInput): Pro
                 throw err;
             }
         }
+
+        if (!createdOrder) throw new Error('No se pudo agregar el consumo tras reintentos');
 
         try {
             await registerInventoryForCartItems({
