@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { createSalesOrderAction, getMenuForPOSAction, validateManagerPinAction, type CartItem } from '@/app/actions/pos.actions';
+import { getExchangeRateValue } from '@/app/actions/exchange.actions';
 import { printReceipt, printKitchenCommand } from '@/lib/print-command';
 import WhatsAppOrderParser from '@/components/whatsapp-order-parser';
 import { CurrencyCalculator } from '@/components/pos/CurrencyCalculator';
@@ -45,6 +46,7 @@ export default function POSDeliveryPage() {
     const [categories, setCategories] = useState<any[]>([]);
     const [selectedCategory, setSelectedCategory] = useState<string>('');
     const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+    const [exchangeRate, setExchangeRate] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     const [cart, setCart] = useState<CartItem[]>([]);
@@ -86,11 +88,12 @@ export default function POSDeliveryPage() {
     useEffect(() => {
         async function loadMenu() {
             try {
-                const result = await getMenuForPOSAction();
+                const [result, rate] = await Promise.all([getMenuForPOSAction(), getExchangeRateValue()]);
                 if (result.success && result.data) {
                     setCategories(result.data);
                     if (result.data.length > 0) setSelectedCategory(result.data[0].id);
                 }
+                setExchangeRate(rate);
             } catch (error) { console.error(error); } finally { setIsLoading(false); }
         }
         loadMenu();
@@ -225,7 +228,8 @@ export default function POSDeliveryPage() {
                     <div><h1 className="text-2xl font-black">Shanklish Delivery</h1><p className="text-blue-200 text-xs font-bold uppercase">Sistema de Despacho</p></div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <CurrencyCalculator />
+                    <CurrencyCalculator totalUsd={Number(finalTotal.toFixed(2))} onRateUpdated={setExchangeRate} />
+                    {exchangeRate && <p className="font-mono text-xs text-blue-100">1$={exchangeRate.toFixed(2)} Bs</p>}
                     <button
                         onClick={() => setShowWhatsAppParser(!showWhatsAppParser)}
                         className={cn(

@@ -500,7 +500,7 @@ export default function POSRestaurantPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
-                    <CurrencyCalculator className="!bg-amber-900/40 !border-amber-400/30 !text-amber-100 hover:!bg-amber-800/50" />
+                    <CurrencyCalculator totalUsd={Number(finalTotal.toFixed(2))} onRateUpdated={setExchangeRate} className="!bg-amber-900/40 !border-amber-400/30 !text-amber-100 hover:!bg-amber-800/50" />
                     <button className="lg:hidden bg-gray-800 p-2 rounded-lg" onClick={() => setShowMobileCart(true)}>
                         🛒 <b>${cartTotal.toFixed(2)}</b>
                     </button>

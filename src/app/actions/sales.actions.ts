@@ -2,6 +2,7 @@
 
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
+import { getCaracasDayRange } from '@/lib/datetime';
 
 export interface SalesFilter {
     startDate?: Date;
@@ -32,6 +33,11 @@ export interface ZReportData {
 
 /** Obtiene una orden completa para reimprimir la nota de entrega */
 export async function getOrderForReceiptAction(orderId: string) {
+    const session = await getSession();
+    if (!session || !['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'].includes(session.role)) {
+        return { success: false, message: 'No autorizado para reimprimir notas de entrega' };
+    }
+
     try {
         const order = await prisma.salesOrder.findUnique({
             where: { id: orderId },
@@ -80,16 +86,13 @@ export async function getSalesHistoryAction(limit = 200) {
 
 export async function getDailyZReportAction(): Promise<{ success: boolean; data?: ZReportData; message?: string }> {
     try {
-        // Por defecto hoy
-        const today = new Date();
-        const startOfDay = new Date(today); startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(today); endOfDay.setHours(23, 59, 59, 999);
+        const { start, end } = getCaracasDayRange();
 
         const todaysOrders = await prisma.salesOrder.findMany({
             where: {
                 createdAt: {
-                    gte: startOfDay,
-                    lte: endOfDay
+                    gte: start,
+                    lte: end
                 },
                 status: { not: 'CANCELLED' }
             }
@@ -131,7 +134,7 @@ export async function getDailyZReportAction(): Promise<{ success: boolean; data?
         return {
             success: true,
             data: {
-                period: today.toLocaleDateString(),
+                period: new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas' }).format(new Date()),
                 totalOrders: todaysOrders.length,
                 grossTotal,
                 totalDiscounts,
