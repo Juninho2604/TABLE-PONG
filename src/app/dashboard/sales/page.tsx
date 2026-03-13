@@ -226,7 +226,6 @@ export default function SalesHistoryPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-700 font-mono text-sm">
                         {sales.map(sale => (
-<<<<<<< HEAD
                             <React.Fragment key={sale.id}>
                                 <tr
                                     className="hover:bg-gray-700/30 transition-colors cursor-pointer"
