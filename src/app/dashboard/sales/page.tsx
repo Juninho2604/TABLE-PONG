@@ -2,11 +2,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { getSalesHistoryAction, getDailyZReportAction, getOrderForReceiptAction, type ZReportData } from '@/app/actions/sales.actions';
+import { voidSalesOrderAction } from '@/app/actions/sales-entry.actions';
 import { printReceipt } from '@/lib/print-command';
 import { useAuthStore } from '@/stores/auth.store';
 import * as XLSX from 'xlsx';
 
 const MANAGER_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'];
+const VOID_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'];
 const CARACAS_TZ = 'America/Caracas';
 
 
@@ -18,7 +20,9 @@ export default function SalesHistoryPage() {
     const [showZReport, setShowZReport] = useState(false);
     const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
     const [printingId, setPrintingId] = useState<string | null>(null);
+    const [voidingId, setVoidingId] = useState<string | null>(null);
     const canPrint = user && MANAGER_ROLES.includes(user.role);
+    const canVoid = user && VOID_ROLES.includes(user.role);
 
     useEffect(() => {
         loadData();
@@ -194,6 +198,28 @@ export default function SalesHistoryPage() {
         }
     };
 
+    const handleVoidOrder = async (sale: any) => {
+        if (!canVoid) return;
+        if (sale.status === 'CANCELLED') {
+            alert('Esta orden ya está anulada');
+            return;
+        }
+        const reason = prompt(`Motivo de anulación para ${sale.orderNumber}:`);
+        if (!reason || !reason.trim()) return;
+        if (!confirm(`¿Confirmar anulación de ${sale.orderNumber}?\nMotivo: ${reason}`)) return;
+        setVoidingId(sale.id);
+        try {
+            const result = await voidSalesOrderAction(sale.id, reason.trim());
+            if (result.success) {
+                await loadData();
+            } else {
+                alert(result.message || 'Error al anular');
+            }
+        } finally {
+            setVoidingId(null);
+        }
+    };
+
     if (isLoading) return <div className="p-8 text-center text-white">Cargando historial...</div>;
 
     return (
@@ -234,7 +260,7 @@ export default function SalesHistoryPage() {
                             <th className="p-4 text-right">Total</th>
                             <th className="p-4">Descuento / Auth</th>
                             <th className="p-4 text-center">Ítems</th>
-                            {canPrint && <th className="p-4 text-center">Acciones</th>}
+                            {(canPrint || canVoid) && <th className="p-4 text-center">Acciones</th>}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700 font-mono text-sm">
@@ -279,21 +305,37 @@ export default function SalesHistoryPage() {
                                             {sale.items?.length || 0} {expandedOrder === sale.id ? '▲' : '▼'}
                                         </span>
                                     </td>
-                                    {canPrint && (
+                                    {(canPrint || canVoid) && (
                                         <td className="p-4 text-center">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handlePrintReceipt(sale); }}
-                                                disabled={printingId === sale.id}
-                                                className="text-white font-medium bg-slate-600 hover:bg-slate-500 px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
-                                            >
-                                                {printingId === sale.id ? '...' : '🖨️ Imprimir'}
-                                            </button>
+                                            <div className="flex items-center justify-center gap-2">
+                                                {canPrint && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handlePrintReceipt(sale); }}
+                                                        disabled={printingId === sale.id}
+                                                        className="text-white font-medium bg-slate-600 hover:bg-slate-500 px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
+                                                    >
+                                                        {printingId === sale.id ? '...' : '🖨️ Imprimir'}
+                                                    </button>
+                                                )}
+                                                {canVoid && sale.status !== 'CANCELLED' && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleVoidOrder(sale); }}
+                                                        disabled={voidingId === sale.id}
+                                                        className="text-red-300 font-medium bg-red-900/40 hover:bg-red-800/60 border border-red-700/50 px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
+                                                    >
+                                                        {voidingId === sale.id ? '...' : '🚫 Anular'}
+                                                    </button>
+                                                )}
+                                                {canVoid && sale.status === 'CANCELLED' && (
+                                                    <span className="text-red-500 text-xs font-bold px-2">ANULADA</span>
+                                                )}
+                                            </div>
                                         </td>
                                     )}
                                 </tr>
                                 {expandedOrder === sale.id && sale.items?.length > 0 && (
                                     <tr className="bg-gray-900/60">
-                                        <td colSpan={canPrint ? 8 : 7} className="px-8 py-3">
+                                        <td colSpan={(canPrint || canVoid) ? 8 : 7} className="px-8 py-3">
                                             <table className="w-full text-xs font-sans">
                                                 <thead>
                                                     <tr className="text-gray-500 uppercase">

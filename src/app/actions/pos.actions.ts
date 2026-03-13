@@ -598,11 +598,20 @@ async function generateOrderNumber(orderType: POSOrderType): Promise<string> {
     const prefix = orderType === 'RESTAURANT' ? 'REST' : 'DELV';
     const orderPrefix = `${prefix}-${dateStr}-`;
 
-    const count = await prisma.salesOrder.count({
+    const lastOrder = await prisma.salesOrder.findFirst({
         where: { orderNumber: { startsWith: orderPrefix } },
+        orderBy: { orderNumber: 'desc' },
+        select: { orderNumber: true },
     });
 
-    const sequence = String(count + 1).padStart(3, '0');
+    let nextSeq = 1;
+    if (lastOrder) {
+        const parts = lastOrder.orderNumber.split('-');
+        const lastSeq = parseInt(parts[parts.length - 1], 10);
+        nextSeq = isNaN(lastSeq) ? 1 : lastSeq + 1;
+    }
+
+    const sequence = String(nextSeq).padStart(3, '0');
     return `${orderPrefix}${sequence}`;
 }
 
@@ -634,8 +643,11 @@ export async function createSalesOrderAction(
         }
 
         let newOrder;
-        for (let attempt = 0; attempt < 5; attempt++) {
+        for (let attempt = 0; attempt < 10; attempt++) {
             try {
+                if (attempt > 0) {
+                    await new Promise(r => setTimeout(r, Math.random() * 80 + 20));
+                }
                 const orderNumber = await generateOrderNumber(data.orderType);
                 newOrder = await prisma.salesOrder.create({
                     data: {
@@ -689,7 +701,7 @@ export async function createSalesOrderAction(
                 });
                 break;
             } catch (err) {
-                if (isOrderNumberUniqueError(err) && attempt < 4) continue;
+                if (isOrderNumberUniqueError(err) && attempt < 9) continue;
                 throw err;
             }
         }
@@ -882,8 +894,11 @@ export async function addItemsToOpenTabAction(data: AddItemsToOpenTabInput): Pro
         });
 
         let createdOrder;
-        for (let attempt = 0; attempt < 5; attempt++) {
+        for (let attempt = 0; attempt < 10; attempt++) {
             try {
+                if (attempt > 0) {
+                    await new Promise(r => setTimeout(r, Math.random() * 80 + 20));
+                }
                 const orderNumber = await generateOrderNumber('RESTAURANT');
                 createdOrder = await prisma.$transaction(async (tx) => {
             await assertOpenTabVersionUpdate({
@@ -957,7 +972,7 @@ export async function addItemsToOpenTabAction(data: AddItemsToOpenTabInput): Pro
                 });
                 break;
             } catch (err) {
-                if (isOrderNumberUniqueError(err) && attempt < 4) continue;
+                if (isOrderNumberUniqueError(err) && attempt < 9) continue;
                 throw err;
             }
         }

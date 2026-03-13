@@ -32,7 +32,7 @@ export default async function TasaCambioPage() {
             <TasaCambioView
                 currentRate={current}
                 history={history}
-                canEdit={session.role === 'OWNER'}
+                canEdit={['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'].includes(session.role)}
             />
         </div>
     );

@@ -353,7 +353,7 @@ export async function voidSalesOrderAction(
         select: { role: true }
     });
 
-    const allowedRoles = ['OWNER', 'AUDITOR', 'ADMIN_MANAGER'];
+    const allowedRoles = ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER'];
     if (!user || !allowedRoles.includes(user.role)) {
         return { success: false, message: 'No tienes permisos para anular ventas' };
     }
