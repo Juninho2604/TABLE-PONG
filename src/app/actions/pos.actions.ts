@@ -7,6 +7,7 @@
  */
 
 import { revalidatePath } from 'next/cache';
+import { Prisma } from '@prisma/client';
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
 import { registerSale } from '@/server/services/inventory.service';
@@ -596,6 +597,85 @@ async function generateOrderNumber(orderType: POSOrderType): Promise<string> {
     return `${prefix}-${dateStr}-${sequence}`;
 }
 
+async function createSalesOrderWithRetry(params: {
+    data: CreateOrderData;
+    createdById: string;
+    areaId: string;
+    finalNotes: string;
+    subtotal: number;
+    discount: number;
+    total: number;
+    change: number;
+    discountReason?: string;
+}) {
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const orderNumber = await generateOrderNumber(params.data.orderType);
+
+        try {
+            return await prisma.salesOrder.create({
+                data: {
+                    orderNumber,
+                    orderType: params.data.orderType,
+                    customerName: params.data.customerName,
+                    customerPhone: params.data.customerPhone,
+                    customerAddress: params.data.customerAddress,
+                    status: 'CONFIRMED',
+                    serviceFlow: 'DIRECT_SALE',
+                    sourceChannel: params.data.orderType === 'DELIVERY' ? 'POS_DELIVERY' : 'POS_RESTAURANT',
+                    paymentStatus: 'PAID',
+                    paymentMethod: params.data.paymentMethod || 'CASH',
+                    kitchenStatus: 'SENT',
+                    sentToKitchenAt: new Date(),
+                    subtotal: params.subtotal,
+                    discount: params.discount,
+                    total: params.total,
+                    amountPaid: params.data.amountPaid || params.total,
+                    change: params.change > 0 ? params.change : 0,
+                    discountType: params.data.discountType,
+                    discountReason: params.discountReason,
+                    authorizedById: params.data.authorizedById && params.data.authorizedById !== 'demo-master-id' ? params.data.authorizedById : undefined,
+                    notes: params.finalNotes,
+                    createdById: params.createdById,
+                    areaId: params.areaId,
+                    items: {
+                        create: params.data.items.map(item => ({
+                            menuItemId: item.menuItemId,
+                            itemName: item.name,
+                            quantity: item.quantity,
+                            unitPrice: item.unitPrice,
+                            lineTotal: item.lineTotal,
+                            notes: item.notes,
+                            modifiers: {
+                                create: item.modifiers?.map(m => ({
+                                    name: m.name,
+                                    priceAdjustment: m.priceAdjustment,
+                                    modifierId: m.modifierId
+                                }))
+                            }
+                        }))
+                    }
+                },
+                include: { items: { include: { modifiers: true } } }
+            });
+        } catch (error) {
+            lastError = error;
+            if (
+                error instanceof Prisma.PrismaClientKnownRequestError &&
+                error.code === 'P2002' &&
+                Array.isArray((error.meta as any)?.target) &&
+                ((error.meta as any).target as string[]).includes('orderNumber')
+            ) {
+                continue;
+            }
+            throw error;
+        }
+    }
+
+    throw lastError;
+}
+
 // ============================================================================
 // ACTION: CREAR ORDEN DE VENTA
 // ============================================================================
@@ -618,57 +698,16 @@ export async function createSalesOrderAction(
             finalNotes = finalNotes ? `${finalNotes} | ${discountReason}` : discountReason;
         }
 
-        const orderNumber = await generateOrderNumber(data.orderType);
-
-        const newOrder = await prisma.salesOrder.create({
-            data: {
-                orderNumber,
-                orderType: data.orderType,
-                customerName: data.customerName,
-                customerPhone: data.customerPhone,
-                customerAddress: data.customerAddress,
-                status: 'CONFIRMED',
-                serviceFlow: 'DIRECT_SALE',
-                sourceChannel: data.orderType === 'DELIVERY' ? 'POS_DELIVERY' : 'POS_RESTAURANT',
-                paymentStatus: 'PAID',
-                paymentMethod: data.paymentMethod || 'CASH',
-                kitchenStatus: 'SENT',
-                sentToKitchenAt: new Date(),
-
-                subtotal,
-                discount,
-                total,
-                amountPaid: data.amountPaid || total,
-                change: change > 0 ? change : 0,
-
-                discountType: data.discountType,
-                discountReason: discountReason,
-                authorizedById: data.authorizedById && data.authorizedById !== 'demo-master-id' ? data.authorizedById : undefined,
-
-                notes: finalNotes,
-
-                createdById: session.id,
-                areaId: areaId,
-
-                items: {
-                    create: data.items.map(item => ({
-                        menuItemId: item.menuItemId,
-                        itemName: item.name,
-                        quantity: item.quantity,
-                        unitPrice: item.unitPrice,
-                        lineTotal: item.lineTotal,
-                        notes: item.notes,
-                        modifiers: {
-                            create: item.modifiers?.map(m => ({
-                                name: m.name, // CORREGIDO: Usando 'name' según schema
-                                priceAdjustment: m.priceAdjustment,
-                                modifierId: m.modifierId
-                            }))
-                        }
-                    }))
-                }
-            },
-            include: { items: { include: { modifiers: true } } }
+        const newOrder = await createSalesOrderWithRetry({
+            data,
+            createdById: session.id,
+            areaId,
+            finalNotes,
+            subtotal,
+            discount,
+            total,
+            change,
+            discountReason,
         });
 
         // ====================================================================
@@ -696,7 +735,8 @@ export async function createSalesOrderAction(
 
     } catch (error) {
         console.error('Error creando orden:', error);
-        return { success: false, message: 'Error al crear la orden. Verifique áreas.' };
+        const detail = error instanceof Error ? error.message : 'Error desconocido';
+        return { success: false, message: `Error al crear la orden: ${detail}` };
     }
 }
 
