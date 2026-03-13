@@ -1,15 +1,22 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getSalesHistoryAction, getDailyZReportAction, type ZReportData } from '@/app/actions/sales.actions';
+import { getSalesHistoryAction, getDailyZReportAction, getOrderForReceiptAction, type ZReportData } from '@/app/actions/sales.actions';
+import { printReceipt } from '@/lib/print-command';
+import { useAuthStore } from '@/stores/auth.store';
 import * as XLSX from 'xlsx';
 
+const MANAGER_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'];
+
 export default function SalesHistoryPage() {
+    const { user } = useAuthStore();
     const [sales, setSales] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [zReport, setZReport] = useState<ZReportData | null>(null);
     const [showZReport, setShowZReport] = useState(false);
     const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+    const [printingId, setPrintingId] = useState<string | null>(null);
+    const canPrint = user && MANAGER_ROLES.includes(user.role);
 
     useEffect(() => {
         loadData();
@@ -136,6 +143,44 @@ export default function SalesHistoryPage() {
 
     const formatMoney = (amount: number) => `$${amount.toFixed(2)}`;
 
+    const handlePrintReceipt = async (sale: any) => {
+        if (!canPrint) return;
+        setPrintingId(sale.id);
+        try {
+            const res = await getOrderForReceiptAction(sale.id);
+            if (!res.success || !res.data) {
+                alert(res.message || 'Error al cargar la orden');
+                return;
+            }
+            const o = res.data;
+            const cashierName = o.createdBy ? `${o.createdBy.firstName} ${o.createdBy.lastName}` : 'Sistema';
+            printReceipt({
+                orderNumber: o.orderNumber,
+                orderType: o.orderType === 'DELIVERY' ? 'DELIVERY' : 'RESTAURANT',
+                date: o.createdAt,
+                cashierName,
+                customerName: o.customerName,
+                customerAddress: o.customerAddress,
+                items: o.items.map((i: any) => ({
+                    name: i.itemName,
+                    quantity: i.quantity,
+                    unitPrice: Number(i.unitPrice),
+                    total: Number(i.lineTotal),
+                    modifiers: (i.modifiers || []).map((m: any) => m.name)
+                })),
+                subtotal: Number(o.subtotal),
+                discount: Number(o.discount || 0),
+                total: Number(o.total),
+                serviceFee: Number(o.total) * 0.10
+            });
+        } catch (e) {
+            console.error(e);
+            alert('Error al imprimir');
+        } finally {
+            setPrintingId(null);
+        }
+    };
+
     if (isLoading) return <div className="p-8 text-center text-white">Cargando historial...</div>;
 
     return (
@@ -176,10 +221,12 @@ export default function SalesHistoryPage() {
                             <th className="p-4 text-right">Total</th>
                             <th className="p-4">Descuento / Auth</th>
                             <th className="p-4 text-center">Ítems</th>
+                            {canPrint && <th className="p-4 text-center">Acciones</th>}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700 font-mono text-sm">
                         {sales.map(sale => (
+<<<<<<< HEAD
                             <React.Fragment key={sale.id}>
                                 <tr
                                     className="hover:bg-gray-700/30 transition-colors cursor-pointer"
@@ -220,10 +267,21 @@ export default function SalesHistoryPage() {
                                             {sale.items?.length || 0} {expandedOrder === sale.id ? '▲' : '▼'}
                                         </span>
                                     </td>
+                                    {canPrint && (
+                                        <td className="p-4 text-center">
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handlePrintReceipt(sale); }}
+                                                disabled={printingId === sale.id}
+                                                className="text-white font-medium bg-slate-600 hover:bg-slate-500 px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
+                                            >
+                                                {printingId === sale.id ? '...' : '🖨️ Imprimir'}
+                                            </button>
+                                        </td>
+                                    )}
                                 </tr>
                                 {expandedOrder === sale.id && sale.items?.length > 0 && (
                                     <tr className="bg-gray-900/60">
-                                        <td colSpan={7} className="px-8 py-3">
+                                        <td colSpan={canPrint ? 8 : 7} className="px-8 py-3">
                                             <table className="w-full text-xs font-sans">
                                                 <thead>
                                                     <tr className="text-gray-500 uppercase">

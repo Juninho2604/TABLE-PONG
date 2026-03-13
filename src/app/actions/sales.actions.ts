@@ -30,6 +30,24 @@ export interface ZReportData {
     ordersByStatus: Record<string, number>;
 }
 
+/** Obtiene una orden completa para reimprimir la nota de entrega */
+export async function getOrderForReceiptAction(orderId: string) {
+    try {
+        const order = await prisma.salesOrder.findUnique({
+            where: { id: orderId },
+            include: {
+                items: { include: { modifiers: true } },
+                createdBy: { select: { firstName: true, lastName: true } }
+            }
+        });
+        if (!order) return { success: false, message: 'Orden no encontrada' };
+        return { success: true, data: order };
+    } catch (error) {
+        console.error('Error fetching order for receipt:', error);
+        return { success: false, message: 'Error al cargar la orden' };
+    }
+}
+
 export async function getSalesHistoryAction(limit = 200) {
     try {
         const sales = await prisma.salesOrder.findMany({

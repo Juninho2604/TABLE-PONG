@@ -116,8 +116,9 @@ export async function createSalesEntryAction(
     }
 
     try {
-        // Generar número de orden
-        const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        // Generar número de orden (fecha LOCAL para evitar UTC)
+        const d = new Date();
+        const today = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
         const count = await prisma.salesOrder.count({
             where: {
                 orderNumber: { startsWith: `VTA-${today}` }

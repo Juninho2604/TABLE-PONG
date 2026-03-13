@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { createSalesOrderAction, getMenuForPOSAction, validateManagerPinAction, type CartItem } from '@/app/actions/pos.actions';
 import { printReceipt, printKitchenCommand } from '@/lib/print-command';
 import WhatsAppOrderParser from '@/components/whatsapp-order-parser';
+import { CurrencyCalculator } from '@/components/pos/CurrencyCalculator';
 
 interface ModifierOption {
     id: string;
@@ -224,6 +225,7 @@ export default function POSDeliveryPage() {
                     <div><h1 className="text-2xl font-black">Shanklish Delivery</h1><p className="text-blue-200 text-xs font-bold uppercase">Sistema de Despacho</p></div>
                 </div>
                 <div className="flex items-center gap-3">
+                    <CurrencyCalculator />
                     <button
                         onClick={() => setShowWhatsAppParser(!showWhatsAppParser)}
                         className={cn(

@@ -581,14 +581,15 @@ export async function validateManagerPinAction(pin: string): Promise<ActionResul
 
 async function generateOrderNumber(orderType: POSOrderType): Promise<string> {
     const today = new Date();
-    const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+    // Usar fecha LOCAL (no UTC) para evitar que ventas nocturnas aparezcan al día siguiente
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    const dateStr = `${y}-${m}-${d}`;
     const prefix = orderType === 'RESTAURANT' ? 'REST' : 'DELV';
 
-    const startOfDay = new Date(today);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(today);
-    endOfDay.setHours(23, 59, 59, 999);
+    const startOfDay = new Date(y, today.getMonth(), today.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(y, today.getMonth(), today.getDate(), 23, 59, 59, 999);
 
     const count = await prisma.salesOrder.count({
         where: {

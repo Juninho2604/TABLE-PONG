@@ -13,6 +13,7 @@ import {
 import { getExchangeRateValue } from '@/app/actions/exchange.actions';
 import { printKitchenCommand } from '@/lib/print-command';
 import { PriceDisplay } from '@/components/pos/PriceDisplay';
+import { CurrencyCalculator } from '@/components/pos/CurrencyCalculator';
 
 interface ModifierOption {
     id: string;
@@ -431,8 +432,11 @@ export default function POSSportBarPage() {
                         <h1 className="text-2xl font-bold">POS Sport Bar</h1>
                         <p className="text-sm text-slate-400">{layout?.name || 'Table Pong'} · cuentas abiertas y consumo incremental</p>
                     </div>
-                    <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300">
-                        Ruta nueva en paralelo al POS actual
+                    <div className="flex items-center gap-3">
+                        <CurrencyCalculator />
+                        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300">
+                            Ruta nueva en paralelo al POS actual
+                        </div>
                     </div>
                 </div>
             </div>
