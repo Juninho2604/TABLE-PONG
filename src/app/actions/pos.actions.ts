@@ -596,17 +596,19 @@ export async function validateManagerPinAction(pin: string): Promise<ActionResul
 async function generateOrderNumber(orderType: POSOrderType): Promise<string> {
     const dateStr = getCaracasDateStamp();
     const prefix = orderType === 'RESTAURANT' ? 'REST' : 'DELV';
-    const { start, end } = getCaracasDayRange();
+    const orderPrefix = `${prefix}-${dateStr}-`;
 
     const count = await prisma.salesOrder.count({
-        where: {
-            orderType,
-            createdAt: { gte: start, lte: end },
-        },
+        where: { orderNumber: { startsWith: orderPrefix } },
     });
 
     const sequence = String(count + 1).padStart(3, '0');
-    return `${prefix}-${dateStr}-${sequence}`;
+    return `${orderPrefix}${sequence}`;
+}
+
+function isOrderNumberUniqueError(err: unknown): boolean {
+    const msg = err instanceof Error ? err.message : String(err);
+    return msg.includes('Unique constraint failed') && msg.includes('orderNumber');
 }
 
 // ============================================================================
@@ -631,58 +633,66 @@ export async function createSalesOrderAction(
             finalNotes = finalNotes ? `${finalNotes} | ${discountReason}` : discountReason;
         }
 
-        const orderNumber = await generateOrderNumber(data.orderType);
+        let newOrder;
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                const orderNumber = await generateOrderNumber(data.orderType);
+                newOrder = await prisma.salesOrder.create({
+                    data: {
+                        orderNumber,
+                        orderType: data.orderType,
+                        customerName: data.customerName,
+                        customerPhone: data.customerPhone,
+                        customerAddress: data.customerAddress,
+                        status: 'CONFIRMED',
+                        serviceFlow: 'DIRECT_SALE',
+                        sourceChannel: data.orderType === 'DELIVERY' ? 'POS_DELIVERY' : 'POS_RESTAURANT',
+                        paymentStatus: 'PAID',
+                        paymentMethod: data.paymentMethod || 'CASH',
+                        kitchenStatus: 'SENT',
+                        sentToKitchenAt: new Date(),
 
-        const newOrder = await prisma.salesOrder.create({
-            data: {
-                orderNumber,
-                orderType: data.orderType,
-                customerName: data.customerName,
-                customerPhone: data.customerPhone,
-                customerAddress: data.customerAddress,
-                status: 'CONFIRMED',
-                serviceFlow: 'DIRECT_SALE',
-                sourceChannel: data.orderType === 'DELIVERY' ? 'POS_DELIVERY' : 'POS_RESTAURANT',
-                paymentStatus: 'PAID',
-                paymentMethod: data.paymentMethod || 'CASH',
-                kitchenStatus: 'SENT',
-                sentToKitchenAt: new Date(),
+                        subtotal,
+                        discount,
+                        total,
+                        amountPaid: data.amountPaid || total,
+                        change: change > 0 ? change : 0,
 
-                subtotal,
-                discount,
-                total,
-                amountPaid: data.amountPaid || total,
-                change: change > 0 ? change : 0,
+                        discountType: data.discountType,
+                        discountReason: discountReason,
+                        authorizedById: data.authorizedById && data.authorizedById !== 'demo-master-id' ? data.authorizedById : undefined,
 
-                discountType: data.discountType,
-                discountReason: discountReason,
-                authorizedById: data.authorizedById && data.authorizedById !== 'demo-master-id' ? data.authorizedById : undefined,
+                        notes: finalNotes,
 
-                notes: finalNotes,
+                        createdById: session.id,
+                        areaId: areaId,
 
-                createdById: session.id,
-                areaId: areaId,
-
-                items: {
-                    create: data.items.map(item => ({
-                        menuItemId: item.menuItemId,
-                        itemName: item.name,
-                        quantity: item.quantity,
-                        unitPrice: item.unitPrice,
-                        lineTotal: item.lineTotal,
-                        notes: item.notes,
-                        modifiers: {
-                            create: item.modifiers?.map(m => ({
-                                name: m.name, // CORREGIDO: Usando 'name' según schema
-                                priceAdjustment: m.priceAdjustment,
-                                modifierId: m.modifierId
+                        items: {
+                            create: data.items.map(item => ({
+                                menuItemId: item.menuItemId,
+                                itemName: item.name,
+                                quantity: item.quantity,
+                                unitPrice: item.unitPrice,
+                                lineTotal: item.lineTotal,
+                                notes: item.notes,
+                                modifiers: {
+                                    create: item.modifiers?.map(m => ({
+                                        name: m.name,
+                                        priceAdjustment: m.priceAdjustment,
+                                        modifierId: m.modifierId
+                                    }))
+                                }
                             }))
                         }
-                    }))
-                }
-            },
-            include: { items: { include: { modifiers: true } } }
-        });
+                    },
+                    include: { items: { include: { modifiers: true } } }
+                });
+                break;
+            } catch (err) {
+                if (isOrderNumberUniqueError(err) && attempt < 4) continue;
+                throw err;
+            }
+        }
 
         // ====================================================================
         // GESTIÓN DE INVENTARIO (Descargo de Recetas)
@@ -869,9 +879,11 @@ export async function addItemsToOpenTabAction(data: AddItemsToOpenTabInput): Pro
             return requiresKitchenRouting(menuItem);
         });
 
-        const orderNumber = await generateOrderNumber('RESTAURANT');
-
-        const createdOrder = await prisma.$transaction(async (tx) => {
+        let createdOrder;
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                const orderNumber = await generateOrderNumber('RESTAURANT');
+                createdOrder = await prisma.$transaction(async (tx) => {
             await assertOpenTabVersionUpdate({
                 tx,
                 openTabId: openTab.id,
@@ -940,7 +952,13 @@ export async function addItemsToOpenTabAction(data: AddItemsToOpenTabInput): Pro
             });
 
             return order;
-        });
+                });
+                break;
+            } catch (err) {
+                if (isOrderNumberUniqueError(err) && attempt < 4) continue;
+                throw err;
+            }
+        }
 
         try {
             await registerInventoryForCartItems({
