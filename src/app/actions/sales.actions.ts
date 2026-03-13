@@ -2,6 +2,8 @@
 
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
+import { revalidatePath } from 'next/cache';
+import { getCaracasDayRange } from '@/lib/datetime';
 
 export interface SalesFilter {
     startDate?: Date;
@@ -32,6 +34,11 @@ export interface ZReportData {
 
 /** Obtiene una orden completa para reimprimir la nota de entrega */
 export async function getOrderForReceiptAction(orderId: string) {
+    const session = await getSession();
+    if (!session || !['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'].includes(session.role)) {
+        return { success: false, message: 'No autorizado para reimprimir notas de entrega' };
+    }
+
     try {
         const order = await prisma.salesOrder.findUnique({
             where: { id: orderId },
@@ -78,18 +85,102 @@ export async function getSalesHistoryAction(limit = 200) {
     }
 }
 
+
+export async function cancelSaleAction(orderId: string, justification: string) {
+    const session = await getSession();
+    if (!session || !['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'].includes(session.role)) {
+        return { success: false, message: 'No autorizado para anular ventas' };
+    }
+
+    const reason = justification?.trim();
+    if (!reason || reason.length < 5) {
+        return { success: false, message: 'Debe indicar una justificación válida (mínimo 5 caracteres)' };
+    }
+
+    try {
+        const result = await prisma.$transaction(async (tx) => {
+            const order = await tx.salesOrder.findUnique({
+                where: { id: orderId },
+                include: {
+                    inventoryMovements: {
+                        where: { movementType: 'SALE' }
+                    }
+                }
+            });
+
+            if (!order) throw new Error('Orden no encontrada');
+            if (order.status === 'CANCELLED') throw new Error('La venta ya está anulada');
+
+            for (const movement of order.inventoryMovements) {
+                await tx.inventoryLocation.upsert({
+                    where: {
+                        inventoryItemId_areaId: {
+                            inventoryItemId: movement.inventoryItemId,
+                            areaId: order.areaId,
+                        }
+                    },
+                    update: {
+                        currentStock: { increment: movement.quantity }
+                    },
+                    create: {
+                        inventoryItemId: movement.inventoryItemId,
+                        areaId: order.areaId,
+                        currentStock: movement.quantity,
+                    }
+                });
+
+                await tx.inventoryMovement.create({
+                    data: {
+                        inventoryItemId: movement.inventoryItemId,
+                        movementType: 'ADJUSTMENT_IN',
+                        quantity: movement.quantity,
+                        unit: movement.unit,
+                        unitCost: movement.unitCost,
+                        totalCost: movement.totalCost,
+                        reason: `Anulación venta ${order.orderNumber}`,
+                        notes: reason,
+                        createdById: session.id,
+                        salesOrderId: order.id,
+                    }
+                });
+            }
+
+            const cancelledBy = `${session.firstName || ''} ${session.lastName || ''}`.trim() || session.id;
+            const trace = `[ANULADA] ${new Date().toISOString()} por ${cancelledBy}. Motivo: ${reason}`;
+
+            const updated = await tx.salesOrder.update({
+                where: { id: order.id },
+                data: {
+                    status: 'CANCELLED',
+                    paymentStatus: 'REFUNDED',
+                    closedAt: new Date(),
+                    notes: order.notes ? `${order.notes}\n${trace}` : trace,
+                }
+            });
+
+            return updated;
+        });
+
+        revalidatePath('/dashboard/sales');
+        revalidatePath('/dashboard/pos/restaurante');
+        revalidatePath('/dashboard/pos/delivery');
+        revalidatePath('/dashboard/pos/sportbar');
+        return { success: true, message: `Venta ${result.orderNumber} anulada correctamente` };
+    } catch (error) {
+        console.error('Error cancelando venta:', error);
+        return { success: false, message: error instanceof Error ? error.message : 'Error al anular venta' };
+    }
+}
+
 export async function getDailyZReportAction(): Promise<{ success: boolean; data?: ZReportData; message?: string }> {
     try {
-        // Por defecto hoy
-        const today = new Date();
-        const startOfDay = new Date(today); startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(today); endOfDay.setHours(23, 59, 59, 999);
+        const { start, end } = getCaracasDayRange();
 
         const todaysOrders = await prisma.salesOrder.findMany({
             where: {
                 createdAt: {
-                    gte: startOfDay,
-                    lte: endOfDay
+                    gte: start,
+                    lte: end
                 },
                 status: { not: 'CANCELLED' }
             }
@@ -131,7 +222,7 @@ export async function getDailyZReportAction(): Promise<{ success: boolean; data?
         return {
             success: true,
             data: {
-                period: today.toLocaleDateString(),
+                period: new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas' }).format(new Date()),
                 totalOrders: todaysOrders.length,
                 grossTotal,
                 totalDiscounts,

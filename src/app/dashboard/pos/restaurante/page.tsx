@@ -8,6 +8,7 @@ import { getExchangeRateValue } from '@/app/actions/exchange.actions';
 import { printReceipt, printKitchenCommand } from '@/lib/print-command';
 import { PriceDisplay } from '@/components/pos/PriceDisplay';
 import { CurrencyCalculator } from '@/components/pos/CurrencyCalculator';
+import { usdToBs } from '@/lib/currency';
 
 // ============================================================================
 
@@ -376,6 +377,7 @@ export default function POSRestaurantPage() {
     const discountAmount = discountType === 'DIVISAS_33' ? cartTotal * 0.33
         : (discountType === 'CORTESIA_100' ? cartTotal : (discountType === 'CORTESIA_PERCENT' ? cartTotal * (cortesiaPercent / 100) : 0));
     const finalTotal = cartTotal - discountAmount;
+    const finalTotalBs = exchangeRate ? usdToBs(finalTotal, exchangeRate) : null;
     const paidAmount = parseFloat(amountReceived) || 0;
     const changeAmount = paidAmount - finalTotal;
 
@@ -500,7 +502,7 @@ export default function POSRestaurantPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
-                    <CurrencyCalculator className="!bg-amber-900/40 !border-amber-400/30 !text-amber-100 hover:!bg-amber-800/50" />
+                    <CurrencyCalculator totalUsd={Number(finalTotal.toFixed(2))} onRateUpdated={setExchangeRate} className="!bg-amber-900/40 !border-amber-400/30 !text-amber-100 hover:!bg-amber-800/50" />
                     <button className="lg:hidden bg-gray-800 p-2 rounded-lg" onClick={() => setShowMobileCart(true)}>
                         🛒 <b>${cartTotal.toFixed(2)}</b>
                     </button>
@@ -662,6 +664,10 @@ export default function POSRestaurantPage() {
                             <div className="flex justify-between text-xl font-black pt-2 border-t border-gray-700">
                                 <span>TOTAL</span>
                                 <span className="text-amber-400">${finalTotal.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm font-bold text-cyan-300 bg-cyan-900/20 rounded px-2 py-1">
+                                <span>Total en Bs</span>
+                                <span>{finalTotalBs !== null ? `${finalTotalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs` : 'Configura tasa 💱'}</span>
                             </div>
                             {paymentMethod === 'CASH' && changeAmount > 0 && (
                                 <div className="flex justify-between text-green-400 font-bold">

@@ -32,7 +32,9 @@ export async function getExchangeRateValue(): Promise<number | null> {
 export async function setExchangeRateAction(rate: number, effectiveDate: Date) {
     const session = await getSession();
     if (!session) return { success: false, message: 'No autorizado' };
-    if (session.role !== 'OWNER') return { success: false, message: 'Solo el dueño puede actualizar la tasa' };
+    if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'].includes(session.role)) {
+        return { success: false, message: 'Solo gerencia o administración puede actualizar la tasa' };
+    }
 
     if (rate <= 0) return { success: false, message: 'La tasa debe ser mayor a 0' };
 
@@ -47,6 +49,9 @@ export async function setExchangeRateAction(rate: number, effectiveDate: Date) {
             },
         });
         revalidatePath('/dashboard/config/tasa-cambio');
+        revalidatePath('/dashboard/pos/restaurante');
+        revalidatePath('/dashboard/pos/delivery');
+        revalidatePath('/dashboard/pos/sportbar');
         revalidatePath('/dashboard');
         return { success: true, message: 'Tasa actualizada correctamente' };
     } catch (error) {

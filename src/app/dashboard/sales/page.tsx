@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { getSalesHistoryAction, getDailyZReportAction, getOrderForReceiptAction, type ZReportData } from '@/app/actions/sales.actions';
+import { getSalesHistoryAction, getDailyZReportAction, getOrderForReceiptAction, cancelSaleAction, type ZReportData } from '@/app/actions/sales.actions';
 import { printReceipt } from '@/lib/print-command';
 import { useAuthStore } from '@/stores/auth.store';
 import * as XLSX from 'xlsx';
 
 const MANAGER_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'];
+const CARACAS_TZ = 'America/Caracas';
+
 
 export default function SalesHistoryPage() {
     const { user } = useAuthStore();
@@ -16,6 +18,7 @@ export default function SalesHistoryPage() {
     const [showZReport, setShowZReport] = useState(false);
     const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
     const [printingId, setPrintingId] = useState<string | null>(null);
+    const [cancellingId, setCancellingId] = useState<string | null>(null);
     const canPrint = user && MANAGER_ROLES.includes(user.role);
 
     useEffect(() => {
@@ -41,14 +44,25 @@ export default function SalesHistoryPage() {
         }
     };
 
+
+    const formatSaleDate = (dateValue: string | Date | null | undefined) => {
+        if (!dateValue) return '';
+        return new Date(dateValue).toLocaleDateString('es-VE', { timeZone: CARACAS_TZ });
+    };
+
+    const formatSaleTime = (dateValue: string | Date | null | undefined) => {
+        if (!dateValue) return '';
+        return new Date(dateValue).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit', timeZone: CARACAS_TZ });
+    };
+
     const handleExportExcel = () => {
         if (!sales.length) return;
 
         // Hoja 1: Resumen de ventas (una fila por orden)
         const summaryRows = sales.map(sale => ({
             'Orden #': sale.orderNumber,
-            'Fecha': sale.createdAt ? new Date(sale.createdAt).toLocaleDateString('es-VE') : '',
-            'Hora': sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '',
+            'Fecha': formatSaleDate(sale.createdAt),
+            'Hora': formatSaleTime(sale.createdAt),
             'Cliente': sale.customerName || 'Cliente General',
             'Tipo': sale.orderType === 'RESTAURANT' ? 'Restaurante' : sale.orderType === 'DELIVERY' ? 'Delivery' : sale.orderType,
             'Canal': sale.sourceChannel || '',
@@ -70,8 +84,8 @@ export default function SalesHistoryPage() {
             if (!sale.items || sale.items.length === 0) {
                 itemRows.push({
                     'Orden #': sale.orderNumber,
-                    'Fecha': sale.createdAt ? new Date(sale.createdAt).toLocaleDateString('es-VE') : '',
-                    'Hora': sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '',
+                    'Fecha': formatSaleDate(sale.createdAt),
+                    'Hora': formatSaleTime(sale.createdAt),
                     'Producto': '(sin detalle)',
                     'Cantidad': '',
                     'Precio Unit. ($)': '',
@@ -84,8 +98,8 @@ export default function SalesHistoryPage() {
                 for (const item of sale.items) {
                     itemRows.push({
                         'Orden #': sale.orderNumber,
-                        'Fecha': sale.createdAt ? new Date(sale.createdAt).toLocaleDateString('es-VE') : '',
-                        'Hora': sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '',
+                        'Fecha': formatSaleDate(sale.createdAt),
+                        'Hora': formatSaleTime(sale.createdAt),
                         'Producto': item.itemName,
                         'Cantidad': item.quantity,
                         'Precio Unit. ($)': Number(item.unitPrice).toFixed(2),
@@ -116,7 +130,7 @@ export default function SalesHistoryPage() {
         ];
         XLSX.utils.book_append_sheet(wb, ws2, 'Detalle Ítems');
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = formatSaleDate(new Date()).replaceAll('/', '-');
         XLSX.writeFile(wb, `historial_ventas_${today}.xlsx`);
     };
 
@@ -181,6 +195,31 @@ export default function SalesHistoryPage() {
         }
     };
 
+
+    const handleCancelSale = async (sale: any) => {
+        if (!canPrint) return;
+        const justification = window.prompt(`Motivo de anulación para ${sale.orderNumber}:`);
+        if (!justification) return;
+
+        if (!window.confirm(`¿Seguro que deseas anular ${sale.orderNumber}? Esta acción devolverá inventario.`)) return;
+
+        setCancellingId(sale.id);
+        try {
+            const res = await cancelSaleAction(sale.id, justification);
+            if (!res.success) {
+                alert(res.message || 'No se pudo anular la venta');
+                return;
+            }
+            alert(res.message);
+            await loadData();
+        } catch (e) {
+            console.error(e);
+            alert('Error anulando venta');
+        } finally {
+            setCancellingId(null);
+        }
+    };
+
     if (isLoading) return <div className="p-8 text-center text-white">Cargando historial...</div>;
 
     return (
@@ -231,9 +270,9 @@ export default function SalesHistoryPage() {
                                     className="hover:bg-gray-700/30 transition-colors cursor-pointer"
                                     onClick={() => setExpandedOrder(expandedOrder === sale.id ? null : sale.id)}
                                 >
-                                    <td className="p-4 font-bold text-blue-300">{sale.orderNumber}</td>
+                                    <td className="p-4 font-bold text-blue-300">{sale.orderNumber} {sale.status === 'CANCELLED' && <span className="ml-2 text-[10px] px-2 py-0.5 rounded bg-red-900 text-red-200">ANULADA</span>}</td>
                                     <td className="p-4 text-gray-400">
-                                        {sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                        {sale.createdAt ? formatSaleTime(sale.createdAt) : '-'}
                                     </td>
                                     <td className="p-4 font-sans text-gray-300 truncate max-w-[150px]">
                                         {sale.customerName || 'Cliente General'}
@@ -268,13 +307,24 @@ export default function SalesHistoryPage() {
                                     </td>
                                     {canPrint && (
                                         <td className="p-4 text-center">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); handlePrintReceipt(sale); }}
-                                                disabled={printingId === sale.id}
-                                                className="text-white font-medium bg-slate-600 hover:bg-slate-500 px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
-                                            >
-                                                {printingId === sale.id ? '...' : '🖨️ Imprimir'}
-                                            </button>
+                                            <div className="flex items-center justify-center gap-2">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handlePrintReceipt(sale); }}
+                                                    disabled={printingId === sale.id}
+                                                    className="text-white font-medium bg-slate-600 hover:bg-slate-500 px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
+                                                >
+                                                    {printingId === sale.id ? '...' : '🖨️ Imprimir'}
+                                                </button>
+                                                {sale.status !== 'CANCELLED' && (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleCancelSale(sale); }}
+                                                        disabled={cancellingId === sale.id}
+                                                        className="text-white font-medium bg-red-700 hover:bg-red-600 px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
+                                                    >
+                                                        {cancellingId === sale.id ? '...' : '⛔ Anular'}
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     )}
                                 </tr>
