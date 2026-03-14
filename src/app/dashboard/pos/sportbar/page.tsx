@@ -137,6 +137,7 @@ export default function POSSportBarPage() {
     // ── State flags ───────────────────────────────────────────────────────────
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [layoutError, setLayoutError] = useState('');
 
     // ============================================================================
     // DATA LOADING
@@ -144,6 +145,7 @@ export default function POSSportBarPage() {
 
     const loadData = async () => {
         setIsLoading(true);
+        setLayoutError('');
         try {
             const [menuResult, layoutResult, usersResult, rate] = await Promise.all([
                 getMenuForPOSAction(),
@@ -159,6 +161,8 @@ export default function POSSportBarPage() {
                 const nextLayout = layoutResult.data as SportBarLayout;
                 setLayout(nextLayout);
                 setSelectedZoneId(prev => prev || nextLayout.serviceZones[0]?.id || '');
+            } else if (!layoutResult.success) {
+                setLayoutError(layoutResult.message || 'Error cargando mesas');
             }
             if (usersResult.success && usersResult.data) {
                 setUsers(usersResult.data);
@@ -451,7 +455,22 @@ export default function POSSportBarPage() {
                                 {z.zoneType === 'BAR' ? '🍺' : '🌿'} {z.name}
                             </button>
                         ))}
+                        {!layout && !layoutError && (
+                            <div className="flex-1 text-center text-xs text-slate-500 py-2">Cargando zonas...</div>
+                        )}
+                        {layoutError && (
+                            <button onClick={loadData} className="flex-1 text-xs text-red-400 hover:text-red-300 py-2 text-center">
+                                ⚠️ Error · Reintentar
+                            </button>
+                        )}
                     </div>
+
+                    {/* Error detail */}
+                    {layoutError && (
+                        <div className="px-3 py-2 text-[10px] text-red-400 bg-red-950/30 border-b border-red-900/30">
+                            {layoutError}
+                        </div>
+                    )}
 
                     {/* Table grid */}
                     <div className="flex-1 overflow-y-auto p-3">

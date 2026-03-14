@@ -144,11 +144,22 @@ async function ensureSportBarSetup() {
     }
 
     // Upsert each zone with exact 20 tables
+    // Use name as the unique lookup key (@@unique([branchId, name]) in schema)
     for (const zConf of SPORT_BAR_ZONES) {
+        // Try by code first; fall back to name (handles pre-existing zones without code)
         let zone = await prisma.serviceZone.findFirst({ where: { branchId: branch.id, code: zConf.code } });
+        if (!zone) {
+            zone = await prisma.serviceZone.findFirst({ where: { branchId: branch.id, name: zConf.name } });
+        }
         if (!zone) {
             zone = await prisma.serviceZone.create({
                 data: { branchId: branch.id, code: zConf.code, name: zConf.name, zoneType: zConf.zoneType, sortOrder: zConf.sortOrder }
+            });
+        } else {
+            // Ensure code + sortOrder are up to date
+            zone = await prisma.serviceZone.update({
+                where: { id: zone.id },
+                data: { code: zConf.code, zoneType: zConf.zoneType, sortOrder: zConf.sortOrder }
             });
         }
         const existingCodes = await prisma.tableOrStation.findMany({
@@ -158,9 +169,9 @@ async function ensureSportBarSetup() {
         const codeSet = new Set(existingCodes.map(t => t.code));
         const toCreate: { branchId: string; serviceZoneId: string; code: string; name: string; stationType: string; capacity: number }[] = [];
         for (let i = 1; i <= zConf.tableCount; i++) {
-            const code = `${zConf.prefix}-${String(i).padStart(2, '0')}`;
-            if (!codeSet.has(code)) {
-                toCreate.push({ branchId: branch.id, serviceZoneId: zone.id, code, name: `Mesa ${code}`, stationType: 'TABLE', capacity: 4 });
+            const tCode = `${zConf.prefix}-${String(i).padStart(2, '0')}`;
+            if (!codeSet.has(tCode)) {
+                toCreate.push({ branchId: branch.id, serviceZoneId: zone.id, code: tCode, name: `Mesa ${tCode}`, stationType: 'TABLE', capacity: 4 });
             }
         }
         if (toCreate.length > 0) {
@@ -168,12 +179,12 @@ async function ensureSportBarSetup() {
         }
     }
 
-    // Return full layout with traceability
+    // Return full layout with traceability — filter by name (reliable even if code was null before)
     return prisma.branch.findFirstOrThrow({
         where: { id: branch.id },
         include: {
             serviceZones: {
-                where: { code: { in: ['BARRA_PISO', 'TERRAZA_SB'] } },
+                where: { name: { in: SPORT_BAR_ZONES.map(z => z.name) } },
                 include: {
                     tablesOrStations: {
                         where: { isActive: true },
