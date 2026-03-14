@@ -25,6 +25,7 @@ model User {
   lastName      String
   role          String    @default("CHEF") // OWNER, AUDITOR, ADMIN_MANAGER, OPS_MANAGER, CHEF, AREA_LEAD
   pin           String?   // CÃ³digo de 4-6 dÃ­gitos para autorizaciÃ³n rÃ¡pida
+  allowedModules String?  // JSON array de módulos permitidos (null = acceso por rol)
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

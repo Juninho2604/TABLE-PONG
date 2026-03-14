@@ -160,6 +160,52 @@ export async function createUserAction(data: {
 }
 
 /**
+ * Obtiene todos los usuarios con su campo allowedModules (solo OWNER)
+ */
+export async function getUsersWithModules() {
+    const session = await getSession();
+    if (!session || session.role !== 'OWNER') {
+        throw new Error('No autorizado');
+    }
+
+    return prisma.user.findMany({
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+        select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true,
+            isActive: true,
+            allowedModules: true,
+        },
+    });
+}
+
+/**
+ * Actualiza los módulos permitidos de un usuario (solo OWNER)
+ * modules: null = acceso por rol; array vacío = sin acceso; array = módulos específicos
+ */
+export async function updateUserModulesAction(userId: string, modules: string[] | null) {
+    const session = await getSession();
+    if (!session || session.role !== 'OWNER') {
+        return { success: false, message: 'No autorizado' };
+    }
+
+    try {
+        await prisma.user.update({
+            where: { id: userId },
+            data: { allowedModules: modules === null ? null : JSON.stringify(modules) },
+        });
+        revalidatePath('/dashboard/config/modulos');
+        return { success: true, message: 'Módulos actualizados correctamente' };
+    } catch (error) {
+        console.error('Error updating user modules:', error);
+        return { success: false, message: 'Error al actualizar módulos' };
+    }
+}
+
+/**
  * Cambiar contraseña del usuario actual
  */
 export async function changePasswordAction(currentPassword: string, newPassword: string) {

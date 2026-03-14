@@ -100,8 +100,7 @@ const posNavigation: NavItem[] = [
         label: 'POS Sport Bar',
         href: '/dashboard/pos/sportbar',
         icon: '🍺',
-        roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT'],
-        archived: true,
+        roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'AREA_LEAD', 'CHEF'],
     },
     {
         label: 'POS Restaurante',
@@ -114,7 +113,6 @@ const posNavigation: NavItem[] = [
         href: '/dashboard/pos/delivery',
         icon: '🛵',
         roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_DELIVERY'],
-        archived: true,
     },
     {
         label: 'Cargar Ventas',
@@ -152,14 +150,16 @@ const secondaryNavigation: NavItem[] = [
     { label: 'Roles y Permisos', href: '/dashboard/config/roles', icon: '⚙️', roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] },
     { label: 'Almacenes', href: '/dashboard/almacenes', icon: '📦', roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] },
     { label: 'Tasa de Cambio', href: '/dashboard/config/tasa-cambio', icon: '💱', roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] },
+    { label: 'Módulos por Usuario', href: '/dashboard/config/modulos', icon: '🔧', roles: ['OWNER'] },
 ];
 
 
 interface SidebarProps {
     initialUser?: any; // SessionPayload
+    allowedModules?: string[] | null; // null = use role-based; array = override
 }
 
-export function Sidebar({ initialUser }: SidebarProps) {
+export function Sidebar({ initialUser, allowedModules }: SidebarProps) {
     const pathname = usePathname();
     const { user, login } = useAuthStore();
     const { sidebarOpen, closeSidebar } = useUIStore();
@@ -186,16 +186,21 @@ export function Sidebar({ initialUser }: SidebarProps) {
     const activeUser = user || (initialUser as any);
     const userRole = activeUser?.role as UserRole;
 
+    // Helper: check if item passes module override (if set) AND role filter
+    const isAllowed = (item: NavItem) => {
+        const passesRole = !item.roles || (userRole && item.roles.includes(userRole));
+        if (!passesRole) return false;
+        // If allowedModules is set (non-null array), the item's href must be included
+        if (allowedModules !== null && allowedModules !== undefined) {
+            return allowedModules.includes(item.href);
+        }
+        return true;
+    };
+
     // Filtrar navegación según rol del usuario
-    const filteredNav = navigation.filter(
-        item => !item.roles || (userRole && item.roles.includes(userRole))
-    );
-    const filteredPosNav = posNavigation.filter(
-        item => !item.archived && (!item.roles || (userRole && item.roles.includes(userRole)))
-    );
-    const filteredSecondaryNav = secondaryNavigation.filter(
-        item => !item.roles || (userRole && item.roles.includes(userRole))
-    );
+    const filteredNav = navigation.filter(isAllowed);
+    const filteredPosNav = posNavigation.filter(item => !item.archived && isAllowed(item));
+    const filteredSecondaryNav = secondaryNavigation.filter(isAllowed);
 
     const roleInfo = userRole ? ROLE_INFO[userRole] : null;
 

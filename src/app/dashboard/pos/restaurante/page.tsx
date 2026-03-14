@@ -170,6 +170,7 @@ export default function POSRestaurantPage() {
         amountPaid: number;
         change: number;
         itemsSnapshot: any[];
+        customerName?: string;
     } | null>(null);
 
     // MODAL STATE
@@ -432,6 +433,7 @@ export default function POSRestaurantPage() {
                     paymentMethod,
                     amountPaid: paidAmount || finalTotal,
                     change: changeAmount,
+                    customerName: customerName || undefined,
                     itemsSnapshot: cart.map(item => ({
                         sku: '00-000',
                         name: item.name,
@@ -873,6 +875,7 @@ export default function POSRestaurantPage() {
                         data={{
                             orderNumber: lastOrder.orderNumber,
                             orderType: 'RESTAURANT',
+                            customerName: lastOrder.customerName,
                             items: lastOrder.itemsSnapshot.map(i => ({
                                 name: i.name,
                                 quantity: i.quantity,

@@ -38,9 +38,15 @@ export async function middleware(request: NextRequest) {
             }
         }
 
-        // C. Configuración Global
-        if (path.startsWith('/dashboard/config')) {
+        // C. Configuración Global (solo OWNER, salvo tasa-cambio que es también gerentes)
+        if (path.startsWith('/dashboard/config') && !path.startsWith('/dashboard/config/tasa-cambio')) {
             const allowed = ['OWNER'];
+            if (!allowed.includes(userRole)) {
+                return NextResponse.redirect(new URL('/dashboard?error=unauthorized_config', request.url));
+            }
+        }
+        if (path.startsWith('/dashboard/config/tasa-cambio')) {
+            const allowed = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'];
             if (!allowed.includes(userRole)) {
                 return NextResponse.redirect(new URL('/dashboard?error=unauthorized_config', request.url));
             }
