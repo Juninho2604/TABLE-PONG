@@ -50,7 +50,9 @@ export interface CreateOrderData {
 export interface OpenTabInput {
     tableOrStationId: string;
     customerLabel?: string;
+    customerPhone?: string;
     guestCount?: number;
+    assignedWaiterId?: string;
     notes?: string;
 }
 
@@ -119,20 +121,74 @@ async function ensureBaseSalesArea() {
     });
 }
 
+const SPORT_BAR_ZONES = [
+    { code: 'BARRA_PISO', name: 'Piso de la Barra', zoneType: 'BAR',     sortOrder: 1, prefix: 'PB', tableCount: 20 },
+    { code: 'TERRAZA_SB', name: 'Terraza',           zoneType: 'TERRACE', sortOrder: 2, prefix: 'TR', tableCount: 20 },
+] as const;
+
 async function ensureSportBarSetup() {
-    let branch = await prisma.branch.findFirst({
+    // Ensure branch
+    let branch = await prisma.branch.findFirst();
+    if (!branch) {
+        branch = await prisma.branch.create({
+            data: { code: 'TP-CCS', name: 'Table Pong Caracas', legalName: 'Table Pong Caracas, C.A.' }
+        });
+    }
+
+    // Ensure sales area for inventory
+    const hasArea = await prisma.area.findFirst({ where: { branchId: branch.id, name: { contains: 'Barra', mode: 'insensitive' } } });
+    if (!hasArea) {
+        await prisma.area.create({
+            data: { branchId: branch.id, name: 'Barra Principal', description: 'Área de descarga POS Sport Bar' }
+        });
+    }
+
+    // Upsert each zone with exact 20 tables
+    for (const zConf of SPORT_BAR_ZONES) {
+        let zone = await prisma.serviceZone.findFirst({ where: { branchId: branch.id, code: zConf.code } });
+        if (!zone) {
+            zone = await prisma.serviceZone.create({
+                data: { branchId: branch.id, code: zConf.code, name: zConf.name, zoneType: zConf.zoneType, sortOrder: zConf.sortOrder }
+            });
+        }
+        const existingCodes = await prisma.tableOrStation.findMany({
+            where: { serviceZoneId: zone.id },
+            select: { code: true }
+        });
+        const codeSet = new Set(existingCodes.map(t => t.code));
+        const toCreate: { branchId: string; serviceZoneId: string; code: string; name: string; stationType: string; capacity: number }[] = [];
+        for (let i = 1; i <= zConf.tableCount; i++) {
+            const code = `${zConf.prefix}-${String(i).padStart(2, '0')}`;
+            if (!codeSet.has(code)) {
+                toCreate.push({ branchId: branch.id, serviceZoneId: zone.id, code, name: `Mesa ${code}`, stationType: 'TABLE', capacity: 4 });
+            }
+        }
+        if (toCreate.length > 0) {
+            await prisma.tableOrStation.createMany({ data: toCreate, skipDuplicates: true });
+        }
+    }
+
+    // Return full layout with traceability
+    return prisma.branch.findFirstOrThrow({
+        where: { id: branch.id },
         include: {
             serviceZones: {
+                where: { code: { in: ['BARRA_PISO', 'TERRAZA_SB'] } },
                 include: {
                     tablesOrStations: {
+                        where: { isActive: true },
                         include: {
                             openTabs: {
                                 where: { status: { in: ['OPEN', 'PARTIALLY_PAID'] } },
                                 include: {
+                                    openedBy: { select: { id: true, firstName: true, lastName: true, role: true } },
+                                    assignedWaiter: { select: { id: true, firstName: true, lastName: true } },
+                                    closedBy: { select: { id: true, firstName: true, lastName: true } },
                                     paymentSplits: true,
                                     orders: {
                                         include: {
-                                            items: true,
+                                            items: { include: { modifiers: true } },
+                                            createdBy: { select: { firstName: true, lastName: true } }
                                         },
                                         orderBy: { createdAt: 'desc' }
                                     }
@@ -146,119 +202,6 @@ async function ensureSportBarSetup() {
                 orderBy: { sortOrder: 'asc' }
             }
         }
-    });
-
-    if (branch && branch.serviceZones.length > 0) {
-        return branch;
-    }
-
-    return prisma.$transaction(async (tx) => {
-        let currentBranch = await tx.branch.findFirst();
-
-        if (!currentBranch) {
-            currentBranch = await tx.branch.create({
-                data: {
-                    code: 'TP-CCS',
-                    name: 'Table Pong Caracas',
-                    legalName: 'Table Pong Caracas, C.A.'
-                }
-            });
-        }
-
-        let salesArea = await tx.area.findFirst({
-            where: {
-                branchId: currentBranch.id,
-                name: { contains: 'Barra', mode: 'insensitive' }
-            }
-        });
-
-        if (!salesArea) {
-            salesArea = await tx.area.create({
-                data: {
-                    branchId: currentBranch.id,
-                    name: 'Barra Principal',
-                    description: 'Área de descarga principal del POS sport bar'
-                }
-            });
-        }
-
-        const existingZones = await tx.serviceZone.count({
-            where: { branchId: currentBranch.id }
-        });
-
-        if (existingZones === 0) {
-            const salon = await tx.serviceZone.create({
-                data: {
-                    branchId: currentBranch.id,
-                    code: 'SALON',
-                    name: 'Salón Principal',
-                    zoneType: 'DINING',
-                    sortOrder: 1
-                }
-            });
-
-            const terraza = await tx.serviceZone.create({
-                data: {
-                    branchId: currentBranch.id,
-                    code: 'TERRAZA',
-                    name: 'Terraza',
-                    zoneType: 'TERRACE',
-                    sortOrder: 2
-                }
-            });
-
-            const bar = await tx.serviceZone.create({
-                data: {
-                    branchId: currentBranch.id,
-                    code: 'BARRA',
-                    name: 'Barra',
-                    zoneType: 'BAR',
-                    sortOrder: 3
-                }
-            });
-
-            await tx.tableOrStation.createMany({
-                data: [
-                    { branchId: currentBranch.id, serviceZoneId: salon.id, code: 'M01', name: 'Mesa 01', stationType: 'TABLE', capacity: 4 },
-                    { branchId: currentBranch.id, serviceZoneId: salon.id, code: 'M02', name: 'Mesa 02', stationType: 'TABLE', capacity: 4 },
-                    { branchId: currentBranch.id, serviceZoneId: salon.id, code: 'M03', name: 'Mesa 03', stationType: 'TABLE', capacity: 4 },
-                    { branchId: currentBranch.id, serviceZoneId: salon.id, code: 'M04', name: 'Mesa 04', stationType: 'TABLE', capacity: 6 },
-                    { branchId: currentBranch.id, serviceZoneId: terraza.id, code: 'T01', name: 'Terraza 01', stationType: 'TABLE', capacity: 4 },
-                    { branchId: currentBranch.id, serviceZoneId: terraza.id, code: 'T02', name: 'Terraza 02', stationType: 'TABLE', capacity: 4 },
-                    { branchId: currentBranch.id, serviceZoneId: bar.id, code: 'B01', name: 'Barra 01', stationType: 'BAR_SEAT', capacity: 2 },
-                    { branchId: currentBranch.id, serviceZoneId: bar.id, code: 'B02', name: 'Barra 02', stationType: 'BAR_SEAT', capacity: 2 }
-                ]
-            });
-        }
-
-        return tx.branch.findFirstOrThrow({
-            where: { id: currentBranch.id },
-            include: {
-                serviceZones: {
-                    include: {
-                        tablesOrStations: {
-                            include: {
-                                openTabs: {
-                                    where: { status: { in: ['OPEN', 'PARTIALLY_PAID'] } },
-                                    include: {
-                                        paymentSplits: true,
-                                        orders: {
-                                            include: {
-                                                items: true,
-                                            },
-                                            orderBy: { createdAt: 'desc' }
-                                        }
-                                    },
-                                    orderBy: { openedAt: 'desc' }
-                                }
-                            },
-                            orderBy: { name: 'asc' }
-                        }
-                    },
-                    orderBy: { sortOrder: 'asc' }
-                }
-            }
-        });
     });
 }
 
@@ -813,11 +756,15 @@ export async function openTabAction(data: OpenTabInput): Promise<ActionResult> {
                     tableOrStationId: table.id,
                     tabCode,
                     customerLabel: data.customerLabel || table.name,
+                    customerPhone: data.customerPhone,
                     guestCount: data.guestCount || 1,
                     notes: data.notes,
                     openedById: session.id,
+                    assignedWaiterId: data.assignedWaiterId || null,
                 },
                 include: {
+                    openedBy: { select: { id: true, firstName: true, lastName: true, role: true } },
+                    assignedWaiter: { select: { id: true, firstName: true, lastName: true } },
                     paymentSplits: true,
                     orders: {
                         include: { items: true },
@@ -1139,7 +1086,8 @@ export async function closeOpenTabAction(openTabId: string): Promise<ActionResul
                 data: {
                     status: 'CLOSED',
                     closedAt: openTab.closedAt || new Date(),
-                    balanceDue: 0
+                    balanceDue: 0,
+                    closedById: session.id
                 }
             });
 
@@ -1171,5 +1119,119 @@ export async function closeOpenTabAction(openTabId: string): Promise<ActionResul
             return { success: false, message: error.message };
         }
         return { success: false, message: 'Error cerrando la cuenta' };
+    }
+}
+
+// ============================================================================
+// ELIMINAR ITEM DE CUENTA ABIERTA (requiere PIN de cajera + justificación)
+// ============================================================================
+
+export async function removeItemFromOpenTabAction({
+    openTabId,
+    orderId,
+    itemId,
+    cashierPin,
+    justification,
+}: {
+    openTabId: string;
+    orderId: string;
+    itemId: string;
+    cashierPin: string;
+    justification: string;
+}): Promise<ActionResult> {
+    try {
+        const session = await getSession();
+        if (!session) return { success: false, message: 'No autorizado' };
+
+        if (!justification?.trim()) {
+            return { success: false, message: 'Debe ingresar una justificación para eliminar el item' };
+        }
+
+        // Validar PIN contra cualquier usuario con rol autorizado
+        const authorizer = await prisma.user.findFirst({
+            where: {
+                pin: cashierPin,
+                role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD'] },
+                isActive: true
+            },
+            select: { id: true, firstName: true, lastName: true, role: true }
+        });
+        if (!authorizer) {
+            return { success: false, message: 'PIN incorrecto o sin permisos de cajera' };
+        }
+
+        // Cargar el item con su orden
+        const item = await prisma.salesOrderItem.findUnique({
+            where: { id: itemId },
+            include: { order: true }
+        });
+        if (!item) return { success: false, message: 'Item no encontrado' };
+        if (item.order.openTabId !== openTabId) {
+            return { success: false, message: 'El item no pertenece a esta cuenta' };
+        }
+        if (!['OPEN', 'PARTIALLY_PAID'].includes(item.order.paymentStatus ?? '')) {
+            // Allow removal even if status is PENDING (not paid yet)
+        }
+
+        const removedAmount = item.lineTotal;
+        const authorizerName = `${authorizer.firstName} ${authorizer.lastName}`;
+
+        await prisma.$transaction(async (tx) => {
+            // Eliminar item (modifiers se borran en cascada)
+            await tx.salesOrderItem.delete({ where: { id: itemId } });
+
+            // Recalcular totales de la orden
+            const remaining = await tx.salesOrderItem.findMany({ where: { orderId: item.orderId } });
+            const newOrderTotal = remaining.reduce((s, i) => s + i.lineTotal, 0);
+            await tx.salesOrder.update({
+                where: { id: item.orderId },
+                data: { subtotal: newOrderTotal, total: newOrderTotal }
+            });
+
+            // Recalcular totales del tab
+            const tab = await tx.openTab.findUniqueOrThrow({ where: { id: openTabId } });
+            const newRunning = Math.max(0, tab.runningTotal - removedAmount);
+            const newBalance = Math.max(0, tab.balanceDue - removedAmount);
+            const noteEntry = `[ELIMINADO: ${item.itemName} x${item.quantity} $${removedAmount.toFixed(2)} | Justif: ${justification.trim()} | Auth: ${authorizerName}]`;
+            await tx.openTab.update({
+                where: { id: openTabId },
+                data: {
+                    runningSubtotal: Math.max(0, tab.runningSubtotal - removedAmount),
+                    runningTotal: newRunning,
+                    balanceDue: newBalance,
+                    notes: ((tab.notes || '') + ' ' + noteEntry).trim().slice(0, 1000),
+                    version: { increment: 1 }
+                }
+            });
+        });
+
+        revalidatePath('/dashboard/pos/sportbar');
+        return {
+            success: true,
+            message: `"${item.itemName}" eliminado. Autorizó: ${authorizerName}`,
+            data: { authorizerName, removedAmount }
+        };
+    } catch (error) {
+        console.error('Error removing item from tab:', error);
+        return { success: false, message: 'Error eliminando item de la cuenta' };
+    }
+}
+
+// ============================================================================
+// USUARIOS DISPONIBLES PARA MESONERO / CAJERA
+// ============================================================================
+
+export async function getUsersForTabAction(): Promise<ActionResult> {
+    try {
+        const session = await getSession();
+        if (!session) return { success: false, message: 'No autorizado' };
+        const users = await prisma.user.findMany({
+            where: { isActive: true, role: { notIn: ['AUDITOR'] } },
+            select: { id: true, firstName: true, lastName: true, role: true },
+            orderBy: { firstName: 'asc' }
+        });
+        return { success: true, message: 'Usuarios cargados', data: users };
+    } catch (error) {
+        return { success: false, message: 'Error cargando usuarios' };
     }
 }

@@ -45,6 +45,7 @@ model User {
   authorizedOrders SalesOrder[] @relation("SalesOrderAuthorizer")
   openedTabs       OpenTab[]    @relation("OpenTabOpener")
   assignedTabs     OpenTab[]    @relation("OpenTabAssignee")
+  closedTabs       OpenTab[]    @relation("OpenTabCloser")
   
   // Cierres de Inventario
   closedDailyInventories DailyInventory[]
@@ -1189,6 +1190,7 @@ model OpenTab {
   tableOrStation  TableOrStation? @relation(fields: [tableOrStationId], references: [id])
   tabCode         String   @unique
   customerLabel   String?
+  customerPhone   String?
   guestCount      Int      @default(1)
   status          String   @default("OPEN") // OPEN, PARTIALLY_PAID, CLOSED, CANCELLED
   serviceType     String   @default("TABLE_SERVICE") // TABLE_SERVICE, BAR_TAB, EVENT
@@ -1206,6 +1208,8 @@ model OpenTab {
   openedBy        User     @relation("OpenTabOpener", fields: [openedById], references: [id])
   assignedWaiterId String?
   assignedWaiter  User?    @relation("OpenTabAssignee", fields: [assignedWaiterId], references: [id])
+  closedById      String?
+  closedBy        User?    @relation("OpenTabCloser", fields: [closedById], references: [id])
 
   orders          SalesOrder[]
   orderLinks      OpenTabOrder[]
