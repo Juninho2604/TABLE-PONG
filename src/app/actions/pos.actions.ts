@@ -724,8 +724,9 @@ export async function getSportBarLayoutAction(): Promise<ActionResult> {
             data: branch
         };
     } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
         console.error('Error loading sport bar layout:', error);
-        return { success: false, message: 'Error cargando layout sport bar' };
+        return { success: false, message: `Error cargando layout sport bar: ${errorMessage}` };
     }
 }
 
