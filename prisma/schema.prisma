@@ -1205,6 +1205,7 @@ model OpenTab {
   closedAt        DateTime?
   updatedAt       DateTime @updatedAt
   notes           String?
+  waiterLabel     String?  // Mesonero asignado (ej: "Mesonero 1")
   openedById      String
   openedBy        User     @relation("OpenTabOpener", fields: [openedById], references: [id])
   assignedWaiterId String?

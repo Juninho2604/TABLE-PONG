@@ -53,6 +53,7 @@ export interface OpenTabInput {
     customerPhone?: string;
     guestCount?: number;
     assignedWaiterId?: string;
+    waiterLabel?: string;
     notes?: string;
 }
 
@@ -89,35 +90,41 @@ class POSActionError extends Error {
 async function ensureBaseSalesArea() {
     const whereActive = { isActive: true };
 
-    // 1. Restaurante
+    // 1. TABLE PONG SERVICIO (almacén preferido)
     let area = await prisma.area.findFirst({
+        where: { ...whereActive, name: { contains: 'TABLE PONG SERVICIO', mode: 'insensitive' } },
+    });
+    if (area) return area;
+
+    // 2. Restaurante
+    area = await prisma.area.findFirst({
         where: { ...whereActive, name: { contains: 'Restaurante', mode: 'insensitive' } },
     });
     if (area) return area;
 
-    // 2. Barra (incluye BARRA, DEPOSITO BARRA)
+    // 3. Barra (incluye BARRA, DEPOSITO BARRA)
     area = await prisma.area.findFirst({
         where: { ...whereActive, name: { contains: 'Barra', mode: 'insensitive' } },
     });
     if (area) return area;
 
-    // 3. Oficina (Table Pong)
+    // 4. Oficina
     area = await prisma.area.findFirst({
         where: { ...whereActive, name: { contains: 'Oficina', mode: 'insensitive' } },
     });
     if (area) return area;
 
-    // 4. Cualquier área activa
+    // 5. Cualquier área activa
     area = await prisma.area.findFirst({ where: whereActive });
     if (area) return area;
 
-    // 5. Último recurso: cualquier área (incluso inactiva)
+    // 6. Último recurso: cualquier área (incluso inactiva)
     area = await prisma.area.findFirst();
     if (area) return area;
 
-    // 6. Crear área por defecto
+    // 7. Crear área TABLE PONG SERVICIO por defecto
     return prisma.area.create({
-        data: { name: 'Barra Principal', isActive: true }
+        data: { name: 'TABLE PONG SERVICIO', isActive: true }
     });
 }
 
@@ -193,7 +200,6 @@ async function ensureSportBarSetup() {
                                 where: { status: { in: ['OPEN', 'PARTIALLY_PAID'] } },
                                 include: {
                                     openedBy: { select: { id: true, firstName: true, lastName: true, role: true } },
-                                    assignedWaiter: { select: { id: true, firstName: true, lastName: true } },
                                     closedBy: { select: { id: true, firstName: true, lastName: true } },
                                     paymentSplits: true,
                                     orders: {
@@ -222,8 +228,10 @@ async function resolveSalesAreaForBranch(branchId?: string) {
             where: {
                 branchId,
                 OR: [
+                    { name: { contains: 'TABLE PONG SERVICIO', mode: 'insensitive' } },
                     { name: { contains: 'Barra', mode: 'insensitive' } },
-                    { name: { contains: 'Restaurante', mode: 'insensitive' } }
+                    { name: { contains: 'Restaurante', mode: 'insensitive' } },
+                    { name: { contains: 'Oficina', mode: 'insensitive' } },
                 ]
             }
         });
@@ -771,11 +779,10 @@ export async function openTabAction(data: OpenTabInput): Promise<ActionResult> {
                     guestCount: data.guestCount || 1,
                     notes: data.notes,
                     openedById: session.id,
-                    assignedWaiterId: data.assignedWaiterId || null,
+                    waiterLabel: data.waiterLabel || null, // Guardar label del mesonero (ej: "Mesonero 1")
                 },
                 include: {
                     openedBy: { select: { id: true, firstName: true, lastName: true, role: true } },
-                    assignedWaiter: { select: { id: true, firstName: true, lastName: true } },
                     paymentSplits: true,
                     orders: {
                         include: { items: true },
@@ -839,11 +846,12 @@ export async function addItemsToOpenTabAction(data: AddItemsToOpenTabInput): Pro
         const menuItems = await getMenuItemMetadata(menuItemIds);
         const menuMap = new Map(menuItems.map(item => [item.id, item]));
 
-        await validateComponentStockAvailability({
-            items: data.items,
-            areaId: salesArea.id,
-            menuMap
-        });
+        // Stock validation disabled - inventory migration not complete
+        // await validateComponentStockAvailability({
+        //     items: data.items,
+        //     areaId: salesArea.id,
+        //     menuMap
+        // });
 
         const shouldSendToKitchen = data.items.some(item => {
             const menuItem = menuMap.get(item.menuItemId);
@@ -1236,13 +1244,16 @@ export async function getUsersForTabAction(): Promise<ActionResult> {
     try {
         const session = await getSession();
         if (!session) return { success: false, message: 'No autorizado' };
-        const users = await prisma.user.findMany({
-            where: { isActive: true, role: { notIn: ['AUDITOR'] } },
-            select: { id: true, firstName: true, lastName: true, role: true },
-            orderBy: { firstName: 'asc' }
-        });
-        return { success: true, message: 'Usuarios cargados', data: users };
+        
+        // Return fixed Mesonero options instead of all system users
+        const mesoneros = [
+            { id: 'mesonero-1', firstName: 'Mesonero', lastName: '1', role: 'WAITER' },
+            { id: 'mesonero-2', firstName: 'Mesonero', lastName: '2', role: 'WAITER' },
+            { id: 'mesonero-3', firstName: 'Mesonero', lastName: '3', role: 'WAITER' },
+        ];
+        
+        return { success: true, message: 'Mesoneros cargados', data: mesoneros };
     } catch (error) {
-        return { success: false, message: 'Error cargando usuarios' };
+        return { success: false, message: 'Error cargando mesoneros' };
     }
 }

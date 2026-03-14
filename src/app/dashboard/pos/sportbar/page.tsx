@@ -224,7 +224,7 @@ export default function POSSportBarPage() {
                 customerLabel: openTabName.trim(),
                 customerPhone: openTabPhone.trim(),
                 guestCount: openTabGuests,
-                assignedWaiterId: openTabWaiter || undefined,
+                waiterLabel: openTabWaiter ? `Mesonero ${openTabWaiter}` : undefined,
             });
             if (!result.success) { alert(result.message); return; }
             setShowOpenTabModal(false);
@@ -527,7 +527,7 @@ export default function POSSportBarPage() {
                                     </div>
                                     {activeTab.assignedWaiter && (
                                         <div className="text-slate-400">
-                                            Mesonero: <span className="text-white">{activeTab.assignedWaiter.firstName} {activeTab.assignedWaiter.lastName}</span>
+                                            Mesonero: <span className="text-white">{(activeTab as any).waiterLabel || '—'}</span>
                                         </div>
                                     )}
                                 </div>
@@ -641,8 +641,8 @@ export default function POSSportBarPage() {
                                 </div>
                                 <div className="text-[10px] text-slate-500 space-y-0.5">
                                     <div>🔓 Abrió: <span className="text-slate-300">{activeTab.openedBy.firstName} {activeTab.openedBy.lastName}</span> · {formatDateTime(activeTab.openedAt)}</div>
-                                    {activeTab.assignedWaiter && (
-                                        <div>👤 Mesonero: <span className="text-slate-300">{activeTab.assignedWaiter.firstName} {activeTab.assignedWaiter.lastName}</span></div>
+                                    {(activeTab as any).waiterLabel && (
+                                        <div>👤 Mesonero: <span className="text-slate-300">{(activeTab as any).waiterLabel}</span></div>
                                     )}
                                     <div>🏷️ {activeTab.tabCode} · {activeTab.guestCount} pax · <span className={activeTab.status === 'OPEN' ? 'text-emerald-400' : 'text-amber-400'}>{activeTab.status}</span></div>
                                 </div>
@@ -837,9 +837,9 @@ export default function POSSportBarPage() {
                                         className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-white text-sm focus:border-amber-500 focus:outline-none"
                                     >
                                         <option value="">— Ninguno —</option>
-                                        {users.map(u => (
-                                            <option key={u.id} value={u.id}>{u.firstName} {u.lastName} ({getRoleLabel(u.role)})</option>
-                                        ))}
+                                        <option value="1">Mesonero 1</option>
+                                        <option value="2">Mesonero 2</option>
+                                        <option value="3">Mesonero 3</option>
                                     </select>
                                 </div>
                             </div>
