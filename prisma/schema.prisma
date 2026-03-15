@@ -689,6 +689,10 @@ model MenuItem {
   isAvailable     Boolean  @default(true)
   isActive        Boolean  @default(true)
   
+  // Intercompany (¿este item proviene de Shanklish?)
+  isIntercompany        Boolean  @default(false)
+  intercompanySupplierCode String? // "SHANKLISH" si proviene de Shanklish
+
   // Modificadores permitidos
   modifierGroups  MenuItemModifierGroup[]
   
@@ -844,6 +848,7 @@ model SalesOrder {
   inventoryMovements InventoryMovement[] @relation("SaleMovements")
   openTabLinks       OpenTabOrder[]
   paymentSplits      PaymentSplit[]
+  settlementLines    IntercompanySettlementLine[]
 
   // Soft Delete
   deletedAt       DateTime?
@@ -887,6 +892,13 @@ model SalesOrderItem {
   costTotal       Float?
   marginPerUnit   Float?
   marginPercent   Float?
+
+  // Intercompany (snapshot al momento de la venta)
+  isIntercompany        Boolean  @default(false)
+  intercompanyUnitPrice Float?   // Precio que Shanklish cobra a TP por este item
+
+  // Relaciones
+  settlementLines       IntercompanySettlementLine[]
   
   // Modificadores seleccionados
   modifiers       SalesOrderItemModifier[]
@@ -1390,6 +1402,9 @@ model IntercompanySettlement {
   approvedAt             DateTime?
   notes                  String?
 
+  // Detalle línea por línea de items vendidos
+  lines                  IntercompanySettlementLine[]
+
   @@index([supplierId, status])
   @@index([periodStart, periodEnd])
   @@index([branchId])
@@ -1620,6 +1635,12 @@ model IntercompanyItemMapping {
   externalSku           String   // SKU del item en Shanklish
   externalSystemCode    String   @default("SHANKLISH") // Identificador del sistema externo
   
+  // Precio intercompany (lo que Shanklish cobra a TP por este item)
+  intercompanyPrice     Float?   // Precio fijo por unidad
+  intercompanyCurrency  String   @default("USD")
+  priceEffectiveFrom    DateTime? // Desde cuándo aplica este precio
+  notes                 String?
+
   // Metadata de sync
   lastSyncAt            DateTime?
   syncStatus            String   @default("ACTIVE") // ACTIVE, PAUSED, DISCONTINUED
@@ -1630,4 +1651,56 @@ model IntercompanyItemMapping {
   @@unique([localItemId, externalSystemCode])
   @@unique([externalSku, externalSystemCode])
   @@index([externalSku])
+}
+
+// ============================================================================
+// DETALLE DE LIQUIDACIÓN INTERCOMPANY
+// ============================================================================
+// Cada línea = un item vendido por TP que proviene de Shanklish.
+// Vincula venta real → liquidación → precio intercompany.
+// Permite auditar exactamente qué generó cada monto adeudado.
+// ============================================================================
+
+model IntercompanySettlementLine {
+  id                    String   @id @default(cuid())
+
+  // Liquidación padre
+  settlementId          String
+  settlement            IntercompanySettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  // Venta que generó esta línea
+  salesOrderId          String
+  salesOrder            SalesOrder @relation(fields: [salesOrderId], references: [id])
+  salesOrderItemId      String
+  salesOrderItem        SalesOrderItem @relation(fields: [salesOrderItemId], references: [id])
+
+  // Snapshot del item al momento de la liquidación
+  menuItemSku           String
+  menuItemName          String
+  quantity              Int      @default(1)
+
+  // Precio de venta al cliente final (TP)
+  saleUnitPrice         Float    @default(0)
+  saleLineTotal         Float    @default(0)
+
+  // Precio intercompany (lo que Shanklish cobra a TP)
+  intercompanyUnitPrice Float    @default(0)
+  intercompanyLineTotal Float    @default(0)
+
+  // Margen de TP sobre este item
+  tpMarginPerUnit       Float?
+  tpMarginPercent       Float?
+
+  // Fecha de la venta original
+  soldAt                DateTime
+
+  notes                 String?
+  createdAt             DateTime @default(now())
+
+  @@unique([settlementId, salesOrderItemId])
+  @@index([settlementId])
+  @@index([salesOrderId])
+  @@index([salesOrderItemId])
+  @@index([menuItemSku])
+  @@index([soldAt])
 }
