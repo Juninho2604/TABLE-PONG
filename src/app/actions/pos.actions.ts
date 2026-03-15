@@ -31,7 +31,7 @@ export interface CartItem {
 }
 
 export type POSOrderType = 'RESTAURANT' | 'DELIVERY';
-export type POSPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'MULTIPLE';
+export type POSPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'MULTIPLE' | 'ZELLE';
 
 export interface CreateOrderData {
     orderType: POSOrderType;
@@ -69,6 +69,7 @@ export interface RegisterOpenTabPaymentInput {
     paymentMethod: POSPaymentMethod;
     splitLabel?: string;
     notes?: string;
+    discountAmount?: number;
 }
 
 export interface ActionResult {
@@ -249,8 +250,8 @@ function calculateCartTotals(data: Pick<CreateOrderData, 'items' | 'discountType
     let discountReason = '';
 
     if (data.discountType === 'DIVISAS_33') {
-        discount = subtotal * 0.33;
-        discountReason = 'Pago en Divisas (33%)';
+        discount = subtotal / 3;
+        discountReason = 'Pago en Divisas (33.33%)';
     } else if (data.discountType === 'CORTESIA_100') {
         discount = subtotal;
         discountReason = 'Cortesía Autorizada (100%)';
@@ -999,8 +1000,12 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
             return { success: false, message: 'La cuenta no está disponible para pago' };
         }
 
-        const appliedAmount = Math.min(data.amount, openTab.balanceDue);
-        const newBalance = Math.max(0, openTab.balanceDue - appliedAmount);
+        const discountAmount = data.discountAmount || 0;
+        const newRunningDiscount = openTab.runningDiscount + discountAmount;
+        const newRunningTotal = Math.max(0, openTab.runningTotal - discountAmount);
+        const effectiveBalance = Math.max(0, openTab.balanceDue - discountAmount);
+        const appliedAmount = Math.min(data.amount, effectiveBalance);
+        const newBalance = Math.max(0, effectiveBalance - appliedAmount);
         const nextTabStatus = newBalance === 0 ? 'CLOSED' : 'PARTIALLY_PAID';
         const nextOrderPaymentStatus = newBalance === 0 ? 'PAID' : 'PARTIAL';
         const nextPaymentMethod = openTab.paymentSplits.length > 0 ? 'MULTIPLE' : data.paymentMethod;
@@ -1012,6 +1017,8 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                 expectedVersion: openTab.version,
                 data: {
                     balanceDue: newBalance,
+                    runningDiscount: newRunningDiscount,
+                    runningTotal: newRunningTotal,
                     status: nextTabStatus,
                     closedAt: newBalance === 0 ? new Date() : null
                 }
@@ -1036,7 +1043,7 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                 data: {
                     paymentStatus: nextOrderPaymentStatus,
                     paymentMethod: nextPaymentMethod,
-                    amountPaid: newBalance === 0 ? openTab.runningTotal : undefined,
+                    amountPaid: newBalance === 0 ? newRunningTotal : undefined,
                     closedAt: newBalance === 0 ? new Date() : undefined
                 }
             });

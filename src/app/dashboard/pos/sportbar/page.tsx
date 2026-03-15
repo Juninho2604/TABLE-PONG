@@ -66,7 +66,7 @@ interface ZoneSummary { id: string; name: string; zoneType: string; tablesOrStat
 interface SportBarLayout { id: string; name: string; serviceZones: ZoneSummary[]; }
 
 const PAYMENT_LABELS: Record<string, string> = {
-    CASH: '💵 Efectivo', CARD: '💳 Tarjeta', MOBILE_PAY: '📱 Pago Móvil', TRANSFER: '🏦 Transferencia'
+    CASH: '💵 Efectivo $', CARD: '💳 Tarjeta', MOBILE_PAY: '📱 Pago Móvil', TRANSFER: '🏦 Transferencia', ZELLE: '⚡ Zelle'
 };
 const CASHIER_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD'];
 
@@ -114,11 +114,14 @@ export default function POSSportBarPage() {
     const [cart, setCart] = useState<CartItem[]>([]);
 
     // ── Payment ───────────────────────────────────────────────────────────────
-    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY'>('CASH');
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'ZELLE'>('CASH');
     const [amountReceived, setAmountReceived] = useState('');
     const [showPaymentPinModal, setShowPaymentPinModal] = useState(false);
     const [paymentPin, setPaymentPin] = useState('');
     const [paymentPinError, setPaymentPinError] = useState('');
+
+    // ── Descuento ─────────────────────────────────────────────────────────────
+    const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33'>('NONE');
 
     // ── Remove item ───────────────────────────────────────────────────────────
     const [showRemoveModal, setShowRemoveModal] = useState(false);
@@ -176,6 +179,12 @@ export default function POSSportBarPage() {
     useEffect(() => { loadData(); }, []);
 
     useEffect(() => {
+        if (paymentMethod !== 'CASH' && paymentMethod !== 'ZELLE' && discountType === 'DIVISAS_33') {
+            setDiscountType('NONE');
+        }
+    }, [paymentMethod, discountType]);
+
+    useEffect(() => {
         if (!selectedCategory || !categories.length) return;
         const cat = categories.find(c => c.id === selectedCategory);
         setMenuItems(cat?.items || []);
@@ -208,6 +217,7 @@ export default function POSSportBarPage() {
 
     const cartTotal = cart.reduce((s, i) => s + i.lineTotal, 0);
     const paidAmount = parseFloat(amountReceived) || 0;
+    const isPagoDivisas = paymentMethod === 'CASH' || paymentMethod === 'ZELLE';
 
     // ============================================================================
     // OPEN TAB
@@ -336,15 +346,19 @@ export default function POSSportBarPage() {
                 setPaymentPinError('PIN incorrecto o sin permisos de cajera');
                 return;
             }
+            const discountAmount = discountType === 'DIVISAS_33' ? activeTab.balanceDue / 3 : 0;
+            const discountLabel = discountType === 'DIVISAS_33' ? ' · -33.33% Divisas' : '';
             const result = await registerOpenTabPaymentAction({
                 openTabId: activeTab.id,
                 amount: paidAmount,
                 paymentMethod,
-                splitLabel: `${PAYMENT_LABELS[paymentMethod] || paymentMethod} – ${pinResult.data?.managerName || ''}`,
+                splitLabel: `${PAYMENT_LABELS[paymentMethod] || paymentMethod}${discountLabel} – ${pinResult.data?.managerName || ''}`,
+                discountAmount: discountAmount > 0 ? discountAmount : undefined,
             });
             if (!result.success) { alert(result.message); return; }
             setAmountReceived('');
             setPaymentPin('');
+            setDiscountType('NONE');
             setShowPaymentPinModal(false);
             await loadData();
         } finally {
@@ -724,17 +738,72 @@ export default function POSSportBarPage() {
                                 <div className="rounded-xl border border-slate-700 bg-slate-800 p-3">
                                     <div className="text-xs font-bold text-slate-400 uppercase mb-2">Cobrar cuenta</div>
 
-                                    {/* Payment methods */}
-                                    <div className="grid grid-cols-2 gap-1.5 mb-3">
-                                        {(['CASH', 'CARD', 'MOBILE_PAY', 'TRANSFER'] as const).map(m => (
+                                    {/* 1. Descuento */}
+                                    <div className="mb-3">
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">1. Descuento</p>
+                                        <div className="flex gap-1.5">
                                             <button
-                                                key={m}
-                                                onClick={() => setPaymentMethod(m)}
-                                                className={`py-2 rounded-lg text-xs font-bold transition ${paymentMethod === m ? 'bg-amber-500 text-black' : 'bg-slate-900 text-slate-300 hover:bg-slate-700'}`}
+                                                onClick={() => setDiscountType('NONE')}
+                                                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${discountType === 'NONE' ? 'bg-slate-500 text-white ring-1 ring-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-700'}`}
                                             >
-                                                {PAYMENT_LABELS[m]}
+                                                Normal
                                             </button>
-                                        ))}
+                                            <button
+                                                onClick={() => isPagoDivisas && setDiscountType('DIVISAS_33')}
+                                                disabled={!isPagoDivisas}
+                                                title={!isPagoDivisas ? 'Solo con Efectivo o Zelle' : 'Descuento por pago en divisas'}
+                                                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${discountType === 'DIVISAS_33' ? 'bg-blue-600 text-white ring-1 ring-white' : isPagoDivisas ? 'bg-slate-900 text-slate-300 hover:bg-slate-700' : 'bg-slate-900 text-slate-600 cursor-not-allowed opacity-50'}`}
+                                            >
+                                                -33.33%
+                                            </button>
+                                        </div>
+                                        {discountType === 'DIVISAS_33' && (
+                                            <p className="text-[10px] text-blue-400 mt-1">
+                                                Descuento: -${(activeTab.balanceDue / 3).toFixed(2)} → Total: ${(activeTab.balanceDue * 2 / 3).toFixed(2)}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* 2. Método de pago */}
+                                    <div className="mb-3">
+                                        <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">2. Forma de pago</p>
+                                        <div className="grid grid-cols-2 gap-1.5">
+                                            {(['CASH', 'ZELLE', 'CARD', 'MOBILE_PAY', 'TRANSFER'] as const).map(m => (
+                                                <button
+                                                    key={m}
+                                                    onClick={() => setPaymentMethod(m)}
+                                                    className={`py-2 rounded-lg text-xs font-bold transition ${paymentMethod === m ? 'bg-amber-500 text-black' : 'bg-slate-900 text-slate-300 hover:bg-slate-700'}`}
+                                                >
+                                                    {PAYMENT_LABELS[m]}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Resumen */}
+                                    <div className="bg-slate-900 rounded-lg px-3 py-2 mb-2 text-xs space-y-1">
+                                        <div className="flex justify-between text-slate-400">
+                                            <span>Saldo</span>
+                                            <span>${activeTab.balanceDue.toFixed(2)}</span>
+                                        </div>
+                                        {discountType === 'DIVISAS_33' && (
+                                            <div className="flex justify-between text-blue-400">
+                                                <span>Descuento divisas</span>
+                                                <span>-${(activeTab.balanceDue / 3).toFixed(2)}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between font-bold text-white border-t border-slate-700 pt-1">
+                                            <span>A cobrar</span>
+                                            <span>${(discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue).toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-slate-600 text-[10px]">
+                                            <span>10% Servicio sugerido</span>
+                                            <span>${((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) * 0.10).toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-slate-500 text-[10px]">
+                                            <span>Total sugerido c/servicio</span>
+                                            <span>${((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) * 1.10).toFixed(2)}</span>
+                                        </div>
                                     </div>
 
                                     {/* Amount */}
@@ -742,13 +811,13 @@ export default function POSSportBarPage() {
                                         type="number"
                                         value={amountReceived}
                                         onChange={e => setAmountReceived(e.target.value)}
-                                        placeholder={`Monto (saldo: $${activeTab.balanceDue.toFixed(2)})`}
+                                        placeholder={`Monto a recibir ($${(discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue).toFixed(2)})`}
                                         className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none mb-2"
                                     />
 
                                     {/* CurrencyCalculator */}
                                     <CurrencyCalculator
-                                        totalUsd={paidAmount > 0 ? paidAmount : Number(activeTab.balanceDue.toFixed(2))}
+                                        totalUsd={paidAmount > 0 ? paidAmount : Number((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue).toFixed(2))}
                                         onRateUpdated={setExchangeRate}
                                         className="w-full justify-center mb-2"
                                     />
@@ -871,6 +940,9 @@ export default function POSSportBarPage() {
                         <div className="p-5 space-y-4">
                             <div className="bg-slate-800 rounded-xl p-3 text-sm space-y-1">
                                 <div className="flex justify-between"><span className="text-slate-400">Método:</span><span className="font-bold">{PAYMENT_LABELS[paymentMethod]}</span></div>
+                                {discountType === 'DIVISAS_33' && activeTab && (
+                                    <div className="flex justify-between text-blue-400 text-xs"><span>Descuento -33.33%:</span><span>-${(activeTab.balanceDue / 3).toFixed(2)}</span></div>
+                                )}
                                 <div className="flex justify-between"><span className="text-slate-400">Monto:</span><span className="font-black text-emerald-400 text-base">${paidAmount.toFixed(2)}</span></div>
                                 {exchangeRate && <div className="flex justify-between text-slate-500 text-xs"><span>Equivalente Bs:</span><span>Bs. {(paidAmount * exchangeRate).toFixed(2)}</span></div>}
                             </div>

@@ -181,7 +181,7 @@ export default function POSRestaurantPage() {
     const [itemNotes, setItemNotes] = useState('');
 
     // PAYMENT STATE
-    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY'>('CASH');
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'ZELLE'>('CASH');
     const [amountReceived, setAmountReceived] = useState('');
 
     // DISCOUNT STATE
@@ -193,10 +193,10 @@ export default function POSRestaurantPage() {
     const [pinInput, setPinInput] = useState('');
     const [pinError, setPinError] = useState('');
 
-    const isPagoDivisas = paymentMethod === 'CASH' || paymentMethod === 'CARD' || paymentMethod === 'TRANSFER';
+    const isPagoDivisas = paymentMethod === 'CASH' || paymentMethod === 'ZELLE';
 
     useEffect(() => {
-        if (paymentMethod === 'MOBILE_PAY' && discountType === 'DIVISAS_33') {
+        if (paymentMethod !== 'CASH' && paymentMethod !== 'ZELLE' && discountType === 'DIVISAS_33') {
             setDiscountType('NONE');
         }
     }, [paymentMethod, discountType]);
@@ -374,7 +374,7 @@ export default function POSRestaurantPage() {
 
     // Totales
     const cartTotal = cart.reduce((sum, item) => sum + item.lineTotal, 0);
-    const discountAmount = discountType === 'DIVISAS_33' ? cartTotal * 0.33
+    const discountAmount = discountType === 'DIVISAS_33' ? cartTotal / 3
         : (discountType === 'CORTESIA_100' ? cartTotal : (discountType === 'CORTESIA_PERCENT' ? cartTotal * (cortesiaPercent / 100) : 0));
     const finalTotal = cartTotal - discountAmount;
     const paidAmount = parseFloat(amountReceived) || 0;
@@ -382,7 +382,7 @@ export default function POSRestaurantPage() {
 
     // Validaciones estrictas para cobrar
     const canCheckout = cart.length > 0;
-    const needsAmountReceived = paymentMethod === 'CASH' && finalTotal > 0;
+    const needsAmountReceived = (paymentMethod === 'CASH') && finalTotal > 0;
     const amountValid = !needsAmountReceived || (paidAmount >= finalTotal);
     const checkoutBlocked = !canCheckout || !amountValid;
     const checkoutBlockReason = !canCheckout ? 'Agregue productos al carrito' : (needsAmountReceived && paidAmount < finalTotal ? `Ingrese al menos $${finalTotal.toFixed(2)}` : null);
@@ -396,7 +396,7 @@ export default function POSRestaurantPage() {
             alert('Cortesía requiere autorización de gerente');
             return;
         }
-        if (discountType !== 'NONE' && !confirm(`¿Confirmar venta con descuento ${discountType === 'DIVISAS_33' ? '33%' : cortesiaPercent + '%'}?`)) return;
+        if (discountType !== 'NONE' && !confirm(`¿Confirmar venta con descuento ${discountType === 'DIVISAS_33' ? '33.33%' : cortesiaPercent + '%'}?`)) return;
         setIsProcessing(true);
         try {
             const result = await createSalesOrderAction({
@@ -605,10 +605,10 @@ export default function POSRestaurantPage() {
                                 <button
                                     onClick={() => handleDiscountSelect('DIVISAS_33')}
                                     disabled={!isPagoDivisas}
-                                    title={!isPagoDivisas ? 'Solo con Efectivo, Tarjeta o Transferencia' : ''}
+                                    title={!isPagoDivisas ? 'Solo con Efectivo o Zelle (Divisas)' : 'Descuento por pago en divisas'}
                                     className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${discountType === 'DIVISAS_33' ? 'bg-blue-600 text-white ring-2 ring-white' : isPagoDivisas ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-800 text-gray-500 cursor-not-allowed opacity-50'}`}
                                 >
-                                    -33%
+                                    -33.33%
                                 </button>
                                 <button onClick={() => handleDiscountSelect('CORTESIA_100')} className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT') ? 'bg-purple-600 text-white ring-2 ring-white' : 'bg-gray-700 hover:bg-gray-600'}`}>Cortesía</button>
                             </div>
@@ -622,7 +622,8 @@ export default function POSRestaurantPage() {
                             <p className="text-xs font-bold text-gray-400 uppercase mb-2">2. Forma de pago</p>
                             <div className="grid grid-cols-2 gap-2">
                                 {[
-                                    { id: 'CASH', label: 'Efectivo', icon: '💵' },
+                                    { id: 'CASH', label: 'Efectivo $', icon: '💵' },
+                                    { id: 'ZELLE', label: 'Zelle', icon: '⚡' },
                                     { id: 'CARD', label: 'Tarjeta', icon: '💳' },
                                     { id: 'MOBILE_PAY', label: 'Pago Móvil', icon: '📱' },
                                     { id: 'TRANSFER', label: 'Transferencia', icon: '🏦' },
@@ -667,6 +668,14 @@ export default function POSRestaurantPage() {
                             <div className="flex justify-between text-xl font-black pt-2 border-t border-gray-700">
                                 <span>TOTAL</span>
                                 <span className="text-amber-400">${finalTotal.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs text-gray-500 border-t border-gray-800 pt-1 mt-1">
+                                <span>10% Servicio sugerido</span>
+                                <span className="text-gray-400">${(finalTotal * 0.10).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm font-bold text-gray-300">
+                                <span>Total sugerido c/servicio</span>
+                                <span>${(finalTotal * 1.10).toFixed(2)}</span>
                             </div>
                             {paymentMethod === 'CASH' && changeAmount > 0 && (
                                 <div className="flex justify-between text-green-400 font-bold">
