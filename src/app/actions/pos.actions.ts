@@ -73,6 +73,8 @@ export interface RegisterOpenTabPaymentInput {
     notes?: string;
     discountAmount?: number;        // Descuento divisas (DIVISAS_33) sobre el saldo
     includeServiceCharge?: boolean; // 10% servicio opcional (Sport Bar)
+    /** Pagos mixtos: varios métodos en una sola operación. Si se envía, amount/paymentMethod se ignoran. */
+    paymentSplits?: { method: POSPaymentMethod; amount: number }[];
 }
 
 export interface ActionResult {
@@ -1009,7 +1011,12 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
             return { success: false, message: 'No autorizado' };
         }
 
-        if (!data.includeServiceCharge && data.amount <= 0) {
+        const useMultiSplits = data.paymentSplits && data.paymentSplits.length > 1;
+        const totalAmount = useMultiSplits
+            ? data.paymentSplits!.reduce((s, p) => s + p.amount, 0)
+            : data.amount;
+
+        if (!data.includeServiceCharge && totalAmount <= 0) {
             return { success: false, message: 'El monto debe ser mayor a cero' };
         }
 
@@ -1033,25 +1040,42 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
 
         // ── 10% Servicio (Sport Bar, opcional) ───────────────────────────────
         let appliedAmount: number;
-        let splitPaidAmount: number;
+        let splitsToCreate: { label: string; method: string; amount: number }[] = [];
         let serviceChargeAmount = 0;
-        let baseSplitLabel = data.splitLabel || `Pago ${openTab.paymentSplits.length + 1}`;
 
-        if (data.includeServiceCharge) {
-            // Aplica 10% sobre el balance efectivo (ya con descuento) → siempre cierra la cuenta
-            appliedAmount = effectiveBalance;
-            serviceChargeAmount = Number((effectiveBalance * 0.10).toFixed(2));
-            splitPaidAmount = appliedAmount + serviceChargeAmount;
-            baseSplitLabel = `${baseSplitLabel} | +10% serv ($${serviceChargeAmount.toFixed(2)})`;
+        if (useMultiSplits) {
+            appliedAmount = Math.min(totalAmount, effectiveBalance);
+            const PAYMENT_LABELS: Record<string, string> = { CASH: 'Efectivo', ZELLE: 'Zelle', CARD: 'Tarjeta', MOBILE_PAY: 'P.Móvil', TRANSFER: 'Transferencia' };
+            splitsToCreate = data.paymentSplits!.map((p, i) => ({
+                label: `${PAYMENT_LABELS[p.method] || p.method} – $${p.amount.toFixed(2)}`,
+                method: p.method,
+                amount: p.amount
+            }));
         } else {
-            appliedAmount = Math.min(data.amount, effectiveBalance);
-            splitPaidAmount = appliedAmount;
+            const baseSplitLabel = data.splitLabel || `Pago ${openTab.paymentSplits.length + 1}`;
+            if (data.includeServiceCharge) {
+                appliedAmount = effectiveBalance;
+                serviceChargeAmount = Number((effectiveBalance * 0.10).toFixed(2));
+                const splitPaidAmount = appliedAmount + serviceChargeAmount;
+                splitsToCreate = [{
+                    label: `${baseSplitLabel} | +10% serv ($${serviceChargeAmount.toFixed(2)})`,
+                    method: data.paymentMethod,
+                    amount: splitPaidAmount
+                }];
+            } else {
+                appliedAmount = Math.min(data.amount, effectiveBalance);
+                splitsToCreate = [{
+                    label: baseSplitLabel,
+                    method: data.paymentMethod,
+                    amount: appliedAmount
+                }];
+            }
         }
 
         const newBalance = Math.max(0, effectiveBalance - appliedAmount);
         const nextTabStatus = newBalance === 0 ? 'CLOSED' : 'PARTIALLY_PAID';
         const nextOrderPaymentStatus = newBalance === 0 ? 'PAID' : 'PARTIAL';
-        const nextPaymentMethod = openTab.paymentSplits.length > 0 ? 'MULTIPLE' : data.paymentMethod;
+        const nextPaymentMethod = openTab.paymentSplits.length > 0 || splitsToCreate.length > 1 ? 'MULTIPLE' : (splitsToCreate[0]?.method || data.paymentMethod);
 
         const updatedTab = await prisma.$transaction(async (tx) => {
             await assertOpenTabVersionUpdate({
@@ -1067,24 +1091,25 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                 }
             });
 
-            await tx.paymentSplit.create({
-                data: {
-                    openTabId: openTab.id,
-                    splitLabel: baseSplitLabel,
-                    splitType: 'CUSTOM',
-                    paymentMethod: data.paymentMethod,
-                    status: 'PAID',
-                    total: splitPaidAmount,
-                    paidAmount: splitPaidAmount,
-                    paidAt: new Date(),
-                    notes: data.notes
-                }
-            });
+            for (const split of splitsToCreate) {
+                await tx.paymentSplit.create({
+                    data: {
+                        openTabId: openTab.id,
+                        splitLabel: split.label,
+                        splitType: 'CUSTOM',
+                        paymentMethod: split.method,
+                        status: 'PAID',
+                        total: split.amount,
+                        paidAmount: split.amount,
+                        paidAt: new Date(),
+                        notes: data.notes
+                    }
+                });
+            }
 
             // amountPaid total en las órdenes = lo que el cliente realmente pagó
-            // (incluye el 10% de servicio si fue cobrado)
             const totalActuallyPaid = newBalance === 0
-                ? (openTab.paymentSplits.reduce((s, p) => s + Number(p.paidAmount), 0) + splitPaidAmount)
+                ? (openTab.paymentSplits.reduce((s, p) => s + Number(p.paidAmount), 0) + splitsToCreate.reduce((s, p) => s + p.amount, 0))
                 : undefined;
 
             await tx.salesOrder.updateMany({

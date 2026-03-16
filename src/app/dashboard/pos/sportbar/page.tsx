@@ -116,6 +116,8 @@ export default function POSSportBarPage() {
     // ── Payment ───────────────────────────────────────────────────────────────
     const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'ZELLE'>('CASH');
     const [amountReceived, setAmountReceived] = useState('');
+    const [paymentLines, setPaymentLines] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'ZELLE'; amount: string }[]>([]);
+    const [useMultiPayment, setUseMultiPayment] = useState(false);
     const [includeServiceCharge, setIncludeServiceCharge] = useState(false);
     const [showPaymentPinModal, setShowPaymentPinModal] = useState(false);
     const [paymentPin, setPaymentPin] = useState('');
@@ -219,6 +221,14 @@ export default function POSSportBarPage() {
     const cartTotal = cart.reduce((s, i) => s + i.lineTotal, 0);
     const paidAmount = parseFloat(amountReceived) || 0;
     const isPagoDivisas = paymentMethod === 'CASH' || paymentMethod === 'ZELLE';
+
+    // Balance a cobrar (con descuento divisas si aplica)
+    const amountToCharge = activeTab ? (discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) : 0;
+    const amountWithService = amountToCharge * 1.10;
+    // Pago mixto
+    const multiTotal = paymentLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+    const multiRemaining = (includeServiceCharge ? amountWithService : amountToCharge) - multiTotal;
+    const multiValid = useMultiPayment ? (paymentLines.length > 1 && multiTotal >= (includeServiceCharge ? amountWithService : amountToCharge) - 0.001) : true;
 
     // ============================================================================
     // OPEN TAB
@@ -339,7 +349,16 @@ export default function POSSportBarPage() {
 
     const handlePaymentPinConfirm = async () => {
         if (!activeTab) return;
-        if (!includeServiceCharge && paidAmount <= 0) return;
+        const totalToPay = includeServiceCharge ? amountWithService : amountToCharge;
+        if (useMultiPayment) {
+            if (!multiValid || paymentLines.filter(l => parseFloat(l.amount) > 0).length < 2) {
+                setPaymentPinError('Pago mixto: asigne al menos 2 métodos y cubra el total');
+                return;
+            }
+        } else if (!includeServiceCharge && paidAmount <= 0) {
+            setPaymentPinError('Ingrese el monto a cobrar');
+            return;
+        }
         setPaymentPinError('');
         setIsProcessing(true);
         try {
@@ -350,17 +369,32 @@ export default function POSSportBarPage() {
             }
             const discountAmount = discountType === 'DIVISAS_33' ? activeTab.balanceDue / 3 : 0;
             const discountLabel = discountType === 'DIVISAS_33' ? ' · -33.33% Divisas' : '';
-            const baseLabel = `${PAYMENT_LABELS[paymentMethod] || paymentMethod}${discountLabel} – ${pinResult.data?.managerName || ''}`;
-            const result = await registerOpenTabPaymentAction({
-                openTabId: activeTab.id,
-                amount: includeServiceCharge ? activeTab.balanceDue : paidAmount,
-                paymentMethod,
-                splitLabel: baseLabel,
-                discountAmount: discountAmount > 0 ? discountAmount : undefined,
-                includeServiceCharge,
-            });
-            if (!result.success) { alert(result.message); return; }
+
+            if (useMultiPayment && paymentLines.filter(l => parseFloat(l.amount) > 0).length > 1) {
+                const splits = paymentLines.filter(l => parseFloat(l.amount) > 0).map(l => ({ method: l.method, amount: parseFloat(l.amount) }));
+                const result = await registerOpenTabPaymentAction({
+                    openTabId: activeTab.id,
+                    amount: 0,
+                    paymentMethod: 'CASH',
+                    paymentSplits: splits,
+                    discountAmount: discountAmount > 0 ? discountAmount : undefined,
+                });
+                if (!result.success) { alert(result.message); return; }
+            } else {
+                const baseLabel = `${PAYMENT_LABELS[paymentMethod] || paymentMethod}${discountLabel} – ${pinResult.data?.managerName || ''}`;
+                const result = await registerOpenTabPaymentAction({
+                    openTabId: activeTab.id,
+                    amount: includeServiceCharge ? activeTab.balanceDue : paidAmount,
+                    paymentMethod,
+                    splitLabel: baseLabel,
+                    discountAmount: discountAmount > 0 ? discountAmount : undefined,
+                    includeServiceCharge,
+                });
+                if (!result.success) { alert(result.message); return; }
+            }
             setAmountReceived('');
+            setPaymentLines([]);
+            setUseMultiPayment(false);
             setPaymentPin('');
             setDiscountType('NONE');
             setIncludeServiceCharge(false);
@@ -769,20 +803,52 @@ export default function POSSportBarPage() {
                                         )}
                                     </div>
 
-                                    {/* 2. Método de pago */}
+                                    {/* 2. Método de pago + Pago Mixto */}
                                     <div className="mb-3">
-                                        <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">2. Forma de pago</p>
-                                        <div className="grid grid-cols-2 gap-1.5">
-                                            {(['CASH', 'ZELLE', 'CARD', 'MOBILE_PAY', 'TRANSFER'] as const).map(m => (
-                                                <button
-                                                    key={m}
-                                                    onClick={() => setPaymentMethod(m)}
-                                                    className={`py-2 rounded-lg text-xs font-bold transition ${paymentMethod === m ? 'bg-amber-500 text-black' : 'bg-slate-900 text-slate-300 hover:bg-slate-700'}`}
-                                                >
-                                                    {PAYMENT_LABELS[m]}
-                                                </button>
-                                            ))}
+                                        <div className="flex items-center justify-between mb-1">
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase">2. Forma de pago</p>
+                                            <button
+                                                onClick={() => { setUseMultiPayment(p => !p); setPaymentLines([]); }}
+                                                className={`text-[10px] px-2 py-0.5 rounded font-bold transition ${useMultiPayment ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                            >
+                                                {useMultiPayment ? '✓ Pago Mixto' : '+ Pago Mixto'}
+                                            </button>
                                         </div>
+                                        {!useMultiPayment ? (
+                                            <div className="grid grid-cols-2 gap-1.5">
+                                                {(['CASH', 'ZELLE', 'CARD', 'MOBILE_PAY', 'TRANSFER'] as const).map(m => (
+                                                    <button
+                                                        key={m}
+                                                        onClick={() => setPaymentMethod(m)}
+                                                        className={`py-2 rounded-lg text-xs font-bold transition ${paymentMethod === m ? 'bg-amber-500 text-black' : 'bg-slate-900 text-slate-300 hover:bg-slate-700'}`}
+                                                    >
+                                                        {PAYMENT_LABELS[m]}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-1.5">
+                                                {paymentLines.map((line, idx) => (
+                                                    <div key={idx} className="flex gap-1.5 items-center">
+                                                        <select value={line.method} onChange={e => setPaymentLines(prev => prev.map((l, i) => i === idx ? { ...l, method: e.target.value as any } : l))} className="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-xs text-white">
+                                                            <option value="CASH">💵 Efectivo</option>
+                                                            <option value="ZELLE">⚡ Zelle</option>
+                                                            <option value="CARD">💳 Tarjeta</option>
+                                                            <option value="MOBILE_PAY">📱 P.Móvil</option>
+                                                            <option value="TRANSFER">🏦 Transferencia</option>
+                                                        </select>
+                                                        <input type="number" step="0.01" min="0" value={line.amount} onChange={e => setPaymentLines(prev => prev.map((l, i) => i === idx ? { ...l, amount: e.target.value } : l))} placeholder="$0" className="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1.5 text-xs text-white text-right" />
+                                                        <button onClick={() => setPaymentLines(prev => prev.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-300 font-bold">×</button>
+                                                    </div>
+                                                ))}
+                                                <button onClick={() => setPaymentLines(prev => [...prev, { method: 'CASH', amount: multiRemaining > 0 ? multiRemaining.toFixed(2) : '' }])} className="w-full py-1.5 bg-slate-900 hover:bg-slate-800 rounded text-xs font-bold text-slate-300">
+                                                    + Agregar método
+                                                </button>
+                                                <div className={`text-[10px] font-bold px-1 ${multiRemaining > 0.005 ? 'text-red-400' : 'text-green-400'}`}>
+                                                    ${multiTotal.toFixed(2)} / ${(includeServiceCharge ? amountWithService : amountToCharge).toFixed(2)}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Resumen */}
@@ -830,13 +896,13 @@ export default function POSSportBarPage() {
                                         )}
                                     </label>
 
-                                    {/* Amount (solo si no aplica servicio completo) */}
-                                    {!includeServiceCharge && (
+                                    {/* Amount (solo si no pago mixto ni servicio completo) */}
+                                    {!includeServiceCharge && !useMultiPayment && (
                                         <input
                                             type="number"
                                             value={amountReceived}
                                             onChange={e => setAmountReceived(e.target.value)}
-                                            placeholder={`Monto a recibir ($${(discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue).toFixed(2)})`}
+                                            placeholder={`Monto a recibir ($${amountToCharge.toFixed(2)})`}
                                             className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none mb-2"
                                         />
                                     )}
@@ -853,12 +919,14 @@ export default function POSSportBarPage() {
                                     {/* Register payment (requiere PIN) */}
                                     <button
                                         onClick={() => { setPaymentPin(''); setPaymentPinError(''); setShowPaymentPinModal(true); }}
-                                        disabled={(!includeServiceCharge && paidAmount <= 0) || isProcessing}
+                                        disabled={(useMultiPayment ? !multiValid : (!includeServiceCharge && paidAmount <= 0)) || isProcessing}
                                         className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-black transition disabled:opacity-40"
                                     >
-                                        🔐 Registrar pago ${includeServiceCharge
-                                            ? ((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) * 1.10).toFixed(2)
-                                            : (paidAmount > 0 ? paidAmount.toFixed(2) : '0.00')}
+                                        🔐 Registrar pago ${useMultiPayment
+                                            ? multiTotal.toFixed(2)
+                                            : includeServiceCharge
+                                                ? amountWithService.toFixed(2)
+                                                : (paidAmount > 0 ? paidAmount.toFixed(2) : '0.00')}
                                     </button>
 
                                     {/* Paid splits */}

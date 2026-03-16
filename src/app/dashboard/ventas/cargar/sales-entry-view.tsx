@@ -607,7 +607,7 @@ export default function SalesEntryView() {
                                     todaySales.sales.map((sale: any) => (
                                         <tr key={sale.id} className={cn(
                                             'hover:bg-gray-50',
-                                            sale.status === 'VOIDED' && 'opacity-50 bg-red-50'
+                                            sale.status === 'CANCELLED' && 'opacity-50 bg-red-50'
                                         )}>
                                             <td className="px-6 py-4">
                                                 <p className="font-medium text-gray-900">{sale.orderNumber}</p>
@@ -636,17 +636,17 @@ export default function SalesEntryView() {
                                                 {new Date(sale.createdAt).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' })}
                                             </td>
                                             <td className="px-6 py-4 text-center">
-                                                {sale.status !== 'VOIDED' && (
+                                                {sale.status !== 'CANCELLED' && (
                                                     <button
                                                         onClick={() => handleVoidSale(sale.id)}
-                                                        className="text-red-500 hover:text-red-700 text-sm"
+                                                        className="text-red-500 hover:text-red-700 text-sm font-medium hover:underline"
                                                         title="Anular venta"
                                                     >
                                                         🗑️ Anular
                                                     </button>
                                                 )}
-                                                {sale.status === 'VOIDED' && (
-                                                    <span className="text-red-500 text-xs">ANULADA</span>
+                                                {sale.status === 'CANCELLED' && (
+                                                    <span className="text-red-500 text-xs font-bold">ANULADA</span>
                                                 )}
                                             </td>
                                         </tr>

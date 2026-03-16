@@ -353,9 +353,9 @@ export async function voidSalesOrderAction(
         select: { role: true }
     });
 
-    const allowedRoles = ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER'];
+    const allowedRoles = ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'AREA_LEAD'];
     if (!user || !allowedRoles.includes(user.role)) {
-        return { success: false, message: 'No tienes permisos para anular ventas' };
+        return { success: false, message: 'No tienes permisos para anular ventas. Solo gerentes, auditores y cajeros pueden anular.' };
     }
 
     try {
@@ -368,6 +368,8 @@ export async function voidSalesOrderAction(
         });
 
         revalidatePath('/dashboard/ventas');
+        revalidatePath('/dashboard/ventas/cargar');
+        revalidatePath('/dashboard/sales');
         return { success: true, message: 'Venta anulada' };
     } catch (error) {
         console.error('Error en voidSalesOrderAction:', error);

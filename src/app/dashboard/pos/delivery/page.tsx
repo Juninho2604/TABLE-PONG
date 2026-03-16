@@ -71,19 +71,31 @@ export default function POSDeliveryPage() {
     const [itemQuantity, setItemQuantity] = useState(1);
     const [itemNotes, setItemNotes] = useState('');
 
-    // PAYMENT STATE
-    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY'>('TRANSFER');
+    // PAYMENT STATE (igual que Restaurante)
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'ZELLE'>('TRANSFER');
     const [amountReceived, setAmountReceived] = useState('');
+    const [paymentLines, setPaymentLines] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'ZELLE'; amount: string }[]>([]);
+    const [useMultiPayment, setUseMultiPayment] = useState(false);
 
-    // DISCOUNT STATE
-    const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33' | 'CORTESIA_100'>('NONE');
+    // DISCOUNT STATE (igual que Restaurante)
+    const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33' | 'CORTESIA_100' | 'CORTESIA_PERCENT'>('NONE');
+    const [cortesiaPercent, setCortesiaPercent] = useState<number>(100);
     const [authorizedManager, setAuthorizedManager] = useState<{ id: string, name: string } | null>(null);
     const [showPinModal, setShowPinModal] = useState(false);
+    const [showCortesiaPercentModal, setShowCortesiaPercentModal] = useState(false);
     const [pinInput, setPinInput] = useState('');
     const [pinError, setPinError] = useState('');
 
+    const isPagoDivisas = paymentMethod === 'CASH' || paymentMethod === 'ZELLE';
+
     // WHATSAPP PARSER
     const [showWhatsAppParser, setShowWhatsAppParser] = useState(false);
+
+    useEffect(() => {
+        if (paymentMethod !== 'CASH' && paymentMethod !== 'ZELLE' && discountType === 'DIVISAS_33') {
+            setDiscountType('NONE');
+        }
+    }, [paymentMethod, discountType]);
 
     useEffect(() => {
         async function loadMenu() {
@@ -185,19 +197,53 @@ export default function POSDeliveryPage() {
     };
 
     const cartTotal = cart.reduce((s, i) => s + i.lineTotal, 0);
-    const discountAmount = discountType === 'DIVISAS_33' ? cartTotal * 0.33 : (discountType === 'CORTESIA_100' ? cartTotal : 0);
+    const discountAmount = discountType === 'DIVISAS_33' ? cartTotal / 3
+        : (discountType === 'CORTESIA_100' ? cartTotal : (discountType === 'CORTESIA_PERCENT' ? cartTotal * (cortesiaPercent / 100) : 0));
     const finalTotal = cartTotal - discountAmount;
     const paidAmount = parseFloat(amountReceived) || 0;
+    const changeAmount = paidAmount - finalTotal;
+
+    // Helpers pagos mixtos (igual que Restaurante)
+    const multiTotal = paymentLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+    const multiRemaining = finalTotal - multiTotal;
+    const multiValid = useMultiPayment ? (paymentLines.length > 1 && multiTotal >= finalTotal - 0.001) : true;
+    const needsAmountReceived = !useMultiPayment && paymentMethod === 'CASH' && finalTotal > 0;
+    const amountValid = !needsAmountReceived || (paidAmount >= finalTotal);
+    const checkoutBlocked = cart.length === 0 || !amountValid || (useMultiPayment && !multiValid);
+    const checkoutBlockReason = cart.length === 0
+        ? 'Agregue productos'
+        : (useMultiPayment && !multiValid)
+            ? `Faltan $${multiRemaining > 0 ? multiRemaining.toFixed(2) : '0.00'} por asignar`
+            : (needsAmountReceived && paidAmount < finalTotal ? `Ingrese al menos $${finalTotal.toFixed(2)}` : null);
 
     const handleCheckout = async () => {
         if (cart.length === 0) return;
+        if (checkoutBlocked && checkoutBlockReason) { alert(checkoutBlockReason); return; }
+        if (discountType !== 'NONE' && !authorizedManager && (discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT')) {
+            alert('Cortesía requiere autorización de gerente');
+            return;
+        }
+        if (discountType !== 'NONE' && !confirm(`¿Confirmar venta con descuento ${discountType === 'DIVISAS_33' ? '33.33%' : cortesiaPercent + '%'}?`)) return;
         setIsProcessing(true);
+
+        const splitsForAction = useMultiPayment && paymentLines.length > 1
+            ? paymentLines.filter(l => parseFloat(l.amount) > 0).map(l => ({ method: l.method, amount: parseFloat(l.amount) }))
+            : undefined;
+
         try {
             const result = await createSalesOrderAction({
                 orderType: 'DELIVERY',
                 customerName: customerName || 'Delivery',
-                customerPhone, customerAddress: customerAddress || 'N/A', // Asegurar que no sea null
-                items: cart, paymentMethod, amountPaid: paidAmount || finalTotal, discountType, authorizedById: authorizedManager?.id, notes: `Dirección: ${customerAddress}`
+                customerPhone,
+                customerAddress: customerAddress || 'N/A',
+                items: cart,
+                paymentMethod: splitsForAction ? 'MULTIPLE' : paymentMethod,
+                amountPaid: splitsForAction ? multiTotal : (paidAmount || finalTotal),
+                discountType: discountType === 'CORTESIA_PERCENT' ? 'CORTESIA_PERCENT' : discountType,
+                discountPercent: discountType === 'CORTESIA_PERCENT' ? cortesiaPercent : undefined,
+                authorizedById: authorizedManager?.id,
+                paymentSplits: splitsForAction,
+                notes: `Dirección: ${customerAddress}`
             });
 
             if (result.success && result.data) {
@@ -208,14 +254,42 @@ export default function POSDeliveryPage() {
                     createdAt: new Date(), address: customerAddress
                 });
 
-                setCart([]); setCustomerName(''); setCustomerPhone(''); setCustomerAddress(''); setPaymentMethod('TRANSFER'); setAmountReceived('');
-                setDiscountType('NONE'); setAuthorizedManager(null);
+                setCart([]);
+                setCustomerName('');
+                setCustomerPhone('');
+                setCustomerAddress('');
+                setPaymentMethod('TRANSFER');
+                setAmountReceived('');
+                setDiscountType('NONE');
+                setCortesiaPercent(100);
+                setAuthorizedManager(null);
+                setPaymentLines([]);
+                setUseMultiPayment(false);
             } else alert(result.message);
         } catch (e) { console.error(e); alert('Error'); } finally { setIsProcessing(false); }
     };
 
-    const handleDiscountSelect = (t: string) => { if (t === 'CORTESIA_100') { setPinInput(''); setPinError(''); setShowPinModal(true); } else { setDiscountType(t as any); setAuthorizedManager(null); } };
-    const handlePinSubmit = async () => { const r = await validateManagerPinAction(pinInput); if (r.success && r.data) { setAuthorizedManager({ id: r.data.managerId, name: r.data.managerName }); setDiscountType('CORTESIA_100'); setShowPinModal(false); } else setPinError('PIN Inválido'); };
+    const handleDiscountSelect = (t: string) => {
+        if (t === 'DIVISAS_33' && !isPagoDivisas) return;
+        if (t === 'CORTESIA_100' || t === 'CORTESIA_PERCENT') {
+            setPinInput(''); setPinError(''); setShowPinModal(true);
+        } else {
+            setDiscountType(t as any); setAuthorizedManager(null);
+        }
+    };
+    const handlePinSubmit = async () => {
+        const r = await validateManagerPinAction(pinInput);
+        if (r.success && r.data) {
+            setAuthorizedManager({ id: r.data.managerId, name: r.data.managerName });
+            setShowPinModal(false);
+            setShowCortesiaPercentModal(true);
+        } else setPinError('PIN Inválido');
+    };
+    const handleCortesiaPercentSelect = (percent: number) => {
+        setCortesiaPercent(percent);
+        setDiscountType(percent === 100 ? 'CORTESIA_100' : 'CORTESIA_PERCENT');
+        setShowCortesiaPercentModal(false);
+    };
     const handlePinKey = (k: string) => { if (k === 'clear') setPinInput(''); else if (k === 'back') setPinInput(p => p.slice(0, -1)); else setPinInput(p => p + k); };
 
     if (isLoading) return <div className="text-white p-10">Cargando...</div>;
@@ -308,21 +382,82 @@ export default function POSDeliveryPage() {
                         ))}
                     </div>
 
-                    <div className="p-4 bg-gray-800 border-t border-gray-700 space-y-3">
-                        <div className="flex gap-1">
-                            <button onClick={() => handleDiscountSelect('NONE')} className={`flex-1 py-1 text-[10px] font-bold rounded ${discountType === 'NONE' ? 'bg-blue-900 text-blue-200 ring-1 ring-blue-500' : 'bg-gray-700'}`}>Normal</button>
-                            <button onClick={() => handleDiscountSelect('DIVISAS_33')} className={`flex-1 py-1 text-[10px] font-bold rounded ${discountType === 'DIVISAS_33' ? 'bg-blue-600' : 'bg-gray-700'}`}>Divisa -33%</button>
-                            <button onClick={() => handleDiscountSelect('CORTESIA_100')} className={`flex-1 py-1 text-[10px] font-bold rounded ${discountType === 'CORTESIA_100' ? 'bg-purple-600' : 'bg-gray-700'}`}>Cortesía</button>
+                    <div className="p-4 bg-gray-800 border-t border-gray-700 space-y-4">
+                        {/* 1. Descuento (igual que Restaurante) */}
+                        <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase mb-2">1. Descuento</p>
+                            <div className="flex gap-2">
+                                <button onClick={() => handleDiscountSelect('NONE')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${discountType === 'NONE' ? 'bg-blue-900 text-blue-200 ring-2 ring-white' : 'bg-gray-700'}`}>Normal</button>
+                                <button onClick={() => handleDiscountSelect('DIVISAS_33')} disabled={!isPagoDivisas} title={!isPagoDivisas ? 'Solo Efectivo o Zelle' : ''} className={`flex-1 py-2 text-xs font-bold rounded-lg ${discountType === 'DIVISAS_33' ? 'bg-blue-600 text-white' : isPagoDivisas ? 'bg-gray-700' : 'bg-gray-800 text-gray-500 opacity-50'}`}>-33%</button>
+                                <button onClick={() => handleDiscountSelect('CORTESIA_100')} className={`flex-1 py-2 text-xs font-bold rounded-lg ${(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT') ? 'bg-purple-600 text-white' : 'bg-gray-700'}`}>Cortesía</button>
+                            </div>
+                            {(discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT') && authorizedManager && (
+                                <p className="text-xs text-purple-300 mt-1">✓ {authorizedManager.name}</p>
+                            )}
                         </div>
-                        <div className="grid grid-cols-4 gap-1">
-                            {['TRANSFER', 'MOBILE_PAY', 'CASH', 'CARD'].map(m => (
-                                <button key={m} onClick={() => setPaymentMethod(m as any)} className={`py-2 text-xs font-bold rounded ${paymentMethod === m ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-400'}`}>
-                                    {m === 'TRANSFER' ? 'Transf' : m === 'MOBILE_PAY' ? 'P.Móvil' : m === 'CASH' ? 'Efec' : 'Punto'}
+                        {/* 2. Forma de pago + Pago Mixto (igual que Restaurante) */}
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-bold text-gray-400 uppercase">2. Forma de pago</p>
+                                <button onClick={() => { setUseMultiPayment(p => !p); setPaymentLines([]); }} className={`text-xs px-2 py-1 rounded-lg font-bold ${useMultiPayment ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
+                                    {useMultiPayment ? '✓ Pago Mixto' : '+ Pago Mixto'}
                                 </button>
-                            ))}
+                            </div>
+                            {!useMultiPayment ? (
+                                <div className="grid grid-cols-2 gap-1.5">
+                                    {[
+                                        { id: 'CASH', label: 'Efectivo', icon: '💵' },
+                                        { id: 'ZELLE', label: 'Zelle', icon: '⚡' },
+                                        { id: 'CARD', label: 'Tarjeta', icon: '💳' },
+                                        { id: 'MOBILE_PAY', label: 'P.Móvil', icon: '📱' },
+                                        { id: 'TRANSFER', label: 'Transf', icon: '🏦' },
+                                    ].map(({ id, label, icon }) => (
+                                        <button key={id} onClick={() => setPaymentMethod(id as any)} className={`py-2 px-2 rounded-lg text-xs font-bold flex items-center gap-1 ${paymentMethod === id ? 'bg-blue-500 text-white' : 'bg-gray-700'}`}>
+                                            <span>{icon}</span> {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    {paymentLines.map((line, idx) => (
+                                        <div key={idx} className="flex gap-1.5 items-center">
+                                            <select value={line.method} onChange={e => setPaymentLines(prev => prev.map((l, i) => i === idx ? { ...l, method: e.target.value as any } : l))} className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-white">
+                                                <option value="CASH">💵 Efectivo</option>
+                                                <option value="ZELLE">⚡ Zelle</option>
+                                                <option value="CARD">💳 Tarjeta</option>
+                                                <option value="MOBILE_PAY">📱 P.Móvil</option>
+                                                <option value="TRANSFER">🏦 Transferencia</option>
+                                            </select>
+                                            <input type="number" step="0.01" min="0" value={line.amount} onChange={e => setPaymentLines(prev => prev.map((l, i) => i === idx ? { ...l, amount: e.target.value } : l))} placeholder="$0" className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-xs text-white text-right" />
+                                            <button onClick={() => setPaymentLines(prev => prev.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-300 font-bold">×</button>
+                                        </div>
+                                    ))}
+                                    <button onClick={() => setPaymentLines(prev => [...prev, { method: 'CASH', amount: multiRemaining > 0 ? multiRemaining.toFixed(2) : '' }])} className="w-full py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-xs font-bold text-gray-300">
+                                        + Agregar método
+                                    </button>
+                                    <div className={`text-xs font-bold px-1 ${multiRemaining > 0.005 ? 'text-red-400' : 'text-green-400'}`}>
+                                        ${multiTotal.toFixed(2)} / ${finalTotal.toFixed(2)}
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                        <button onClick={handleCheckout} disabled={cart.length === 0 || isProcessing} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xl shadow-lg disabled:opacity-50">
+                        {/* Monto recibido (solo CASH, no pago mixto) */}
+                        {!useMultiPayment && paymentMethod === 'CASH' && (
+                            <div>
+                                <label className="text-xs font-bold text-gray-400 block mb-1">Monto recibido ($)</label>
+                                <input type="number" step="0.01" min="0" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} placeholder={`Mín. $${finalTotal.toFixed(2)}`} className={`w-full bg-gray-700 border rounded p-2 text-right text-lg font-bold text-white ${!amountValid && needsAmountReceived ? 'border-red-500' : 'border-gray-600'}`} />
+                                {!amountValid && needsAmountReceived && paidAmount > 0 && <p className="text-red-400 text-xs mt-1">Faltan ${(finalTotal - paidAmount).toFixed(2)}</p>}
+                            </div>
+                        )}
+                        {/* Totales */}
+                        <div className="flex justify-between text-sm"><span className="text-gray-400">Subtotal</span><span>${cartTotal.toFixed(2)}</span></div>
+                        {discountAmount > 0 && <div className="flex justify-between text-sm text-amber-400"><span>Descuento</span><span>-${discountAmount.toFixed(2)}</span></div>}
+                        <div className="flex justify-between text-lg font-black pt-2 border-t border-gray-700"><span>TOTAL</span><span className="text-blue-400">${finalTotal.toFixed(2)}</span></div>
+                        {!useMultiPayment && paymentMethod === 'CASH' && changeAmount > 0 && <div className="flex justify-between text-green-400 font-bold text-sm"><span>Propina/Excedente</span><span>${changeAmount.toFixed(2)}</span></div>}
+                        {useMultiPayment && multiTotal > finalTotal + 0.005 && <div className="flex justify-between text-green-400 font-bold text-sm"><span>Propina/Excedente</span><span>${(multiTotal - finalTotal).toFixed(2)}</span></div>}
+                        <button onClick={handleCheckout} disabled={checkoutBlocked || isProcessing} title={checkoutBlockReason || undefined} className={`w-full py-4 rounded-xl font-bold text-xl shadow-lg ${checkoutBlocked || isProcessing ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'}`}>
                             {isProcessing ? 'PROCESANDO...' : `CONFIRMAR $${finalTotal.toFixed(2)}`}
+                            {checkoutBlockReason && <span className="block text-xs font-normal opacity-80">{checkoutBlockReason}</span>}
                         </button>
                     </div>
                 </div>
@@ -397,12 +532,26 @@ export default function POSDeliveryPage() {
                     <div className="bg-gray-800 p-6 rounded-2xl w-80 text-center">
                         <h3 className="font-bold text-xl mb-4">Autorización</h3>
                         <div className="bg-black p-4 rounded text-2xl tracking-widest mb-4 font-mono">{pinInput.replace(/./g, '*')}</div>
+                        {pinError && <p className="text-red-400 text-sm mb-2">{pinError}</p>}
                         <div className="grid grid-cols-3 gap-2 mb-4">
                             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map(n => <button key={n} onClick={() => handlePinKey(n.toString())} className="bg-gray-700 p-3 rounded font-bold text-xl">{n}</button>)}
                             <button onClick={() => handlePinKey('clear')} className="bg-red-800 rounded font-bold text-red-200">C</button>
                             <button onClick={() => handlePinKey('back')} className="bg-gray-600 rounded font-bold">⌫</button>
                         </div>
                         <div className="flex gap-2"><button onClick={() => setShowPinModal(false)} className="flex-1 bg-gray-600 py-2 rounded">Cancelar</button><button onClick={handlePinSubmit} className="flex-1 bg-blue-600 py-2 rounded font-bold">OK</button></div>
+                    </div>
+                </div>
+            )}
+            {showCortesiaPercentModal && (
+                <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[60]">
+                    <div className="bg-gray-800 p-6 rounded-2xl w-80 max-w-sm">
+                        <h3 className="text-center font-bold text-xl mb-4">% Cortesía</h3>
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                            {[10, 20, 30, 50, 75, 100].map(p => (
+                                <button key={p} onClick={() => handleCortesiaPercentSelect(p)} className="py-3 rounded-lg font-bold bg-purple-600 hover:bg-purple-500 text-white">{p}%</button>
+                            ))}
+                        </div>
+                        <button onClick={() => setShowCortesiaPercentModal(false)} className="w-full py-3 bg-gray-700 rounded font-bold">Cancelar</button>
                     </div>
                 </div>
             )}

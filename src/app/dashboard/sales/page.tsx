@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/auth.store';
 import * as XLSX from 'xlsx';
 
 const MANAGER_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'];
-const VOID_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'];
+const VOID_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'AREA_LEAD'];
 const CARACAS_TZ = 'America/Caracas';
 
 
