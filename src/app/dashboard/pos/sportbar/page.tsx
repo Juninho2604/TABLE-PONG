@@ -116,6 +116,7 @@ export default function POSSportBarPage() {
     // ── Payment ───────────────────────────────────────────────────────────────
     const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'ZELLE'>('CASH');
     const [amountReceived, setAmountReceived] = useState('');
+    const [includeServiceCharge, setIncludeServiceCharge] = useState(false);
     const [showPaymentPinModal, setShowPaymentPinModal] = useState(false);
     const [paymentPin, setPaymentPin] = useState('');
     const [paymentPinError, setPaymentPinError] = useState('');
@@ -337,7 +338,8 @@ export default function POSSportBarPage() {
     // ============================================================================
 
     const handlePaymentPinConfirm = async () => {
-        if (!activeTab || paidAmount <= 0) return;
+        if (!activeTab) return;
+        if (!includeServiceCharge && paidAmount <= 0) return;
         setPaymentPinError('');
         setIsProcessing(true);
         try {
@@ -348,17 +350,20 @@ export default function POSSportBarPage() {
             }
             const discountAmount = discountType === 'DIVISAS_33' ? activeTab.balanceDue / 3 : 0;
             const discountLabel = discountType === 'DIVISAS_33' ? ' · -33.33% Divisas' : '';
+            const baseLabel = `${PAYMENT_LABELS[paymentMethod] || paymentMethod}${discountLabel} – ${pinResult.data?.managerName || ''}`;
             const result = await registerOpenTabPaymentAction({
                 openTabId: activeTab.id,
-                amount: paidAmount,
+                amount: includeServiceCharge ? activeTab.balanceDue : paidAmount,
                 paymentMethod,
-                splitLabel: `${PAYMENT_LABELS[paymentMethod] || paymentMethod}${discountLabel} – ${pinResult.data?.managerName || ''}`,
+                splitLabel: baseLabel,
                 discountAmount: discountAmount > 0 ? discountAmount : undefined,
+                includeServiceCharge,
             });
             if (!result.success) { alert(result.message); return; }
             setAmountReceived('');
             setPaymentPin('');
             setDiscountType('NONE');
+            setIncludeServiceCharge(false);
             setShowPaymentPinModal(false);
             await loadData();
         } finally {
@@ -806,18 +811,41 @@ export default function POSSportBarPage() {
                                         </div>
                                     </div>
 
-                                    {/* Amount */}
-                                    <input
-                                        type="number"
-                                        value={amountReceived}
-                                        onChange={e => setAmountReceived(e.target.value)}
-                                        placeholder={`Monto a recibir ($${(discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue).toFixed(2)})`}
-                                        className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none mb-2"
-                                    />
+                                    {/* 10% Servicio (opcional) */}
+                                    <label className="flex items-center gap-2 mb-2 cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={includeServiceCharge}
+                                            onChange={e => {
+                                                setIncludeServiceCharge(e.target.checked);
+                                                if (e.target.checked) setAmountReceived('');
+                                            }}
+                                            className="w-4 h-4 accent-amber-500"
+                                        />
+                                        <span className="text-xs font-bold text-amber-300">Incluir 10% servicio</span>
+                                        {includeServiceCharge && (
+                                            <span className="ml-auto text-xs text-amber-400 font-black">
+                                                +${((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) * 0.10).toFixed(2)} → Total ${((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) * 1.10).toFixed(2)}
+                                            </span>
+                                        )}
+                                    </label>
+
+                                    {/* Amount (solo si no aplica servicio completo) */}
+                                    {!includeServiceCharge && (
+                                        <input
+                                            type="number"
+                                            value={amountReceived}
+                                            onChange={e => setAmountReceived(e.target.value)}
+                                            placeholder={`Monto a recibir ($${(discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue).toFixed(2)})`}
+                                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none mb-2"
+                                        />
+                                    )}
 
                                     {/* CurrencyCalculator */}
                                     <CurrencyCalculator
-                                        totalUsd={paidAmount > 0 ? paidAmount : Number((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue).toFixed(2))}
+                                        totalUsd={includeServiceCharge
+                                            ? Number(((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) * 1.10).toFixed(2))
+                                            : (paidAmount > 0 ? paidAmount : Number((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue).toFixed(2)))}
                                         onRateUpdated={setExchangeRate}
                                         className="w-full justify-center mb-2"
                                     />
@@ -825,10 +853,12 @@ export default function POSSportBarPage() {
                                     {/* Register payment (requiere PIN) */}
                                     <button
                                         onClick={() => { setPaymentPin(''); setPaymentPinError(''); setShowPaymentPinModal(true); }}
-                                        disabled={paidAmount <= 0 || isProcessing}
+                                        disabled={(!includeServiceCharge && paidAmount <= 0) || isProcessing}
                                         className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-black transition disabled:opacity-40"
                                     >
-                                        🔐 Registrar pago ${paidAmount > 0 ? paidAmount.toFixed(2) : '0.00'}
+                                        🔐 Registrar pago ${includeServiceCharge
+                                            ? ((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) * 1.10).toFixed(2)
+                                            : (paidAmount > 0 ? paidAmount.toFixed(2) : '0.00')}
                                     </button>
 
                                     {/* Paid splits */}

@@ -183,6 +183,9 @@ export default function POSRestaurantPage() {
     // PAYMENT STATE
     const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'ZELLE'>('CASH');
     const [amountReceived, setAmountReceived] = useState('');
+    // Pagos mixtos: lista de métodos + montos
+    const [paymentLines, setPaymentLines] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY'; amount: string }[]>([]);
+    const [useMultiPayment, setUseMultiPayment] = useState(false);
 
     // DISCOUNT STATE
     const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33' | 'CORTESIA_100' | 'CORTESIA_PERCENT'>('NONE');
@@ -380,16 +383,29 @@ export default function POSRestaurantPage() {
     const paidAmount = parseFloat(amountReceived) || 0;
     const changeAmount = paidAmount - finalTotal;
 
+    // Helpers pagos mixtos (después de finalTotal)
+    const multiTotal = paymentLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+    const multiRemaining = finalTotal - multiTotal;
+    const multiValid = useMultiPayment ? (paymentLines.length > 1 && multiTotal >= finalTotal - 0.001) : true;
+
     // Validaciones estrictas para cobrar
     const canCheckout = cart.length > 0;
-    const needsAmountReceived = (paymentMethod === 'CASH') && finalTotal > 0;
+    const needsAmountReceived = !useMultiPayment && paymentMethod === 'CASH' && finalTotal > 0;
     const amountValid = !needsAmountReceived || (paidAmount >= finalTotal);
-    const checkoutBlocked = !canCheckout || !amountValid;
-    const checkoutBlockReason = !canCheckout ? 'Agregue productos al carrito' : (needsAmountReceived && paidAmount < finalTotal ? `Ingrese al menos $${finalTotal.toFixed(2)}` : null);
+    const checkoutBlocked = !canCheckout || !amountValid || (useMultiPayment && !multiValid);
+    const checkoutBlockReason = !canCheckout
+        ? 'Agregue productos al carrito'
+        : (useMultiPayment && !multiValid)
+            ? `Faltan $${multiRemaining > 0 ? multiRemaining.toFixed(2) : '0.00'} por asignar`
+            : (needsAmountReceived && paidAmount < finalTotal ? `Ingrese al menos $${finalTotal.toFixed(2)}` : null);
 
     const handleCheckout = async () => {
         if (checkoutBlocked) {
             if (checkoutBlockReason) alert(checkoutBlockReason);
+            return;
+        }
+        if (useMultiPayment && !multiValid) {
+            alert(`Faltan $${multiRemaining.toFixed(2)} por asignar a un método de pago`);
             return;
         }
         if (discountType !== 'NONE' && !authorizedManager && (discountType === 'CORTESIA_100' || discountType === 'CORTESIA_PERCENT')) {
@@ -398,16 +414,22 @@ export default function POSRestaurantPage() {
         }
         if (discountType !== 'NONE' && !confirm(`¿Confirmar venta con descuento ${discountType === 'DIVISAS_33' ? '33.33%' : cortesiaPercent + '%'}?`)) return;
         setIsProcessing(true);
+
+        const splitsForAction = useMultiPayment && paymentLines.length > 1
+            ? paymentLines.filter(l => parseFloat(l.amount) > 0).map(l => ({ method: l.method, amount: parseFloat(l.amount) }))
+            : undefined;
+
         try {
             const result = await createSalesOrderAction({
                 orderType: 'RESTAURANT',
-                customerName: customerName || 'Cliente Restaurante',
+                customerName: customerName || 'Pick Up',
                 items: cart,
-                paymentMethod,
-                amountPaid: paidAmount || finalTotal,
+                paymentMethod: splitsForAction ? 'MULTIPLE' : paymentMethod,
+                amountPaid: splitsForAction ? multiTotal : (paidAmount || finalTotal),
                 discountType: discountType === 'CORTESIA_PERCENT' ? 'CORTESIA_PERCENT' : discountType,
                 discountPercent: discountType === 'CORTESIA_PERCENT' ? cortesiaPercent : undefined,
                 authorizedById: authorizedManager?.id,
+                paymentSplits: splitsForAction,
                 notes: undefined
             });
 
@@ -451,6 +473,8 @@ export default function POSRestaurantPage() {
                 setCortesiaPercent(100);
                 setAuthorizedManager(null);
                 setShowMobileCart(false);
+                setPaymentLines([]);
+                setUseMultiPayment(false);
             } else {
                 alert(result.message);
             }
@@ -495,10 +519,10 @@ export default function POSRestaurantPage() {
         <div className="min-h-screen bg-gray-900 text-white relative">
             <div className="bg-gradient-to-r from-amber-600 to-orange-600 px-6 py-4 fixed top-0 w-full z-30 flex justify-between items-center shadow-md">
                 <div className="flex items-center gap-3">
-                    <span className="text-3xl">🏓</span>
+                    <span className="text-3xl">🥡</span>
                     <div>
-                        <h1 className="text-2xl font-bold">Table Pong POS</h1>
-                        <p className="text-amber-100 text-sm">Restaurante · Ventas</p>
+                        <h1 className="text-2xl font-bold">POS Pick Up</h1>
+                        <p className="text-amber-100 text-sm">Venta directa · Mostrador</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -617,28 +641,77 @@ export default function POSRestaurantPage() {
                             )}
                         </div>
 
-                        {/* PASO 2: Método de pago */}
+                        {/* PASO 2: Forma de pago */}
                         <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase mb-2">2. Forma de pago</p>
-                            <div className="grid grid-cols-2 gap-2">
-                                {[
-                                    { id: 'CASH', label: 'Efectivo $', icon: '💵' },
-                                    { id: 'ZELLE', label: 'Zelle', icon: '⚡' },
-                                    { id: 'CARD', label: 'Tarjeta', icon: '💳' },
-                                    { id: 'MOBILE_PAY', label: 'Pago Móvil', icon: '📱' },
-                                    { id: 'TRANSFER', label: 'Transferencia', icon: '🏦' },
-                                ].map(({ id, label, icon }) => (
-                                    <button key={id} onClick={() => setPaymentMethod(id as any)} className={`py-3 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${paymentMethod === id ? 'bg-amber-500 text-black shadow-lg ring-2 ring-amber-300' : 'bg-gray-700 hover:bg-gray-600'}`}>
-                                        <span className="text-xl">{icon}</span>
-                                        <span>{label}</span>
-                                    </button>
-                                ))}
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-bold text-gray-400 uppercase">2. Forma de pago</p>
+                                <button
+                                    onClick={() => { setUseMultiPayment(p => !p); setPaymentLines([]); }}
+                                    className={`text-xs px-2 py-1 rounded-lg font-bold transition-all ${useMultiPayment ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                                >
+                                    {useMultiPayment ? '✓ Pago Mixto' : '+ Pago Mixto'}
+                                </button>
                             </div>
+
+                            {!useMultiPayment ? (
+                                <div className="grid grid-cols-2 gap-2">
+                                    {[
+                                        { id: 'CASH', label: 'Efectivo $', icon: '💵' },
+                                        { id: 'ZELLE', label: 'Zelle', icon: '⚡' },
+                                        { id: 'CARD', label: 'Tarjeta', icon: '💳' },
+                                        { id: 'MOBILE_PAY', label: 'Pago Móvil', icon: '📱' },
+                                        { id: 'TRANSFER', label: 'Transferencia', icon: '🏦' },
+                                    ].map(({ id, label, icon }) => (
+                                        <button key={id} onClick={() => setPaymentMethod(id as any)} className={`py-3 px-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all ${paymentMethod === id ? 'bg-amber-500 text-black shadow-lg ring-2 ring-amber-300' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                            <span className="text-xl">{icon}</span>
+                                            <span>{label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {paymentLines.map((line, idx) => (
+                                        <div key={idx} className="flex gap-2 items-center">
+                                            <select
+                                                value={line.method}
+                                                onChange={e => setPaymentLines(prev => prev.map((l, i) => i === idx ? { ...l, method: e.target.value as any } : l))}
+                                                className="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-white focus:border-amber-500 focus:outline-none"
+                                            >
+                                                <option value="CASH">💵 Efectivo</option>
+                                                <option value="ZELLE">⚡ Zelle</option>
+                                                <option value="CARD">💳 Tarjeta</option>
+                                                <option value="MOBILE_PAY">📱 Pago Móvil</option>
+                                                <option value="TRANSFER">🏦 Transferencia</option>
+                                            </select>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                value={line.amount}
+                                                onChange={e => setPaymentLines(prev => prev.map((l, i) => i === idx ? { ...l, amount: e.target.value } : l))}
+                                                placeholder="$0.00"
+                                                className="w-24 bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-sm text-white text-right focus:border-amber-500 focus:outline-none"
+                                            />
+                                            <button onClick={() => setPaymentLines(prev => prev.filter((_, i) => i !== idx))} className="text-red-400 hover:text-red-300 text-lg font-bold px-1">×</button>
+                                        </div>
+                                    ))}
+                                    <button
+                                        onClick={() => setPaymentLines(prev => [...prev, { method: 'CASH', amount: multiRemaining > 0 ? multiRemaining.toFixed(2) : '' }])}
+                                        className="w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs font-bold text-gray-300 transition-all"
+                                    >
+                                        + Agregar método de pago
+                                    </button>
+                                    <div className={`flex justify-between text-xs font-bold px-1 ${multiRemaining > 0.005 ? 'text-red-400' : 'text-green-400'}`}>
+                                        <span>Asignado</span>
+                                        <span>${multiTotal.toFixed(2)} / ${finalTotal.toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* PASO 3: Monto y Total */}
                         <div className="bg-gray-900 p-4 rounded-xl border-2 border-gray-700 space-y-2">
-                            {paymentMethod === 'CASH' && (
+                            {!useMultiPayment && paymentMethod === 'CASH' && (
                                 <div>
                                     <label className="text-sm font-bold text-gray-400 block mb-1">Monto recibido ($)</label>
                                     <input
@@ -669,18 +742,16 @@ export default function POSRestaurantPage() {
                                 <span>TOTAL</span>
                                 <span className="text-amber-400">${finalTotal.toFixed(2)}</span>
                             </div>
-                            <div className="flex justify-between text-xs text-gray-500 border-t border-gray-800 pt-1 mt-1">
-                                <span>10% Servicio sugerido</span>
-                                <span className="text-gray-400">${(finalTotal * 0.10).toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between text-sm font-bold text-gray-300">
-                                <span>Total sugerido c/servicio</span>
-                                <span>${(finalTotal * 1.10).toFixed(2)}</span>
-                            </div>
-                            {paymentMethod === 'CASH' && changeAmount > 0 && (
+                            {!useMultiPayment && paymentMethod === 'CASH' && changeAmount > 0 && (
                                 <div className="flex justify-between text-green-400 font-bold">
-                                    <span>Cambio</span>
+                                    <span>Propina / Excedente</span>
                                     <span>${changeAmount.toFixed(2)}</span>
+                                </div>
+                            )}
+                            {useMultiPayment && multiTotal > finalTotal + 0.005 && (
+                                <div className="flex justify-between text-green-400 font-bold">
+                                    <span>Propina / Excedente</span>
+                                    <span>${(multiTotal - finalTotal).toFixed(2)}</span>
                                 </div>
                             )}
                         </div>

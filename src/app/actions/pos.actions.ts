@@ -45,6 +45,8 @@ export interface CreateOrderData {
     discountType?: string; // 'DIVISAS_33', 'CORTESIA_100', 'CORTESIA_PERCENT', 'NONE'
     discountPercent?: number; // Para CORTESIA_PERCENT (ej: 20 = 20%)
     authorizedById?: string; // ID del gerente que autorizó
+    // Pagos mixtos: si hay más de uno, paymentMethod se sobreescribe a 'MULTIPLE'
+    paymentSplits?: { method: POSPaymentMethod; amount: number }[];
 }
 
 export interface OpenTabInput {
@@ -69,7 +71,8 @@ export interface RegisterOpenTabPaymentInput {
     paymentMethod: POSPaymentMethod;
     splitLabel?: string;
     notes?: string;
-    discountAmount?: number;
+    discountAmount?: number;        // Descuento divisas (DIVISAS_33) sobre el saldo
+    includeServiceCharge?: boolean; // 10% servicio opcional (Sport Bar)
 }
 
 export interface ActionResult {
@@ -600,10 +603,32 @@ export async function createSalesOrderAction(
         const areaId = salesArea.id;
         const { subtotal, discount, total, change, discountReason } = calculateCartTotals(data);
 
+        // ── Pagos mixtos ──────────────────────────────────────────────────────
+        let finalPaymentMethod = data.paymentMethod || 'CASH';
+        let finalAmountPaid = data.amountPaid || total;
+        let splitsNote = '';
+
+        if (data.paymentSplits && data.paymentSplits.length > 1) {
+            finalPaymentMethod = 'MULTIPLE';
+            finalAmountPaid = data.paymentSplits.reduce((s, p) => s + p.amount, 0);
+            // Guardar desglose en nota para arqueo y reimpresión
+            const splitsMap: Record<string, number> = {};
+            for (const p of data.paymentSplits) {
+                splitsMap[p.method] = (splitsMap[p.method] || 0) + p.amount;
+            }
+            splitsNote = `SPLITS:${JSON.stringify(splitsMap)}`;
+        }
+
         let finalNotes = data.notes || '';
         if (discountReason) {
             finalNotes = finalNotes ? `${finalNotes} | ${discountReason}` : discountReason;
         }
+        if (splitsNote) {
+            finalNotes = finalNotes ? `${finalNotes} | ${splitsNote}` : splitsNote;
+        }
+
+        // Propina / excedente (lo que el cliente dejó sin vuelto)
+        const tipAmount = finalAmountPaid - total;
 
         let newOrder;
         for (let attempt = 0; attempt < 10; attempt++) {
@@ -621,17 +646,17 @@ export async function createSalesOrderAction(
                         customerAddress: data.customerAddress,
                         status: 'CONFIRMED',
                         serviceFlow: 'DIRECT_SALE',
-                        sourceChannel: data.orderType === 'DELIVERY' ? 'POS_DELIVERY' : 'POS_RESTAURANT',
+                        sourceChannel: data.orderType === 'DELIVERY' ? 'POS_DELIVERY' : 'POS_PICKUP',
                         paymentStatus: 'PAID',
-                        paymentMethod: data.paymentMethod || 'CASH',
+                        paymentMethod: finalPaymentMethod as any,
                         kitchenStatus: 'SENT',
                         sentToKitchenAt: new Date(),
 
                         subtotal,
                         discount,
                         total,
-                        amountPaid: data.amountPaid || total,
-                        change: change > 0 ? change : 0,
+                        amountPaid: finalAmountPaid,
+                        change: tipAmount > 0 ? tipAmount : 0,
 
                         discountType: data.discountType,
                         discountReason: discountReason,
@@ -984,7 +1009,7 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
             return { success: false, message: 'No autorizado' };
         }
 
-        if (data.amount <= 0) {
+        if (!data.includeServiceCharge && data.amount <= 0) {
             return { success: false, message: 'El monto debe ser mayor a cero' };
         }
 
@@ -1000,11 +1025,29 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
             return { success: false, message: 'La cuenta no está disponible para pago' };
         }
 
+        // ── Descuento divisas (DIVISAS_33) ───────────────────────────────────
         const discountAmount = data.discountAmount || 0;
         const newRunningDiscount = openTab.runningDiscount + discountAmount;
         const newRunningTotal = Math.max(0, openTab.runningTotal - discountAmount);
         const effectiveBalance = Math.max(0, openTab.balanceDue - discountAmount);
-        const appliedAmount = Math.min(data.amount, effectiveBalance);
+
+        // ── 10% Servicio (Sport Bar, opcional) ───────────────────────────────
+        let appliedAmount: number;
+        let splitPaidAmount: number;
+        let serviceChargeAmount = 0;
+        let baseSplitLabel = data.splitLabel || `Pago ${openTab.paymentSplits.length + 1}`;
+
+        if (data.includeServiceCharge) {
+            // Aplica 10% sobre el balance efectivo (ya con descuento) → siempre cierra la cuenta
+            appliedAmount = effectiveBalance;
+            serviceChargeAmount = Number((effectiveBalance * 0.10).toFixed(2));
+            splitPaidAmount = appliedAmount + serviceChargeAmount;
+            baseSplitLabel = `${baseSplitLabel} | +10% serv ($${serviceChargeAmount.toFixed(2)})`;
+        } else {
+            appliedAmount = Math.min(data.amount, effectiveBalance);
+            splitPaidAmount = appliedAmount;
+        }
+
         const newBalance = Math.max(0, effectiveBalance - appliedAmount);
         const nextTabStatus = newBalance === 0 ? 'CLOSED' : 'PARTIALLY_PAID';
         const nextOrderPaymentStatus = newBalance === 0 ? 'PAID' : 'PARTIAL';
@@ -1027,23 +1070,29 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
             await tx.paymentSplit.create({
                 data: {
                     openTabId: openTab.id,
-                    splitLabel: data.splitLabel || `Pago ${openTab.paymentSplits.length + 1}`,
+                    splitLabel: baseSplitLabel,
                     splitType: 'CUSTOM',
                     paymentMethod: data.paymentMethod,
                     status: 'PAID',
-                    total: appliedAmount,
-                    paidAmount: appliedAmount,
+                    total: splitPaidAmount,
+                    paidAmount: splitPaidAmount,
                     paidAt: new Date(),
                     notes: data.notes
                 }
             });
+
+            // amountPaid total en las órdenes = lo que el cliente realmente pagó
+            // (incluye el 10% de servicio si fue cobrado)
+            const totalActuallyPaid = newBalance === 0
+                ? (openTab.paymentSplits.reduce((s, p) => s + Number(p.paidAmount), 0) + splitPaidAmount)
+                : undefined;
 
             await tx.salesOrder.updateMany({
                 where: { openTabId: openTab.id },
                 data: {
                     paymentStatus: nextOrderPaymentStatus,
                     paymentMethod: nextPaymentMethod,
-                    amountPaid: newBalance === 0 ? newRunningTotal : undefined,
+                    amountPaid: newBalance === 0 ? totalActuallyPaid : undefined,
                     closedAt: newBalance === 0 ? new Date() : undefined
                 }
             });

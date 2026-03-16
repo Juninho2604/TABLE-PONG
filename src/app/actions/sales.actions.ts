@@ -74,6 +74,20 @@ export async function getSalesHistoryAction(limit = 200) {
                         lineTotal: true,
                         notes: true,
                     }
+                },
+                // Para órdenes de Sport Bar: incluir splits de pago del tab
+                openTab: {
+                    select: {
+                        tabCode: true,
+                        runningTotal: true,
+                        paymentSplits: {
+                            select: {
+                                splitLabel: true,
+                                paidAmount: true,
+                                paymentMethod: true,
+                            }
+                        }
+                    }
                 }
             }
         });

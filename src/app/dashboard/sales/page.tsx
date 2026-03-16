@@ -173,6 +173,39 @@ export default function SalesHistoryPage() {
 
     const formatMoney = (amount: number) => `$${amount.toFixed(2)}`;
 
+    // Detecta si una orden de Sport Bar cobró el 10% de servicio
+    const getServiceChargeInfo = (sale: any): { charged: boolean; amount: number } => {
+        const splits: any[] = sale.openTab?.paymentSplits || [];
+        for (const s of splits) {
+            const label: string = s.splitLabel || '';
+            const match = label.match(/\+10% serv \(\$([\d.]+)\)/);
+            if (match) return { charged: true, amount: parseFloat(match[1]) };
+            if (label.includes('+10% serv')) return { charged: true, amount: Number(s.paidAmount) * 0.10 / 1.10 };
+        }
+        return { charged: false, amount: 0 };
+    };
+
+    // Extrae splits de pago desde el campo notes (pagos mixtos Pick Up)
+    const parseSplitsFromNotes = (notes: string | null): Record<string, number> | null => {
+        if (!notes) return null;
+        const m = notes.match(/SPLITS:(\{[^}]+\})/);
+        if (!m) return null;
+        try { return JSON.parse(m[1]); } catch { return null; }
+    };
+
+    const PAYMENT_ICONS: Record<string, string> = {
+        CASH: '💵', CARD: '💳', MOBILE_PAY: '📱', TRANSFER: '🏦',
+    };
+
+    // Calcula el total cobrado real para una orden
+    const getAmountPaid = (sale: any): number => {
+        // Sport Bar: suma de payment splits del tab
+        if (sale.openTab?.paymentSplits?.length) {
+            return sale.openTab.paymentSplits.reduce((s: number, p: any) => s + Number(p.paidAmount), 0);
+        }
+        return Number(sale.amountPaid) || Number(sale.total);
+    };
+
     const handlePrintReceipt = async (sale: any) => {
         if (!canPrint) return;
         setPrintingId(sale.id);
@@ -286,7 +319,9 @@ export default function SalesHistoryPage() {
                             <th className="p-4">Hora</th>
                             <th className="p-4">Cliente</th>
                             <th className="p-4">Método</th>
-                            <th className="p-4 text-right">Total</th>
+                            <th className="p-4 text-right">Total Factura</th>
+                            <th className="p-4 text-right">Cobrado</th>
+                            <th className="p-4 text-center">10% Serv.</th>
                             <th className="p-4">Descuento / Auth</th>
                             <th className="p-4 text-center">Ítems</th>
                             {(canPrint || canVoid) && <th className="p-4 text-center">Acciones</th>}
@@ -295,102 +330,192 @@ export default function SalesHistoryPage() {
                     <tbody className="divide-y divide-gray-700 font-mono text-sm">
                         {filteredSales.map(sale => (
                             <React.Fragment key={sale.id}>
-                                <tr
-                                    className="hover:bg-gray-700/30 transition-colors cursor-pointer"
-                                    onClick={() => setExpandedOrder(expandedOrder === sale.id ? null : sale.id)}
-                                >
-                                    <td className="p-4 font-bold text-blue-300">{sale.orderNumber}</td>
-                                    <td className="p-4 text-gray-300 text-xs">
-                                        {sale.createdAt ? formatSaleDate(sale.createdAt) : '-'}
-                                    </td>
-                                    <td className="p-4 text-gray-400">
-                                        {sale.createdAt ? formatSaleTime(sale.createdAt) : '-'}
-                                    </td>
-                                    <td className="p-4 font-sans text-gray-300 truncate max-w-[150px]">
-                                        {sale.customerName || 'Cliente General'}
-                                    </td>
-                                    <td className="p-4">
-                                        {getPaymentBadge(sale.paymentMethod)}
-                                    </td>
-                                    <td className="p-4 text-right font-bold text-white text-base">
-                                        {formatMoney(sale.total)}
-                                    </td>
-                                    <td className="p-4 font-sans">
-                                        {sale.discount > 0 ? (
-                                            <div className="flex flex-col gap-1">
-                                                {sale.discountType === 'DIVISAS_33' && (
-                                                    <span className="text-blue-400 text-xs">📉 Divisas (-{formatMoney(sale.discount)})</span>
-                                                )}
-                                                {sale.discountType === 'CORTESIA_100' && (
-                                                    <span className="text-purple-400 text-xs font-bold">🎁 CORTESÍA</span>
-                                                )}
-                                                {sale.authorizedById && (
-                                                    <span className="text-green-500 text-[10px] bg-green-900/30 px-1 rounded w-fit">
-                                                        Auth: {sale.authorizedBy?.firstName}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        ) : <span className="text-gray-600">-</span>}
-                                    </td>
-                                    <td className="p-4 text-center">
-                                        <span className="text-gray-400 text-xs">
-                                            {sale.items?.length || 0} {expandedOrder === sale.id ? '▲' : '▼'}
-                                        </span>
-                                    </td>
-                                    {(canPrint || canVoid) && (
-                                        <td className="p-4 text-center">
-                                            <div className="flex items-center justify-center gap-2">
-                                                {canPrint && (
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handlePrintReceipt(sale); }}
-                                                        disabled={printingId === sale.id}
-                                                        className="text-white font-medium bg-slate-600 hover:bg-slate-500 px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
-                                                    >
-                                                        {printingId === sale.id ? '...' : '🖨️ Imprimir'}
-                                                    </button>
-                                                )}
-                                                {canVoid && sale.status !== 'CANCELLED' && (
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleVoidOrder(sale); }}
-                                                        disabled={voidingId === sale.id}
-                                                        className="text-red-300 font-medium bg-red-900/40 hover:bg-red-800/60 border border-red-700/50 px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
-                                                    >
-                                                        {voidingId === sale.id ? '...' : '🚫 Anular'}
-                                                    </button>
-                                                )}
-                                                {canVoid && sale.status === 'CANCELLED' && (
-                                                    <span className="text-red-500 text-xs font-bold px-2">ANULADA</span>
-                                                )}
-                                            </div>
+                                {(() => {
+                                    const amountPaid = getAmountPaid(sale);
+                                    const tip = amountPaid - Number(sale.total);
+                                    const serviceInfo = getServiceChargeInfo(sale);
+                                    const splits = parseSplitsFromNotes(sale.notes);
+                                    const isSportBar = sale.sourceChannel === 'POS_SPORTBAR' || !!sale.openTabId;
+                                    return (
+                                    <>
+                                    <tr
+                                        className="hover:bg-gray-700/30 transition-colors cursor-pointer"
+                                        onClick={() => setExpandedOrder(expandedOrder === sale.id ? null : sale.id)}
+                                    >
+                                        <td className="p-4">
+                                            <div className="font-bold text-blue-300">{sale.orderNumber}</div>
+                                            {isSportBar && sale.openTab?.tabCode && (
+                                                <div className="text-[10px] text-slate-500">{sale.openTab.tabCode}</div>
+                                            )}
                                         </td>
-                                    )}
-                                </tr>
-                                {expandedOrder === sale.id && sale.items?.length > 0 && (
-                                    <tr className="bg-gray-900/60">
-                                        <td colSpan={(canPrint || canVoid) ? 9 : 8} className="px-8 py-3">
-                                            <table className="w-full text-xs font-sans">
-                                                <thead>
-                                                    <tr className="text-gray-500 uppercase">
-                                                        <th className="text-left pb-1">Producto</th>
-                                                        <th className="text-center pb-1">Cant.</th>
-                                                        <th className="text-right pb-1">P. Unit.</th>
-                                                        <th className="text-right pb-1">Subtotal</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {sale.items.map((item: any, i: number) => (
-                                                        <tr key={i} className="border-t border-gray-800">
-                                                            <td className="py-1 text-gray-300">{item.itemName}</td>
-                                                            <td className="py-1 text-center text-gray-400">×{item.quantity}</td>
-                                                            <td className="py-1 text-right text-gray-400">{formatMoney(item.unitPrice)}</td>
-                                                            <td className="py-1 text-right text-white font-bold">{formatMoney(item.lineTotal)}</td>
-                                                        </tr>
+                                        <td className="p-4 text-gray-300 text-xs">
+                                            {sale.createdAt ? formatSaleDate(sale.createdAt) : '-'}
+                                        </td>
+                                        <td className="p-4 text-gray-400">
+                                            {sale.createdAt ? formatSaleTime(sale.createdAt) : '-'}
+                                        </td>
+                                        <td className="p-4 font-sans text-gray-300 truncate max-w-[150px]">
+                                            {sale.customerName || 'Cliente General'}
+                                        </td>
+                                        <td className="p-4">
+                                            {getPaymentBadge(sale.paymentMethod)}
+                                            {splits && (
+                                                <div className="mt-1 space-y-0.5">
+                                                    {Object.entries(splits).map(([m, amt]) => (
+                                                        <div key={m} className="text-[10px] text-gray-400">
+                                                            {PAYMENT_ICONS[m] || ''} {getPaymentLabel(m)}: ${(amt as number).toFixed(2)}
+                                                        </div>
                                                     ))}
-                                                </tbody>
-                                            </table>
+                                                </div>
+                                            )}
                                         </td>
+                                        <td className="p-4 text-right font-bold text-white text-base">
+                                            {formatMoney(Number(sale.total))}
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <div className="font-bold text-emerald-300">{formatMoney(amountPaid)}</div>
+                                            {tip > 0.005 && (
+                                                <div className="text-[10px] text-amber-400">+{formatMoney(tip)} propina</div>
+                                            )}
+                                        </td>
+                                        <td className="p-4 text-center">
+                                            {isSportBar ? (
+                                                serviceInfo.charged
+                                                    ? <span className="text-green-400 text-xs font-bold" title={`+$${serviceInfo.amount.toFixed(2)}`}>✓ Sí</span>
+                                                    : <span className="text-red-400 text-xs font-bold">✗ No</span>
+                                            ) : (
+                                                <span className="text-gray-600 text-xs">—</span>
+                                            )}
+                                        </td>
+                                        <td className="p-4 font-sans">
+                                            {sale.discount > 0 ? (
+                                                <div className="flex flex-col gap-1">
+                                                    {sale.discountType === 'DIVISAS_33' && (
+                                                        <span className="text-blue-400 text-xs">📉 Divisas (-{formatMoney(sale.discount)})</span>
+                                                    )}
+                                                    {sale.discountType === 'CORTESIA_100' && (
+                                                        <span className="text-purple-400 text-xs font-bold">🎁 CORTESÍA</span>
+                                                    )}
+                                                    {(sale.discountType === 'CORTESIA_PERCENT') && (
+                                                        <span className="text-purple-400 text-xs">🎁 Cortesía parcial (-{formatMoney(sale.discount)})</span>
+                                                    )}
+                                                    {sale.authorizedById && (
+                                                        <span className="text-green-500 text-[10px] bg-green-900/30 px-1 rounded w-fit">
+                                                            Auth: {sale.authorizedBy?.firstName}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : <span className="text-gray-600">-</span>}
+                                        </td>
+                                        <td className="p-4 text-center">
+                                            <span className="text-gray-400 text-xs">
+                                                {sale.items?.length || 0} {expandedOrder === sale.id ? '▲' : '▼'}
+                                            </span>
+                                        </td>
+                                        {(canPrint || canVoid) && (
+                                            <td className="p-4 text-center">
+                                                <div className="flex items-center justify-center gap-2">
+                                                    {canPrint && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handlePrintReceipt(sale); }}
+                                                            disabled={printingId === sale.id}
+                                                            className="text-white font-medium bg-slate-600 hover:bg-slate-500 px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
+                                                        >
+                                                            {printingId === sale.id ? '...' : '🖨️ Imprimir'}
+                                                        </button>
+                                                    )}
+                                                    {canVoid && sale.status !== 'CANCELLED' && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleVoidOrder(sale); }}
+                                                            disabled={voidingId === sale.id}
+                                                            className="text-red-300 font-medium bg-red-900/40 hover:bg-red-800/60 border border-red-700/50 px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
+                                                        >
+                                                            {voidingId === sale.id ? '...' : '🚫 Anular'}
+                                                        </button>
+                                                    )}
+                                                    {canVoid && sale.status === 'CANCELLED' && (
+                                                        <span className="text-red-500 text-xs font-bold px-2">ANULADA</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        )}
                                     </tr>
-                                )}
+                                    {expandedOrder === sale.id && (
+                                        <tr className="bg-gray-900/60">
+                                            <td colSpan={(canPrint || canVoid) ? 11 : 10} className="px-8 py-3">
+                                                {sale.items?.length > 0 && (
+                                                <table className="w-full text-xs font-sans mb-3">
+                                                    <thead>
+                                                        <tr className="text-gray-500 uppercase">
+                                                            <th className="text-left pb-1">Producto</th>
+                                                            <th className="text-center pb-1">Cant.</th>
+                                                            <th className="text-right pb-1">P. Unit.</th>
+                                                            <th className="text-right pb-1">Subtotal</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {sale.items.map((item: any, i: number) => (
+                                                            <tr key={i} className="border-t border-gray-800">
+                                                                <td className="py-1 text-gray-300">{item.itemName}</td>
+                                                                <td className="py-1 text-center text-gray-400">×{item.quantity}</td>
+                                                                <td className="py-1 text-right text-gray-400">{formatMoney(item.unitPrice)}</td>
+                                                                <td className="py-1 text-right text-white font-bold">{formatMoney(item.lineTotal)}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                                )}
+                                                {/* Resumen de cobro: antifraude */}
+                                                <div className="flex gap-4 flex-wrap text-xs border-t border-gray-800 pt-2">
+                                                    <div className="flex gap-1 items-center text-gray-400">
+                                                        <span>Productos:</span>
+                                                        <span className="font-bold text-white">{formatMoney(Number(sale.subtotal))}</span>
+                                                    </div>
+                                                    {Number(sale.discount) > 0 && (
+                                                        <div className="flex gap-1 items-center text-amber-400">
+                                                            <span>Desc.:</span>
+                                                            <span className="font-bold">-{formatMoney(Number(sale.discount))}</span>
+                                                        </div>
+                                                    )}
+                                                    {serviceInfo.charged && (
+                                                        <div className="flex gap-1 items-center text-green-400">
+                                                            <span>10% Servicio:</span>
+                                                            <span className="font-bold">+{formatMoney(serviceInfo.amount)}</span>
+                                                        </div>
+                                                    )}
+                                                    <div className="flex gap-1 items-center text-white">
+                                                        <span>Total factura:</span>
+                                                        <span className="font-black">{formatMoney(Number(sale.total))}</span>
+                                                    </div>
+                                                    <div className="flex gap-1 items-center text-emerald-300">
+                                                        <span>Cobrado:</span>
+                                                        <span className="font-black">{formatMoney(amountPaid)}</span>
+                                                    </div>
+                                                    {tip > 0.005 && (
+                                                        <div className="flex gap-1 items-center text-amber-400">
+                                                            <span>Propina/excedente:</span>
+                                                            <span className="font-bold">+{formatMoney(tip)}</span>
+                                                        </div>
+                                                    )}
+                                                    {/* Desglose Sport Bar */}
+                                                    {sale.openTab?.paymentSplits?.length > 0 && (
+                                                        <div className="w-full mt-1 space-y-0.5">
+                                                            <span className="text-gray-500 uppercase text-[10px]">Desglose de pagos:</span>
+                                                            {sale.openTab.paymentSplits.map((p: any, idx: number) => (
+                                                                <div key={idx} className="flex gap-2 text-[11px] text-gray-300 pl-2">
+                                                                    <span>{p.splitLabel}</span>
+                                                                    <span className="text-emerald-400 font-bold">${Number(p.paidAmount).toFixed(2)}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    )}
+                                    </>
+                                    );
+                                })()}
                             </React.Fragment>
                         ))}
                     </tbody>
