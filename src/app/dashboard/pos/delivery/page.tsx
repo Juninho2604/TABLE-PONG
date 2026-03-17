@@ -83,6 +83,8 @@ export default function POSDeliveryPage() {
     const [authorizedManager, setAuthorizedManager] = useState<{ id: string, name: string } | null>(null);
     const [showPinModal, setShowPinModal] = useState(false);
     const [showCortesiaPercentModal, setShowCortesiaPercentModal] = useState(false);
+    const [cortesiaCustomPercent, setCortesiaCustomPercent] = useState('');
+    const [productSearch, setProductSearch] = useState('');
     const [pinInput, setPinInput] = useState('');
     const [pinError, setPinError] = useState('');
 
@@ -114,9 +116,39 @@ export default function POSDeliveryPage() {
     useEffect(() => {
         if (selectedCategory) {
             const cat = categories.find(c => c.id === selectedCategory);
-            if (cat) setMenuItems(cat.items);
+            if (cat) setMenuItems(cat.items || []);
         }
     }, [selectedCategory, categories]);
+
+    const allProductsWithCategory = useMemo(() => {
+        return (categories || []).flatMap((cat: any) =>
+            (cat.items || []).map((item: MenuItem) => ({
+                ...item,
+                categoryName: cat.name,
+                categoryId: cat.id,
+            }))
+        );
+    }, [categories]);
+
+    const filteredBySearch = useMemo(() => {
+        if (!productSearch.trim()) return menuItems;
+        const q = productSearch.toLowerCase().trim();
+        return allProductsWithCategory.filter(
+            (p: MenuItem & { categoryName?: string; categoryId?: string }) =>
+                p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q))
+        );
+    }, [productSearch, menuItems, allProductsWithCategory]);
+
+    const displayItems = productSearch.trim() ? filteredBySearch : menuItems;
+
+    useEffect(() => {
+        if (productSearch.trim() && filteredBySearch.length > 0) {
+            const first = filteredBySearch[0] as MenuItem & { categoryId?: string };
+            if (first?.categoryId && first.categoryId !== selectedCategory) {
+                setSelectedCategory(first.categoryId);
+            }
+        }
+    }, [productSearch, filteredBySearch, selectedCategory]);
 
     const getCategoryIcon = (name: string) => {
         if (name.includes('Tabla') || name.includes('Combo')) return '🍱';
@@ -126,7 +158,8 @@ export default function POSDeliveryPage() {
         return '📦';
     };
 
-    const handleAddToCart = (item: MenuItem) => {
+    const handleAddToCart = (item: MenuItem & { categoryId?: string }) => {
+        if (item.categoryId) setSelectedCategory(item.categoryId);
         setSelectedItemForModifier(item);
         setCurrentModifiers([]);
         setItemQuantity(1);
@@ -289,6 +322,7 @@ export default function POSDeliveryPage() {
         setCortesiaPercent(percent);
         setDiscountType(percent === 100 ? 'CORTESIA_100' : 'CORTESIA_PERCENT');
         setShowCortesiaPercentModal(false);
+        setCortesiaCustomPercent('');
     };
     const handlePinKey = (k: string) => { if (k === 'clear') setPinInput(''); else if (k === 'back') setPinInput(p => p.slice(0, -1)); else setPinInput(p => p + k); };
 
@@ -336,17 +370,40 @@ export default function POSDeliveryPage() {
                         </div>
                     ) : (
                         <>
-                            <div className="flex gap-2 p-3 bg-gray-800 border-b border-gray-700 overflow-x-auto whitespace-nowrap">
-                                {categories.map(cat => (
-                                    <button key={cat.id} onClick={() => setSelectedCategory(cat.id)} className={`px-5 py-3 rounded-lg font-bold transition-all flex items-center gap-2 ${selectedCategory === cat.id ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
-                                        <span>{getCategoryIcon(cat.name)}</span> {cat.name}
-                                    </button>
-                                ))}
+                            <div className="p-3 bg-gray-800 border-b border-gray-700 space-y-3">
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+                                    <input
+                                        type="text"
+                                        value={productSearch}
+                                        onChange={e => setProductSearch(e.target.value)}
+                                        placeholder="Buscar producto (ej: Shawarma, Cachapa...)"
+                                        className="w-full pl-10 pr-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 outline-none"
+                                    />
+                                    {productSearch && (
+                                        <button onClick={() => setProductSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">✕</button>
+                                    )}
+                                </div>
+                                <div className="flex gap-2 overflow-x-auto whitespace-nowrap">
+                                    {categories.map(cat => (
+                                        <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); setProductSearch(''); }} className={`flex-shrink-0 px-5 py-3 rounded-lg font-bold transition-all flex items-center gap-2 ${selectedCategory === cat.id && !productSearch ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300'}`}>
+                                            <span>{getCategoryIcon(cat.name)}</span> {cat.name}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                             <div className="flex-1 p-4 overflow-y-auto pb-24">
+                                {productSearch && (
+                                    <p className="text-center text-blue-400 text-sm mb-3">
+                                        {displayItems.length} resultado(s) en todas las categorías
+                                    </p>
+                                )}
                                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-                                    {menuItems.map(item => (
+                                    {displayItems.map((item: MenuItem & { categoryName?: string }) => (
                                         <button key={item.id} onClick={() => handleAddToCart(item)} className="bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-blue-500 rounded-xl p-4 text-left shadow-md group h-36 flex flex-col justify-between">
+                                            {item.categoryName && productSearch && (
+                                                <span className="text-[10px] mb-1 block text-blue-400/80">{item.categoryName}</span>
+                                            )}
                                             <div className="font-bold text-lg leading-tight group-hover:text-blue-300">{item.name}</div>
                                             <div className="text-2xl font-black text-blue-400">${item.price.toFixed(2)}</div>
                                         </button>
@@ -550,6 +607,32 @@ export default function POSDeliveryPage() {
                             {[10, 20, 30, 50, 75, 100].map(p => (
                                 <button key={p} onClick={() => handleCortesiaPercentSelect(p)} className="py-3 rounded-lg font-bold bg-purple-600 hover:bg-purple-500 text-white">{p}%</button>
                             ))}
+                        </div>
+                        <div className="flex gap-2 mb-4">
+                            <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={cortesiaCustomPercent}
+                                onChange={(e) => setCortesiaCustomPercent(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
+                                placeholder="% personalizado"
+                                className="flex-1 px-3 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white text-center font-mono focus:border-purple-500 outline-none"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        const val = parseInt(cortesiaCustomPercent, 10);
+                                        if (!isNaN(val) && val >= 0 && val <= 100) handleCortesiaPercentSelect(val);
+                                    }
+                                }}
+                            />
+                            <button
+                                onClick={() => {
+                                    const val = parseInt(cortesiaCustomPercent, 10);
+                                    if (!isNaN(val) && val >= 0 && val <= 100) handleCortesiaPercentSelect(val);
+                                }}
+                                className="px-4 py-2.5 rounded-lg font-bold bg-purple-600 hover:bg-purple-500 text-white"
+                            >
+                                OK
+                            </button>
                         </div>
                         <button onClick={() => setShowCortesiaPercentModal(false)} className="w-full py-3 bg-gray-700 rounded font-bold">Cancelar</button>
                     </div>

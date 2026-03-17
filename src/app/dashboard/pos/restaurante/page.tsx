@@ -117,6 +117,7 @@ export default function POSRestaurantPage() {
     const [authorizedManager, setAuthorizedManager] = useState<{ id: string, name: string } | null>(null);
     const [showPinModal, setShowPinModal] = useState(false);
     const [showCortesiaPercentModal, setShowCortesiaPercentModal] = useState(false);
+    const [cortesiaCustomPercent, setCortesiaCustomPercent] = useState('');
     const [pinInput, setPinInput] = useState('');
     const [pinError, setPinError] = useState('');
 
@@ -184,6 +185,16 @@ export default function POSRestaurantPage() {
     }, [productSearch, menuItems, allProductsWithCategory]);
 
     const displayItems = productSearch.trim() ? filteredBySearch : menuItems;
+
+    // Al buscar, cambiar categoría al primer resultado para que la barra de categorías refleje la categoría del producto encontrado
+    useEffect(() => {
+        if (productSearch.trim() && filteredBySearch.length > 0) {
+            const first = filteredBySearch[0] as MenuItem & { categoryId?: string };
+            if (first?.categoryId && first.categoryId !== selectedCategory) {
+                setSelectedCategory(first.categoryId);
+            }
+        }
+    }, [productSearch, filteredBySearch, selectedCategory]);
 
     const getCategoryIcon = (name: string) => {
         if (name.includes('Tabla') || name.includes('Combo')) return '🍱';
@@ -430,6 +441,7 @@ export default function POSRestaurantPage() {
         setCortesiaPercent(percent);
         setDiscountType(percent === 100 ? 'CORTESIA_100' : 'CORTESIA_PERCENT');
         setShowCortesiaPercentModal(false);
+        setCortesiaCustomPercent('');
     };
     const handlePinKey = (k: string) => {
         if (k === 'back') setPinInput(p => p.slice(0, -1));
@@ -834,6 +846,33 @@ export default function POSRestaurantPage() {
                                     {p}%
                                 </button>
                             ))}
+                        </div>
+                        <div className="flex gap-2 mb-4">
+                            <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={cortesiaCustomPercent}
+                                onChange={(e) => setCortesiaCustomPercent(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
+                                placeholder="% personalizado"
+                                className="flex-1 px-3 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white text-center font-mono focus:border-purple-500 outline-none"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        const val = parseInt(cortesiaCustomPercent, 10);
+                                        if (!isNaN(val) && val >= 0 && val <= 100) handleCortesiaPercentSelect(val);
+                                    }
+                                }}
+                            />
+                            <button
+                                onClick={() => {
+                                    const val = parseInt(cortesiaCustomPercent, 10);
+                                    if (!isNaN(val) && val >= 0 && val <= 100) handleCortesiaPercentSelect(val);
+                                }}
+                                className="px-4 py-2.5 rounded-lg font-bold bg-purple-600 hover:bg-purple-500 text-white"
+                            >
+                                OK
+                            </button>
                         </div>
                         <button onClick={() => setShowCortesiaPercentModal(false)} className="w-full py-3 bg-gray-700 rounded font-bold">Cancelar</button>
                     </div>

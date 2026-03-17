@@ -213,11 +213,35 @@ export default function POSSportBarPage() {
         [selectedTable]
     );
 
+    const allProductsWithCategory = useMemo(() => {
+        return (categories || []).flatMap((cat: any) =>
+            (cat.items || []).map((item: MenuItem) => ({
+                ...item,
+                categoryName: cat.name,
+                categoryId: cat.id,
+            }))
+        );
+    }, [categories]);
+
     const filteredMenuItems = useMemo(() => {
         if (!productSearch.trim()) return menuItems;
-        const q = productSearch.toLowerCase();
-        return menuItems.filter(i => i.name.toLowerCase().includes(q) || i.sku?.toLowerCase().includes(q));
-    }, [menuItems, productSearch]);
+        const q = productSearch.toLowerCase().trim();
+        return allProductsWithCategory.filter(
+            (p: MenuItem & { categoryName?: string; categoryId?: string }) =>
+                p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q))
+        );
+    }, [productSearch, menuItems, allProductsWithCategory]);
+
+    const displayMenuItems = productSearch.trim() ? filteredMenuItems : menuItems;
+
+    useEffect(() => {
+        if (productSearch.trim() && filteredMenuItems.length > 0) {
+            const first = filteredMenuItems[0] as MenuItem & { categoryId?: string };
+            if (first?.categoryId && first.categoryId !== selectedCategory) {
+                setSelectedCategory(first.categoryId);
+            }
+        }
+    }, [productSearch, filteredMenuItems, selectedCategory]);
 
     const cartTotal = cart.reduce((s, i) => s + i.lineTotal, 0);
     const paidAmount = parseFloat(amountReceived) || 0;
@@ -261,8 +285,9 @@ export default function POSSportBarPage() {
     // CART & MODIFIERS
     // ============================================================================
 
-    const handleAddToCart = (item: MenuItem) => {
+    const handleAddToCart = (item: MenuItem & { categoryId?: string }) => {
         if (!activeTab) return;
+        if (item.categoryId) setSelectedCategory(item.categoryId);
         setSelectedItemForModifier(item);
         setCurrentModifiers([]);
         setItemQuantity(1);
@@ -651,20 +676,23 @@ export default function POSSportBarPage() {
                     {/* Menu items */}
                     <div className="flex-1 overflow-y-auto p-3">
                         <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
-                            {filteredMenuItems.map(item => (
+                            {displayMenuItems.map((item: MenuItem & { categoryName?: string }) => (
                                 <button
                                     key={item.id}
                                     onClick={() => handleAddToCart(item)}
                                     disabled={!activeTab}
                                     className="flex flex-col justify-between rounded-2xl border border-slate-700 bg-slate-900 p-3 text-left shadow transition hover:border-amber-500/50 hover:bg-slate-800 disabled:opacity-35 disabled:cursor-not-allowed h-24"
                                 >
+                                    {item.categoryName && productSearch && (
+                                        <span className="text-[10px] mb-0.5 block text-amber-400/80">{item.categoryName}</span>
+                                    )}
                                     <div className="text-sm font-bold line-clamp-2 leading-tight">{item.name}</div>
                                     <div className="text-lg font-black text-amber-400">
                                         <PriceDisplay usd={item.price} rate={exchangeRate} size="sm" showBs={false} />
                                     </div>
                                 </button>
                             ))}
-                            {filteredMenuItems.length === 0 && (
+                            {displayMenuItems.length === 0 && (
                                 <div className="col-span-full text-center text-slate-500 py-12 text-sm">
                                     {productSearch ? `Sin resultados para "${productSearch}"` : 'Sin productos en esta categoría'}
                                 </div>

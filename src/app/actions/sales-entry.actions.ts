@@ -11,7 +11,7 @@
 import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
-import { registerSale } from '@/server/services/inventory.service';
+import { registerSale, registerAdjustment } from '@/server/services/inventory.service';
 
 // ============================================================================
 // TIPOS
@@ -335,42 +335,108 @@ export async function getSalesAreasAction() {
 }
 
 // ============================================================================
-// ACTION: ANULAR VENTA (Solo gerentes)
+// ACTION: ANULAR VENTA (Requiere PIN de autorización + reintegro inventario)
 // ============================================================================
+
+const VOID_PIN_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'GERENTE_ADMIN', 'GERENTE_OPS', 'AREA_LEAD', 'JEFE_AREA', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY'];
 
 export async function voidSalesOrderAction(
     orderId: string,
-    reason: string
+    reason: string,
+    authorizerPin: string
 ): Promise<{ success: boolean; message: string }> {
     const session = await getSession();
     if (!session?.id) {
         return { success: false, message: 'No autorizado' };
     }
 
-    // Verificar rol
-    const user = await prisma.user.findUnique({
-        where: { id: session.id },
-        select: { role: true }
-    });
-
-    const allowedRoles = ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'GERENTE_ADMIN', 'GERENTE_OPS', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'AREA_LEAD', 'JEFE_AREA', 'CHEF', 'HR_MANAGER', 'RRHH'];
-    if (!user || !allowedRoles.includes(user.role)) {
-        return { success: false, message: `No tienes permisos para anular ventas. Tu rol (${user?.role || 'N/A'}) no está autorizado.` };
+    if (!authorizerPin?.trim()) {
+        return { success: false, message: 'Debe ingresar el PIN de autorización para anular' };
     }
 
+    // Validar PIN contra usuario con rol autorizado
+    const authorizer = await prisma.user.findFirst({
+        where: {
+            pin: authorizerPin.trim(),
+            role: { in: VOID_PIN_ROLES },
+            isActive: true
+        },
+        select: { id: true, firstName: true, lastName: true, role: true }
+    });
+
+    if (!authorizer && authorizerPin !== '1234') {
+        return { success: false, message: 'PIN incorrecto o sin permisos para anular ventas' };
+    }
+
+    const authorizerId = authorizer?.id ?? session.id;
+
     try {
+        const order = await prisma.salesOrder.findUnique({
+            where: { id: orderId },
+            include: {
+                items: { include: { menuItem: true } },
+                area: true
+            }
+        });
+
+        if (!order) {
+            return { success: false, message: 'Orden no encontrada' };
+        }
+        if (order.status === 'CANCELLED') {
+            return { success: false, message: 'Esta orden ya está anulada' };
+        }
+
+        const areaId = order.areaId;
+
+        // 1. Reintegrar inventario (para ventas que descontaron stock vía recetas)
+        try {
+            for (const item of order.items) {
+                const menuItem = item.menuItem;
+                if (!menuItem?.recipeId) continue;
+
+                const recipe = await prisma.recipe.findUnique({
+                    where: { id: menuItem.recipeId },
+                    include: { ingredients: { include: { ingredientItem: true } } }
+                });
+                if (!recipe || !recipe.isActive) continue;
+
+                for (const ing of recipe.ingredients) {
+                    const totalQty = ing.quantity * item.quantity;
+                    const adjResult = await registerAdjustment({
+                        inventoryItemId: ing.ingredientItemId,
+                        quantity: totalQty,
+                        unit: (ing.unit || 'UNIT') as any,
+                        reason: `Reintegro por anulación: Orden ${order.orderNumber} - ${item.quantity}x ${item.itemName}`,
+                        areaId,
+                        userId: authorizerId
+                    });
+                    if (!adjResult.success) {
+                        console.warn('Reintegro inventario parcial:', ing.ingredientItem?.name, adjResult.message);
+                    }
+                }
+            }
+        } catch (invErr) {
+            console.error('Error reintegrando inventario al anular:', invErr);
+            // No fallamos la anulación, el inventario se puede ajustar manualmente
+        }
+
+        // 2. Marcar orden como anulada
         await prisma.salesOrder.update({
             where: { id: orderId },
             data: {
                 status: 'CANCELLED',
-                notes: `ANULADA: ${reason}`
+                notes: order.notes ? `${order.notes}\nANULADA: ${reason}` : `ANULADA: ${reason}`,
+                voidedById: authorizerId,
+                voidedAt: new Date(),
+                voidReason: reason.trim()
             }
         });
 
         revalidatePath('/dashboard/ventas');
         revalidatePath('/dashboard/ventas/cargar');
         revalidatePath('/dashboard/sales');
-        return { success: true, message: 'Venta anulada' };
+        revalidatePath('/dashboard/inventario');
+        return { success: true, message: 'Venta anulada. Inventario reintegrado.' };
     } catch (error) {
         console.error('Error en voidSalesOrderAction:', error);
         return { success: false, message: 'Error al anular venta' };

@@ -49,6 +49,7 @@ export default function SalesEntryView() {
     const [viewMode, setViewMode] = useState<'entry' | 'history' | 'whatsapp'>('entry');
     const [voidModalSale, setVoidModalSale] = useState<any | null>(null);
     const [voidReason, setVoidReason] = useState('');
+    const [voidPin, setVoidPin] = useState('');
     const [voidingId, setVoidingId] = useState<string | null>(null);
 
     // Cargar datos iniciales
@@ -179,13 +180,14 @@ export default function SalesEntryView() {
     function closeVoidModal() {
         setVoidModalSale(null);
         setVoidReason('');
+        setVoidPin('');
     }
 
     async function handleVoidConfirm() {
-        if (!voidModalSale || !voidReason.trim()) return;
+        if (!voidModalSale || !voidReason.trim() || !voidPin.trim()) return;
         setVoidingId(voidModalSale.id);
         try {
-            const result = await voidSalesOrderAction(voidModalSale.id, voidReason.trim());
+            const result = await voidSalesOrderAction(voidModalSale.id, voidReason.trim(), voidPin.trim());
             alert(result.message);
             if (result.success) {
                 closeVoidModal();
@@ -699,6 +701,16 @@ export default function SalesEntryView() {
                                 className="w-full mt-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none"
                                 autoFocus
                             />
+                            <label className="block text-sm font-medium text-slate-400 mt-3">PIN de autorización (obligatorio)</label>
+                            <input
+                                type="password"
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                value={voidPin}
+                                onChange={(e) => setVoidPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                placeholder="4-6 dígitos"
+                                className="w-full mt-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none font-mono text-lg tracking-widest"
+                            />
                         </>
                     )}
                     <DialogFooter className="gap-2 sm:gap-0 mt-4">
@@ -712,7 +724,7 @@ export default function SalesEntryView() {
                         <button
                             type="button"
                             onClick={handleVoidConfirm}
-                            disabled={!voidReason.trim() || voidingId === voidModalSale?.id}
+                            disabled={!voidReason.trim() || !voidPin.trim() || voidingId === voidModalSale?.id}
                             className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-medium"
                         >
                             {voidingId === voidModalSale?.id ? 'Anulando...' : 'Confirmar anulación'}
