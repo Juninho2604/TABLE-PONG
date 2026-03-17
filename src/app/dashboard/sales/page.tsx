@@ -7,8 +7,8 @@ import { printReceipt } from '@/lib/print-command';
 import { useAuthStore } from '@/stores/auth.store';
 import * as XLSX from 'xlsx';
 
-const MANAGER_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'];
-const VOID_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'AREA_LEAD', 'CHEF', 'HR_MANAGER'];
+const MANAGER_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'GERENTE_ADMIN', 'GERENTE_OPS'];
+const VOID_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'GERENTE_ADMIN', 'GERENTE_OPS', 'AUDITOR', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'AREA_LEAD', 'JEFE_AREA', 'CHEF', 'HR_MANAGER', 'RRHH'];
 const CARACAS_TZ = 'America/Caracas';
 
 

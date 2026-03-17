@@ -353,7 +353,7 @@ export async function voidSalesOrderAction(
         select: { role: true }
     });
 
-    const allowedRoles = ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'AREA_LEAD', 'CHEF', 'HR_MANAGER'];
+    const allowedRoles = ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'GERENTE_ADMIN', 'GERENTE_OPS', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'AREA_LEAD', 'JEFE_AREA', 'CHEF', 'HR_MANAGER', 'RRHH'];
     if (!user || !allowedRoles.includes(user.role)) {
         return { success: false, message: `No tienes permisos para anular ventas. Tu rol (${user?.role || 'N/A'}) no está autorizado.` };
     }
