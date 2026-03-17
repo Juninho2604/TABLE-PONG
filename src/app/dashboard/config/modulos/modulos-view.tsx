@@ -20,7 +20,7 @@ const ALL_MODULES = [
     { href: '/dashboard/menu', label: 'Menú', group: 'Operaciones' },
     // Ventas / POS
     { href: '/dashboard/pos/sportbar', label: 'POS Sport Bar', group: 'Ventas' },
-    { href: '/dashboard/pos/restaurante', label: 'POS Restaurante', group: 'Ventas' },
+    { href: '/dashboard/pos/restaurante', label: 'POS Pick Up', group: 'Ventas' },
     { href: '/dashboard/pos/delivery', label: 'POS Delivery', group: 'Ventas' },
     { href: '/dashboard/ventas/cargar', label: 'Cargar Ventas', group: 'Ventas' },
     { href: '/dashboard/sales', label: 'Historial Ventas', group: 'Ventas' },

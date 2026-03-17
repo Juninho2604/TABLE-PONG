@@ -583,6 +583,13 @@ async function generateOrderNumber(orderType: POSOrderType): Promise<string> {
     return `${orderPrefix}${sequence}`;
 }
 
+/** Número interno para consumos de Sport Bar (no es el correlativo de factura) */
+async function generateConsumptionOrderNumber(openTabId: string, tabCode: string, tx: any): Promise<string> {
+    const orderCount = await tx.openTabOrder.count({ where: { openTabId } });
+    const seq = String(orderCount + 1).padStart(2, '0');
+    return `COM-${tabCode}-${seq}`;
+}
+
 function isOrderNumberUniqueError(err: unknown): boolean {
     const msg = err instanceof Error ? err.message : String(err);
     return msg.includes('Unique constraint failed') && msg.includes('orderNumber');
@@ -894,8 +901,8 @@ export async function addItemsToOpenTabAction(data: AddItemsToOpenTabInput): Pro
                 if (attempt > 0) {
                     await new Promise(r => setTimeout(r, Math.random() * 80 + 20));
                 }
-                const orderNumber = await generateOrderNumber('RESTAURANT');
                 createdOrder = await prisma.$transaction(async (tx) => {
+                    const orderNumber = await generateConsumptionOrderNumber(openTab.id, openTab.tabCode, tx);
             await assertOpenTabVersionUpdate({
                 tx,
                 openTabId: openTab.id,
@@ -1121,6 +1128,78 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                     closedAt: newBalance === 0 ? new Date() : undefined
                 }
             });
+
+            // Al facturar (cerrar cuenta): crear orden consolidada con correlativo real
+            if (newBalance === 0) {
+                const tabOrders = await tx.salesOrder.findMany({
+                    where: { openTabId: openTab.id },
+                    include: { items: { include: { modifiers: true } } }
+                });
+                const salesArea = await resolveSalesAreaForBranch(openTab.branchId);
+                const allItems: { menuItemId: string; itemName: string; quantity: number; unitPrice: number; lineTotal: number; notes?: string; modifiers: { modifierId?: string; name: string; priceAdjustment: number }[] }[] = [];
+                for (const ord of tabOrders) {
+                    for (const it of ord.items) {
+                        allItems.push({
+                            menuItemId: it.menuItemId,
+                            itemName: it.itemName,
+                            quantity: it.quantity,
+                            unitPrice: it.unitPrice,
+                            lineTotal: it.lineTotal,
+                            notes: it.notes ?? undefined,
+                            modifiers: (it.modifiers || []).map((m: { modifierId: string | null; name: string; priceAdjustment: number }) => ({
+                                modifierId: m.modifierId ?? undefined,
+                                name: m.name,
+                                priceAdjustment: m.priceAdjustment
+                            }))
+                        });
+                    }
+                }
+                const invoiceNumber = await generateOrderNumber('RESTAURANT');
+                const consolidatedOrder = await tx.salesOrder.create({
+                    data: {
+                        orderNumber: invoiceNumber,
+                        orderType: 'RESTAURANT',
+                        serviceFlow: 'OPEN_TAB',
+                        sourceChannel: 'POS_SPORTBAR',
+                        customerName: openTab.customerLabel || 'Mesa',
+                        status: 'CONFIRMED',
+                        kitchenStatus: 'NOT_REQUIRED',
+                        paymentStatus: 'PAID',
+                        paymentMethod: nextPaymentMethod,
+                        subtotal: newRunningTotal,
+                        total: newRunningTotal,
+                        amountPaid: totalActuallyPaid,
+                        areaId: salesArea.id,
+                        branchId: openTab.branchId,
+                        serviceZoneId: openTab.serviceZoneId,
+                        tableOrStationId: openTab.tableOrStationId,
+                        openTabId: openTab.id,
+                        createdById: session.id,
+                        closedAt: new Date(),
+                        items: allItems.length > 0 ? {
+                            create: allItems.map(item => ({
+                                menuItemId: item.menuItemId,
+                                itemName: item.itemName,
+                                quantity: item.quantity,
+                                unitPrice: item.unitPrice,
+                                lineTotal: item.lineTotal,
+                                notes: item.notes,
+                                modifiers: item.modifiers.length > 0 ? {
+                                    create: item.modifiers.map(m => ({
+                                        modifierId: m.modifierId ?? undefined,
+                                        name: m.name,
+                                        priceAdjustment: m.priceAdjustment
+                                    }))
+                                } : undefined
+                            }))
+                        } : undefined
+                    },
+                    include: { items: { include: { modifiers: true } } }
+                });
+                await tx.openTabOrder.create({
+                    data: { openTabId: openTab.id, salesOrderId: consolidatedOrder.id }
+                });
+            }
 
             const tab = await tx.openTab.findUniqueOrThrow({
                 where: { id: openTab.id },

@@ -353,9 +353,9 @@ export async function voidSalesOrderAction(
         select: { role: true }
     });
 
-    const allowedRoles = ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'AREA_LEAD'];
+    const allowedRoles = ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'CASHIER_DELIVERY', 'AREA_LEAD', 'CHEF', 'HR_MANAGER'];
     if (!user || !allowedRoles.includes(user.role)) {
-        return { success: false, message: 'No tienes permisos para anular ventas. Solo gerentes, auditores y cajeros pueden anular.' };
+        return { success: false, message: `No tienes permisos para anular ventas. Tu rol (${user?.role || 'N/A'}) no está autorizado.` };
     }
 
     try {

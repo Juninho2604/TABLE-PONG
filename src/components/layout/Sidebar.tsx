@@ -103,7 +103,7 @@ const posNavigation: NavItem[] = [
         roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'AREA_LEAD', 'CHEF'],
     },
     {
-        label: 'POS Restaurante',
+        label: 'POS Pick Up',
         href: '/dashboard/pos/restaurante',
         icon: '🥙',
         roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT'],

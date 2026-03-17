@@ -14,7 +14,7 @@ import {
     type CartItem,
 } from '@/app/actions/pos.actions';
 import { getExchangeRateValue } from '@/app/actions/exchange.actions';
-import { printKitchenCommand } from '@/lib/print-command';
+import { printKitchenCommand, printReceipt } from '@/lib/print-command';
 import { PriceDisplay } from '@/components/pos/PriceDisplay';
 import { CurrencyCalculator } from '@/components/pos/CurrencyCalculator';
 
@@ -122,6 +122,7 @@ export default function POSSportBarPage() {
     const [showPaymentPinModal, setShowPaymentPinModal] = useState(false);
     const [paymentPin, setPaymentPin] = useState('');
     const [paymentPinError, setPaymentPinError] = useState('');
+    const [closedTabForPrint, setClosedTabForPrint] = useState<OpenTabSummary | null>(null);
 
     // ── Descuento ─────────────────────────────────────────────────────────────
     const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33'>('NONE');
@@ -370,9 +371,10 @@ export default function POSSportBarPage() {
             const discountAmount = discountType === 'DIVISAS_33' ? activeTab.balanceDue / 3 : 0;
             const discountLabel = discountType === 'DIVISAS_33' ? ' · -33.33% Divisas' : '';
 
+            let result;
             if (useMultiPayment && paymentLines.filter(l => parseFloat(l.amount) > 0).length > 1) {
                 const splits = paymentLines.filter(l => parseFloat(l.amount) > 0).map(l => ({ method: l.method, amount: parseFloat(l.amount) }));
-                const result = await registerOpenTabPaymentAction({
+                result = await registerOpenTabPaymentAction({
                     openTabId: activeTab.id,
                     amount: 0,
                     paymentMethod: 'CASH',
@@ -382,7 +384,7 @@ export default function POSSportBarPage() {
                 if (!result.success) { alert(result.message); return; }
             } else {
                 const baseLabel = `${PAYMENT_LABELS[paymentMethod] || paymentMethod}${discountLabel} – ${pinResult.data?.managerName || ''}`;
-                const result = await registerOpenTabPaymentAction({
+                result = await registerOpenTabPaymentAction({
                     openTabId: activeTab.id,
                     amount: includeServiceCharge ? activeTab.balanceDue : paidAmount,
                     paymentMethod,
@@ -399,6 +401,9 @@ export default function POSSportBarPage() {
             setDiscountType('NONE');
             setIncludeServiceCharge(false);
             setShowPaymentPinModal(false);
+            if (result.data?.status === 'CLOSED') {
+                setClosedTabForPrint(result.data as OpenTabSummary);
+            }
             await loadData();
         } finally {
             setIsProcessing(false);
@@ -1066,6 +1071,58 @@ export default function POSSportBarPage() {
                                 className="flex-[2] py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-black text-sm transition disabled:opacity-50"
                             >
                                 {isProcessing ? 'Procesando...' : '✓ Confirmar pago'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════════════ */}
+            {/* MODAL: CUENTA CERRADA — IMPRIMIR FACTURA                        */}
+            {/* ══════════════════════════════════════════════════════════════════ */}
+            {closedTabForPrint && (
+                <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-4">
+                    <div className="bg-white text-black w-full max-w-md rounded-2xl p-8 text-center shadow-2xl">
+                        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <span className="text-5xl">✅</span>
+                        </div>
+                        <h2 className="text-3xl font-black mb-2 text-gray-900">¡Cuenta cerrada!</h2>
+                        <p className="text-xl text-gray-600 mb-8">{closedTabForPrint.tabCode} · ${closedTabForPrint.runningTotal.toFixed(2)}</p>
+                        <div className="flex flex-col gap-4">
+                            <button
+                                onClick={() => {
+                                    const tab = closedTabForPrint;
+                                    const invoiceOrder = tab.orders.find((o: any) => o.orderNumber?.startsWith('REST-'));
+                                    const items = (invoiceOrder ? invoiceOrder.items : tab.orders.flatMap((o: any) => o.items)).map((i: any) => ({
+                                        name: i.itemName,
+                                        quantity: i.quantity,
+                                        unitPrice: i.lineTotal / i.quantity,
+                                        total: i.lineTotal,
+                                        modifiers: (i.modifiers || []).map((m: { name: string }) => m.name),
+                                        notes: undefined
+                                    }));
+                                    const total = tab.runningTotal;
+                                    printReceipt({
+                                        orderNumber: invoiceOrder?.orderNumber || tab.orders[0]?.orderNumber || tab.tabCode,
+                                        orderType: 'RESTAURANT',
+                                        date: new Date(),
+                                        cashierName: 'Cajero',
+                                        customerName: tab.customerLabel || 'Mesa',
+                                        items,
+                                        subtotal: total,
+                                        discount: 0,
+                                        total,
+                                    });
+                                }}
+                                className="w-full py-5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xl flex items-center justify-center gap-3 shadow-lg"
+                            >
+                                <span>🖨️</span> IMPRIMIR FACTURA
+                            </button>
+                            <button
+                                onClick={() => { setClosedTabForPrint(null); setSelectedTableId(''); }}
+                                className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-xl font-bold text-lg border-2 border-gray-200"
+                            >
+                                Nueva cuenta
                             </button>
                         </div>
                     </div>

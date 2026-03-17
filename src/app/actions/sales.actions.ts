@@ -57,6 +57,7 @@ export async function getOrderForReceiptAction(orderId: string) {
 export async function getSalesHistoryAction(limit = 200) {
     try {
         const sales = await prisma.salesOrder.findMany({
+            where: { orderNumber: { not: { startsWith: 'COM-' } } },
             take: limit,
             orderBy: { createdAt: 'desc' },
             include: {
@@ -104,6 +105,7 @@ export async function getDailyZReportAction(): Promise<{ success: boolean; data?
 
         const todaysOrders = await prisma.salesOrder.findMany({
             where: {
+                orderNumber: { not: { startsWith: 'COM-' } },
                 createdAt: {
                     gte: start,
                     lte: end
