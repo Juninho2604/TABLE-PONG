@@ -5,6 +5,7 @@ import { getSalesHistoryAction, getDailyZReportAction, getOrderForReceiptAction,
 import { voidSalesOrderAction } from '@/app/actions/sales-entry.actions';
 import { printReceipt } from '@/lib/print-command';
 import { useAuthStore } from '@/stores/auth.store';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import * as XLSX from 'xlsx';
 
 const MANAGER_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'GERENTE_ADMIN', 'GERENTE_OPS'];
@@ -21,6 +22,8 @@ export default function SalesHistoryPage() {
     const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
     const [printingId, setPrintingId] = useState<string | null>(null);
     const [voidingId, setVoidingId] = useState<string | null>(null);
+    const [voidModalSale, setVoidModalSale] = useState<any | null>(null);
+    const [voidReason, setVoidReason] = useState('');
     const [dateFilter, setDateFilter] = useState<string>(() => {
         // Default: hoy en hora Caracas
         return new Date().toLocaleDateString('sv-SE', { timeZone: CARACAS_TZ });
@@ -244,19 +247,28 @@ export default function SalesHistoryPage() {
         }
     };
 
-    const handleVoidOrder = async (sale: any) => {
+    const openVoidModal = (sale: any) => {
         if (!canVoid) return;
         if (sale.status === 'CANCELLED') {
             alert('Esta orden ya está anulada');
             return;
         }
-        const reason = prompt(`Motivo de anulación para ${sale.orderNumber}:`);
-        if (!reason || !reason.trim()) return;
-        if (!confirm(`¿Confirmar anulación de ${sale.orderNumber}?\nMotivo: ${reason}`)) return;
-        setVoidingId(sale.id);
+        setVoidModalSale(sale);
+        setVoidReason('');
+    };
+
+    const closeVoidModal = () => {
+        setVoidModalSale(null);
+        setVoidReason('');
+    };
+
+    const handleVoidConfirm = async () => {
+        if (!voidModalSale || !voidReason.trim()) return;
+        setVoidingId(voidModalSale.id);
         try {
-            const result = await voidSalesOrderAction(sale.id, reason.trim());
+            const result = await voidSalesOrderAction(voidModalSale.id, voidReason.trim());
             if (result.success) {
+                closeVoidModal();
                 await loadData();
             } else {
                 alert(result.message || 'Error al anular');
@@ -426,7 +438,9 @@ export default function SalesHistoryPage() {
                                                     )}
                                                     {canVoid && sale.status !== 'CANCELLED' && (
                                                         <button
-                                                            onClick={(e) => { e.stopPropagation(); handleVoidOrder(sale); }}
+                                                            type="button"
+                                                            onPointerDown={(e) => e.stopPropagation()}
+                                                            onClick={(e) => { e.stopPropagation(); e.preventDefault(); openVoidModal(sale); }}
                                                             disabled={voidingId === sale.id}
                                                             className="text-red-300 font-medium bg-red-900/40 hover:bg-red-800/60 border border-red-700/50 px-3 py-1.5 rounded-lg text-xs disabled:opacity-50"
                                                         >
@@ -593,6 +607,48 @@ export default function SalesHistoryPage() {
                     </div>
                 </div>
             )}
+
+            {/* Modal Anular Factura */}
+            <Dialog open={!!voidModalSale} onOpenChange={(open) => !open && closeVoidModal()}>
+                <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700 text-white">
+                    <DialogHeader>
+                        <DialogTitle className="text-red-400">Anular factura</DialogTitle>
+                    </DialogHeader>
+                    {voidModalSale && (
+                        <>
+                            <p className="text-slate-300 text-sm">
+                                Orden <span className="font-bold text-white">{voidModalSale.orderNumber}</span> · Total {formatMoney(Number(voidModalSale.total))}
+                            </p>
+                            <label className="block text-sm font-medium text-slate-400 mt-3">Motivo de anulación (obligatorio)</label>
+                            <textarea
+                                value={voidReason}
+                                onChange={(e) => setVoidReason(e.target.value)}
+                                placeholder="Ej: Error en pedido, cliente canceló..."
+                                rows={3}
+                                className="w-full mt-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none"
+                                autoFocus
+                            />
+                        </>
+                    )}
+                    <DialogFooter className="gap-2 sm:gap-0 mt-4">
+                        <button
+                            type="button"
+                            onClick={closeVoidModal}
+                            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg font-medium"
+                        >
+                            Cancelar
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleVoidConfirm}
+                            disabled={!voidReason.trim() || voidingId === voidModalSale?.id}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-medium"
+                        >
+                            {voidingId === voidModalSale?.id ? 'Anulando...' : 'Confirmar anulación'}
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
