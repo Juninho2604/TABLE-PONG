@@ -119,6 +119,8 @@ export default function POSSportBarPage() {
     const [paymentLines, setPaymentLines] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'ZELLE'; amount: string }[]>([]);
     const [useMultiPayment, setUseMultiPayment] = useState(false);
     const [includeServiceCharge, setIncludeServiceCharge] = useState(false);
+    const [serviceChargeRate, setServiceChargeRate] = useState(0.10); // tasa configurable
+    const [keepChangeAsTip, setKeepChangeAsTip] = useState(false);
     const [showPaymentPinModal, setShowPaymentPinModal] = useState(false);
     const [paymentPin, setPaymentPin] = useState('');
     const [paymentPinError, setPaymentPinError] = useState('');
@@ -249,7 +251,14 @@ export default function POSSportBarPage() {
 
     // Balance a cobrar (con descuento divisas si aplica)
     const amountToCharge = activeTab ? (discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) : 0;
-    const amountWithService = amountToCharge * 1.10;
+    const serviceCharge = Math.round(amountToCharge * serviceChargeRate * 100) / 100;
+    const suggestedTotal = Math.round((amountToCharge + serviceCharge) * 100) / 100;
+    const amountWithService = suggestedTotal; // alias para compatibilidad
+    const receivedFloat = parseFloat(amountReceived) || 0;
+    const changeFromSuggested = receivedFloat > suggestedTotal + 0.005 ? Math.round((receivedFloat - suggestedTotal) * 100) / 100 : 0;
+    const hasChange = changeFromSuggested > 0.005;
+    const computedTip = keepChangeAsTip && hasChange ? changeFromSuggested : 0;
+    const computedChange = !keepChangeAsTip && hasChange ? changeFromSuggested : 0;
     // Pago mixto
     const multiTotal = paymentLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
     const multiRemaining = (includeServiceCharge ? amountWithService : amountToCharge) - multiTotal;
@@ -381,8 +390,11 @@ export default function POSSportBarPage() {
                 setPaymentPinError('Pago mixto: asigne al menos 2 métodos y cubra el total');
                 return;
             }
-        } else if (!includeServiceCharge && paidAmount <= 0) {
+        } else if (!includeServiceCharge && serviceChargeRate === 0 && paidAmount <= 0) {
             setPaymentPinError('Ingrese el monto a cobrar');
+            return;
+        } else if (serviceChargeRate > 0 && receivedFloat <= 0) {
+            setPaymentPinError('Ingrese el monto recibido del cliente');
             return;
         }
         setPaymentPinError('');
@@ -409,6 +421,21 @@ export default function POSSportBarPage() {
                 if (!result.success) { alert(result.message); return; }
             } else {
                 const baseLabel = `${PAYMENT_LABELS[paymentMethod] || paymentMethod}${discountLabel} – ${pinResult.data?.managerName || ''}`;
+                if (serviceChargeRate > 0 && !includeServiceCharge) {
+                    // Nuevo path: cargo por servicio configurable con vuelto/propina
+                    result = await registerOpenTabPaymentAction({
+                        openTabId: activeTab.id,
+                        amount: amountToCharge,
+                        paymentMethod,
+                        splitLabel: baseLabel,
+                        discountAmount: discountAmount > 0 ? discountAmount : undefined,
+                        serviceChargeRate,
+                        serviceChargeAmount: serviceCharge,
+                        tipAmount: computedTip,
+                        amountReceived: receivedFloat,
+                        changeReturned: computedChange,
+                    });
+                } else {
                 result = await registerOpenTabPaymentAction({
                     openTabId: activeTab.id,
                     amount: includeServiceCharge ? activeTab.balanceDue : paidAmount,
@@ -417,6 +444,7 @@ export default function POSSportBarPage() {
                     discountAmount: discountAmount > 0 ? discountAmount : undefined,
                     includeServiceCharge,
                 });
+                }
                 if (!result.success) { alert(result.message); return; }
             }
             setAmountReceived('');
@@ -425,6 +453,8 @@ export default function POSSportBarPage() {
             setPaymentPin('');
             setDiscountType('NONE');
             setIncludeServiceCharge(false);
+            setServiceChargeRate(0.10);
+            setKeepChangeAsTip(false);
             setShowPaymentPinModal(false);
             if (result.data?.status === 'CLOSED') {
                 setClosedTabForPrint(result.data as OpenTabSummary);
@@ -900,44 +930,75 @@ export default function POSSportBarPage() {
                                             <span>A cobrar</span>
                                             <span>${(discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue).toFixed(2)}</span>
                                         </div>
-                                        <div className="flex justify-between text-slate-600 text-[10px]">
-                                            <span>10% Servicio sugerido</span>
-                                            <span>${((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) * 0.10).toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex justify-between text-slate-500 text-[10px]">
-                                            <span>Total sugerido c/servicio</span>
-                                            <span>${((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) * 1.10).toFixed(2)}</span>
-                                        </div>
+                                        {serviceChargeRate > 0 && (
+                                            <div className="flex justify-between text-amber-400 text-[10px]">
+                                                <span>{Math.round(serviceChargeRate * 100)}% Servicio</span>
+                                                <span>+${serviceCharge.toFixed(2)}</span>
+                                            </div>
+                                        )}
+                                        {serviceChargeRate > 0 && (
+                                            <div className="flex justify-between text-white text-[10px] font-bold">
+                                                <span>Total c/servicio</span>
+                                                <span>${suggestedTotal.toFixed(2)}</span>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {/* 10% Servicio (opcional) */}
-                                    <label className="flex items-center gap-2 mb-2 cursor-pointer select-none">
-                                        <input
-                                            type="checkbox"
-                                            checked={includeServiceCharge}
-                                            onChange={e => {
-                                                setIncludeServiceCharge(e.target.checked);
-                                                if (e.target.checked) setAmountReceived('');
-                                            }}
-                                            className="w-4 h-4 accent-amber-500"
-                                        />
-                                        <span className="text-xs font-bold text-amber-300">Incluir 10% servicio</span>
-                                        {includeServiceCharge && (
-                                            <span className="ml-auto text-xs text-amber-400 font-black">
-                                                +${((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) * 0.10).toFixed(2)} → Total ${((discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) * 1.10).toFixed(2)}
-                                            </span>
-                                        )}
-                                    </label>
+                                    {/* Cargo por servicio configurable */}
+                                    {!useMultiPayment && (
+                                        <div className="mb-2">
+                                            <div className="flex items-center gap-1 mb-1">
+                                                <span className="text-[10px] text-slate-400 font-semibold uppercase">Servicio</span>
+                                                {[0, 0.05, 0.10, 0.15].map(rate => (
+                                                    <button
+                                                        key={rate}
+                                                        onClick={() => setServiceChargeRate(rate)}
+                                                        className={`flex-1 py-1 rounded text-[10px] font-black transition ${serviceChargeRate === rate ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                                                    >
+                                                        {rate === 0 ? 'Sin serv.' : `${Math.round(rate * 100)}%`}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {serviceChargeRate > 0 && (
+                                                <div className="flex justify-between text-[10px] text-amber-300 px-1">
+                                                    <span>+{Math.round(serviceChargeRate * 100)}% servicio</span>
+                                                    <span className="font-black">+${serviceCharge.toFixed(2)} → Total ${suggestedTotal.toFixed(2)}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
 
-                                    {/* Amount (solo si no pago mixto ni servicio completo) */}
-                                    {!includeServiceCharge && !useMultiPayment && (
+                                    {/* Monto recibido */}
+                                    {!useMultiPayment && (
                                         <input
                                             type="number"
                                             value={amountReceived}
-                                            onChange={e => setAmountReceived(e.target.value)}
-                                            placeholder={`Monto a recibir ($${amountToCharge.toFixed(2)})`}
-                                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none mb-2"
+                                            onChange={e => { setAmountReceived(e.target.value); setKeepChangeAsTip(false); }}
+                                            placeholder={serviceChargeRate > 0 ? `Recibido (sugerido $${suggestedTotal.toFixed(2)})` : `Monto a recibir ($${amountToCharge.toFixed(2)})`}
+                                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none mb-1"
                                         />
+                                    )}
+
+                                    {/* Vuelto / propina */}
+                                    {!useMultiPayment && hasChange && (
+                                        <div className="bg-slate-900 rounded-lg px-3 py-2 mb-2 border border-slate-700">
+                                            <div className="flex justify-between text-xs font-bold text-green-400 mb-1">
+                                                <span>💵 Vuelto</span>
+                                                <span>${changeFromSuggested.toFixed(2)}</span>
+                                            </div>
+                                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={keepChangeAsTip}
+                                                    onChange={e => setKeepChangeAsTip(e.target.checked)}
+                                                    className="w-3.5 h-3.5 accent-amber-500"
+                                                />
+                                                <span className="text-[10px] text-amber-300 font-semibold">Cliente deja el vuelto de propina</span>
+                                                {keepChangeAsTip && (
+                                                    <span className="ml-auto text-[10px] text-amber-400 font-black">+${computedTip.toFixed(2)} propina</span>
+                                                )}
+                                            </label>
+                                        </div>
                                     )}
 
                                     {/* CurrencyCalculator */}
@@ -952,14 +1013,16 @@ export default function POSSportBarPage() {
                                     {/* Register payment (requiere PIN) */}
                                     <button
                                         onClick={() => { setPaymentPin(''); setPaymentPinError(''); setShowPaymentPinModal(true); }}
-                                        disabled={(useMultiPayment ? !multiValid : (!includeServiceCharge && paidAmount <= 0)) || isProcessing}
+                                        disabled={(useMultiPayment ? !multiValid : (serviceChargeRate > 0 ? receivedFloat <= 0 : (!includeServiceCharge && paidAmount <= 0))) || isProcessing}
                                         className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-black transition disabled:opacity-40"
                                     >
                                         🔐 Registrar pago ${useMultiPayment
                                             ? multiTotal.toFixed(2)
                                             : includeServiceCharge
                                                 ? amountWithService.toFixed(2)
-                                                : (paidAmount > 0 ? paidAmount.toFixed(2) : '0.00')}
+                                                : serviceChargeRate > 0
+                                                    ? suggestedTotal.toFixed(2)
+                                                    : (paidAmount > 0 ? paidAmount.toFixed(2) : '0.00')}
                                     </button>
 
                                     {/* Paid splits */}

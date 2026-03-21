@@ -92,6 +92,12 @@ const navigation: NavItem[] = [
         icon: '🍽️',
         roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'],
     },
+    {
+        label: 'Aliados Comerciales',
+        href: '/dashboard/intercompany',
+        icon: '🤝',
+        roles: ['OWNER', 'ADMIN_MANAGER', 'AUDITOR'],
+    },
 ];
 
 // Navegación POS (archived = oculto por ahora, para pruebas futuras)

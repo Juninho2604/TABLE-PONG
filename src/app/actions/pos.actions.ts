@@ -72,7 +72,17 @@ export interface RegisterOpenTabPaymentInput {
     splitLabel?: string;
     notes?: string;
     discountAmount?: number;        // Descuento divisas (DIVISAS_33) sobre el saldo
-    includeServiceCharge?: boolean; // 10% servicio opcional (Sport Bar)
+    includeServiceCharge?: boolean; // 10% servicio opcional (Sport Bar) — legacy
+    /** Tasa de cargo por servicio aplicada (ej: 0.10 = 10%). Reemplaza includeServiceCharge. */
+    serviceChargeRate?: number;
+    /** Monto de cargo por servicio calculado en la UI. */
+    serviceChargeAmount?: number;
+    /** Propina adicional dejada por el cliente (cuando "deja el vuelto de propina"). */
+    tipAmount?: number;
+    /** Efectivo físico que entregó el cliente. */
+    amountReceived?: number;
+    /** Vuelto devuelto al cliente. */
+    changeReturned?: number;
     /** Pagos mixtos: varios métodos en una sola operación. Si se envía, amount/paymentMethod se ignoran. */
     paymentSplits?: { method: POSPaymentMethod; amount: number }[];
 }
@@ -937,13 +947,17 @@ export async function addItemsToOpenTabAction(data: AddItemsToOpenTabInput): Pro
                     notes: data.notes,
                     createdById: session.id,
                     items: {
-                        create: data.items.map(item => ({
+                        create: data.items.map(item => {
+                            const menuMeta = menuMap.get(item.menuItemId);
+                            return {
                             menuItemId: item.menuItemId,
                             itemName: item.name,
                             quantity: item.quantity,
                             unitPrice: item.unitPrice,
                             lineTotal: item.lineTotal,
                             notes: item.notes,
+                            isIntercompany: menuMeta?.isIntercompany ?? false,
+                            intercompanySupplierId: menuMeta?.intercompanySupplierId ?? null,
                             modifiers: {
                                 create: item.modifiers?.map(modifier => ({
                                     modifierId: modifier.modifierId,
@@ -951,7 +965,8 @@ export async function addItemsToOpenTabAction(data: AddItemsToOpenTabInput): Pro
                                     priceAdjustment: modifier.priceAdjustment
                                 }))
                             }
-                        }))
+                            };
+                        })
                     }
                 },
                 include: {
@@ -1023,7 +1038,13 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
             ? data.paymentSplits!.reduce((s, p) => s + p.amount, 0)
             : data.amount;
 
-        if (!data.includeServiceCharge && totalAmount <= 0) {
+        // Servicio y propina (nuevos campos explícitos de la UI)
+        const serviceChargeRateInput = data.serviceChargeRate ?? 0;
+        const tipAmountInput = data.tipAmount ?? 0;
+        const amountReceivedInput = data.amountReceived ?? data.amount;
+        const changeReturnedInput = data.changeReturned ?? 0;
+
+        if (!data.includeServiceCharge && !(data.serviceChargeAmount && data.serviceChargeAmount > 0) && totalAmount <= 0) {
             return { success: false, message: 'El monto debe ser mayor a cero' };
         }
 
@@ -1069,6 +1090,17 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                     method: data.paymentMethod,
                     amount: splitPaidAmount
                 }];
+            } else if (data.serviceChargeAmount && data.serviceChargeAmount > 0) {
+                // Nuevo path: servicio explícito enviado desde la UI (tasa configurable + propina)
+                appliedAmount = Math.min(data.amount, effectiveBalance);
+                serviceChargeAmount = data.serviceChargeAmount;
+                const splitPaidAmount = appliedAmount + serviceChargeAmount + (tipAmountInput > 0 ? 0 : 0); // propina ya incluida en amountReceived
+                const rateLabel = data.serviceChargeRate ? `+${Math.round(data.serviceChargeRate * 100)}% serv` : '+serv';
+                splitsToCreate = [{
+                    label: `${baseSplitLabel} | ${rateLabel} ($${serviceChargeAmount.toFixed(2)})`,
+                    method: data.paymentMethod,
+                    amount: splitPaidAmount
+                }];
             } else {
                 appliedAmount = Math.min(data.amount, effectiveBalance);
                 splitsToCreate = [{
@@ -1078,6 +1110,12 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                 }];
             }
         }
+
+        // Merge explicit UI fields (override if set)
+        const finalServiceChargeRate = serviceChargeRateInput || (serviceChargeAmount > 0 ? 0.10 : 0);
+        const finalTipAmount = tipAmountInput;
+        const finalAmountReceived = amountReceivedInput;
+        const finalChangeReturned = changeReturnedInput;
 
         const newBalance = Math.max(0, effectiveBalance - appliedAmount);
         const nextTabStatus = newBalance === 0 ? 'CLOSED' : 'PARTIALLY_PAID';
@@ -1094,7 +1132,9 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                     runningDiscount: newRunningDiscount,
                     runningTotal: newRunningTotal,
                     status: nextTabStatus,
-                    closedAt: newBalance === 0 ? new Date() : null
+                    closedAt: newBalance === 0 ? new Date() : null,
+                    totalServiceCharge: { increment: serviceChargeAmount },
+                    totalTip: { increment: finalTipAmount },
                 }
             });
 
@@ -1108,6 +1148,11 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                         status: 'PAID',
                         total: split.amount,
                         paidAmount: split.amount,
+                        serviceChargeRate: finalServiceChargeRate,
+                        serviceChargeAmount,
+                        tipAmount: finalTipAmount,
+                        amountReceived: finalAmountReceived,
+                        changeReturned: finalChangeReturned,
                         paidAt: new Date(),
                         notes: data.notes
                     }

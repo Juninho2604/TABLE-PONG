@@ -690,8 +690,10 @@ model MenuItem {
   isActive        Boolean  @default(true)
   
   // Intercompany (¿este item proviene de Shanklish?)
-  isIntercompany        Boolean  @default(false)
-  intercompanySupplierCode String? // "SHANKLISH" si proviene de Shanklish
+  isIntercompany           Boolean   @default(false)
+  intercompanySupplierCode String?   // "SHANKLISH" (legacy / código legible)
+  intercompanySupplierId   String?   // FK al Supplier de tipo INTERCOMPANY
+  intercompanySupplier     Supplier? @relation("IntercompanyMenuItems", fields: [intercompanySupplierId], references: [id])
 
   // Modificadores permitidos
   modifierGroups  MenuItemModifierGroup[]
@@ -709,6 +711,7 @@ model MenuItem {
   @@index([categoryId])
   @@index([sku])
   @@index([serviceCategory])
+  @@index([intercompanySupplierId])
 }
 
 model MenuModifierGroup {
@@ -894,8 +897,9 @@ model SalesOrderItem {
   marginPercent   Float?
 
   // Intercompany (snapshot al momento de la venta)
-  isIntercompany        Boolean  @default(false)
-  intercompanyUnitPrice Float?   // Precio que Shanklish cobra a TP por este item
+  isIntercompany           Boolean @default(false)
+  intercompanyUnitPrice    Float?  // Precio que Shanklish cobra a TP por este item
+  intercompanySupplierId   String? // ID del aliado comercial (snapshot)
 
   // Relaciones
   settlementLines       IntercompanySettlementLine[]
@@ -905,6 +909,7 @@ model SalesOrderItem {
   
   @@index([orderId])
   @@index([menuItemId])
+  @@index([intercompanySupplierId])
 }
 
 model SalesOrderItemModifier {
@@ -1115,6 +1120,8 @@ model Supplier {
   // Procesamiento de Proteínas
   proteinProcessings ProteinProcessing[]
   settlements    IntercompanySettlement[]
+  // Items del menú marcados como intercompany de este aliado
+  intercompanyMenuItems MenuItem[] @relation("IntercompanyMenuItems")
 
   @@index([name])
   @@index([supplierType])
@@ -1315,6 +1322,8 @@ model OpenTab {
   runningTotal    Float    @default(0)
   balanceDue      Float    @default(0)
   version         Int      @default(0)
+  totalServiceCharge Float  @default(0) // Acumulado de cargo por servicio cobrado en esta cuenta
+  totalTip           Float  @default(0) // Acumulado de propinas recibidas en esta cuenta
   openedAt        DateTime @default(now())
   closedAt        DateTime?
   updatedAt       DateTime @updatedAt
@@ -1365,7 +1374,13 @@ model PaymentSplit {
   discount       Float    @default(0)
   tax            Float    @default(0)
   total          Float    @default(0)
-  paidAmount     Float    @default(0)
+  paidAmount          Float    @default(0)
+  // Cargo por servicio y propina de este split
+  serviceChargeRate   Float    @default(0)   // Tasa aplicada (0.10 = 10%)
+  serviceChargeAmount Float    @default(0)   // Monto de cargo por servicio ($)
+  tipAmount           Float    @default(0)   // Propina adicional dejada por el cliente ($)
+  amountReceived      Float    @default(0)   // Efectivo físico que entregó el cliente
+  changeReturned      Float    @default(0)   // Vuelto devuelto al cliente
   createdAt      DateTime @default(now())
   paidAt         DateTime?
   notes          String?
