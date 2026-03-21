@@ -124,7 +124,7 @@ export async function getMenuItemsWithPartnerAction() {
             intercompanySupplier: { select: { id: true, name: true } },
             category: { select: { name: true } },
         },
-        orderBy: [{ isIntercompany: 'desc' }, { category: { displayOrder: 'asc' } }, { name: 'asc' }]
+        orderBy: [{ isIntercompany: 'desc' }, { category: { name: 'asc' } }, { name: 'asc' }]
     });
 
     return { success: true, message: '', data: items };
