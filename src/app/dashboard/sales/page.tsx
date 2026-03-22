@@ -96,6 +96,10 @@ export default function SalesHistoryPage() {
             'Registrado por': sale.createdBy ? `${sale.createdBy.firstName} ${sale.createdBy.lastName}` : '',
             'Autorizado por': sale.authorizedBy ? `${sale.authorizedBy.firstName} ${sale.authorizedBy.lastName}` : '',
             'Notas': sale.notes || '',
+            'Anulada': sale.status === 'CANCELLED' ? 'Sí' : 'No',
+            'Justificación anulación': sale.voidReason || '',
+            'Anulada por': sale.voidedBy ? `${sale.voidedBy.firstName} ${sale.voidedBy.lastName}` : '',
+            'Fecha anulación': sale.voidedAt ? formatSaleDate(sale.voidedAt) + ' ' + formatSaleTime(sale.voidedAt) : '',
         }));
 
         // Hoja 2: Detalle de ítems (una fila por ítem vendido)
@@ -484,6 +488,26 @@ export default function SalesHistoryPage() {
                                     {expandedOrder === sale.id && (
                                         <tr className="bg-gray-900/60">
                                             <td colSpan={(canPrint || canVoid) ? 11 : 10} className="px-8 py-3">
+                                                {sale.status === 'CANCELLED' && (
+                                                    <div className="mb-4 rounded-lg border border-red-800/60 bg-red-900/20 px-4 py-3">
+                                                        <p className="text-sm font-bold text-red-400">🚫 Venta anulada</p>
+                                                        {sale.voidReason && (
+                                                            <p className="mt-1 text-sm text-red-200"><span className="text-red-400">Justificación:</span> {sale.voidReason}</p>
+                                                        )}
+                                                        {sale.voidedBy && (
+                                                            <p className="mt-1 text-xs text-gray-400">
+                                                                Anulada por: {sale.voidedBy.firstName} {sale.voidedBy.lastName}
+                                                                {sale.voidedAt && <> · {new Date(sale.voidedAt).toLocaleString('es-VE')}</>}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {sale.openTab?.notes && sale.openTab.notes.includes('[ELIMINADO:') && (
+                                                    <div className="mb-3 rounded border border-amber-700/50 bg-amber-900/20 px-3 py-2 text-xs text-amber-200">
+                                                        <span className="font-bold text-amber-400">📝 Notas de cuenta (ítems eliminados con justificación):</span>
+                                                        <pre className="mt-1 whitespace-pre-wrap break-words font-sans text-[11px]">{sale.openTab.notes}</pre>
+                                                    </div>
+                                                )}
                                                 {sale.items?.length > 0 && (
                                                 <table className="w-full text-xs font-sans mb-3">
                                                     <thead>

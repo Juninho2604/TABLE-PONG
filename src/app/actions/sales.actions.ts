@@ -77,10 +77,14 @@ export async function getSalesHistoryAction(limit = 200) {
                     }
                 },
                 // Para órdenes de Sport Bar: incluir splits de pago del tab
+                voidedBy: {
+                    select: { firstName: true, lastName: true }
+                },
                 openTab: {
                     select: {
                         tabCode: true,
                         runningTotal: true,
+                        notes: true,
                         paymentSplits: {
                             select: {
                                 splitLabel: true,
@@ -99,6 +103,58 @@ export async function getSalesHistoryAction(limit = 200) {
     } catch (error) {
         console.error('Error fetching sales:', error);
         return { success: false, message: 'Error cargando historial' };
+    }
+}
+
+/** Ventas del mes con detalle completo (para Historial Mensual) */
+export async function getMonthlySalesAction(month: number, year: number) {
+    try {
+        const start = new Date(year, month - 1, 1, 0, 0, 0);
+        const end = new Date(year, month, 0, 23, 59, 59);
+
+        const sales = await prisma.salesOrder.findMany({
+            where: {
+                orderNumber: { not: { startsWith: 'COM-' } },
+                createdAt: { gte: start, lte: end }
+            },
+            orderBy: { createdAt: 'desc' },
+            include: {
+                authorizedBy: { select: { firstName: true, lastName: true } },
+                createdBy: { select: { firstName: true, lastName: true } },
+                voidedBy: { select: { firstName: true, lastName: true } },
+                items: {
+                    select: {
+                        itemName: true,
+                        quantity: true,
+                        unitPrice: true,
+                        lineTotal: true,
+                        notes: true,
+                    }
+                },
+                openTab: {
+                    select: {
+                        tabCode: true,
+                        runningTotal: true,
+                        notes: true,
+                        paymentSplits: {
+                            select: {
+                                splitLabel: true,
+                                paidAmount: true,
+                                paymentMethod: true,
+                                tipAmount: true,
+                                serviceChargeAmount: true,
+                                amountReceived: true,
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        return { success: true, data: sales };
+    } catch (error) {
+        console.error('Error fetching monthly sales:', error);
+        return { success: false, message: 'Error cargando ventas del mes' };
     }
 }
 

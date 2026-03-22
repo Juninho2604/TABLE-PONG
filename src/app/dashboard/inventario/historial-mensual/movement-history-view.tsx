@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { cn, formatCurrency } from '@/lib/utils';
 import {
     getMonthlyMovementsAction,
     getMovementTypesAction,
     type MovementHistoryFilters,
 } from '@/app/actions/movement-history.actions';
+import { getMonthlySalesAction } from '@/app/actions/sales.actions';
 
 const MOVEMENT_TYPE_LABELS: Record<string, { label: string; icon: string; color: string }> = {
     PURCHASE: { label: 'Compra', icon: '🛒', color: 'bg-emerald-100 text-emerald-700' },
@@ -27,16 +28,24 @@ const MONTHS = [
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ];
 
+const PAYMENT_LABELS: Record<string, string> = {
+    CASH: 'Efectivo', CARD: 'Punto', TRANSFER: 'Transferencia', MOBILE_PAY: 'Pago Móvil', MULTIPLE: 'Mixto',
+};
+
 export default function MovementHistoryView() {
     const now = new Date();
+    const [tab, setTab] = useState<'movements' | 'sales'>('movements');
     const [month, setMonth] = useState(now.getMonth() + 1);
     const [year, setYear] = useState(now.getFullYear());
     const [movementType, setMovementType] = useState('');
     const [searchItem, setSearchItem] = useState('');
     const [movements, setMovements] = useState<any[]>([]);
     const [summary, setSummary] = useState<any>(null);
+    const [sales, setSales] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [salesLoading, setSalesLoading] = useState(false);
     const [availableTypes, setAvailableTypes] = useState<string[]>([]);
+    const [expandedSaleId, setExpandedSaleId] = useState<string | null>(null);
 
     useEffect(() => {
         getMovementTypesAction().then(setAvailableTypes);
@@ -45,6 +54,10 @@ export default function MovementHistoryView() {
     useEffect(() => {
         loadMovements();
     }, [month, year, movementType]);
+
+    useEffect(() => {
+        if (tab === 'sales') loadSales();
+    }, [tab, month, year]);
 
     async function loadMovements() {
         setIsLoading(true);
@@ -62,9 +75,21 @@ export default function MovementHistoryView() {
         setIsLoading(false);
     }
 
+    async function loadSales() {
+        setSalesLoading(true);
+        const result = await getMonthlySalesAction(month, year);
+        if (result.success && result.data) setSales(result.data);
+        else setSales([]);
+        setSalesLoading(false);
+    }
+
     function handleSearch() {
         loadMovements();
     }
+
+    const formatDate = (d: string | Date) => new Date(d).toLocaleDateString('es-VE');
+    const formatTime = (d: string | Date) => new Date(d).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' });
+    const formatMoney = (n: number) => `$${Number(n).toFixed(2)}`;
 
     function exportToExcel() {
         if (movements.length === 0) {
@@ -121,22 +146,49 @@ export default function MovementHistoryView() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                        📊 Historial de Movimientos
+                        📊 Historial Mensual
                     </h1>
                     <p className="text-gray-500">
-                        Consulta y exporta todos los movimientos de inventario por mes
+                        {tab === 'movements' ? 'Movimientos de inventario' : 'Ventas del mes por operación'} · {MONTHS[month - 1]} {year}
                     </p>
                 </div>
-                <button
-                    onClick={exportToExcel}
-                    disabled={movements.length === 0}
-                    className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:shadow-md transition-all disabled:opacity-50"
-                >
-                    📥 Exportar a Excel
-                </button>
+                <div className="flex items-center gap-2">
+                    <div className="flex rounded-lg border border-gray-200 bg-gray-100 p-1 dark:border-gray-600 dark:bg-gray-800">
+                        <button
+                            type="button"
+                            onClick={() => setTab('movements')}
+                            className={cn(
+                                'rounded-md px-3 py-1.5 text-sm font-medium',
+                                tab === 'movements' ? 'bg-white text-gray-900 shadow dark:bg-gray-700 dark:text-white' : 'text-gray-600 dark:text-gray-400'
+                            )}
+                        >
+                            📦 Movimientos
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setTab('sales')}
+                            className={cn(
+                                'rounded-md px-3 py-1.5 text-sm font-medium',
+                                tab === 'sales' ? 'bg-white text-gray-900 shadow dark:bg-gray-700 dark:text-white' : 'text-gray-600 dark:text-gray-400'
+                            )}
+                        >
+                            💰 Ventas
+                        </button>
+                    </div>
+                    {tab === 'movements' && (
+                        <button
+                            onClick={exportToExcel}
+                            disabled={movements.length === 0}
+                            className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-500 to-green-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:shadow-md transition-all disabled:opacity-50"
+                        >
+                            📥 Exportar Excel
+                        </button>
+                    )}
+                </div>
             </div>
 
-            {/* Filters */}
+            {/* Filters - only for movements */}
+            {tab === 'movements' && (
             <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div className="grid gap-3 sm:grid-cols-4">
                     {/* Month */}
@@ -204,9 +256,10 @@ export default function MovementHistoryView() {
                     </div>
                 </div>
             </div>
+            )}
 
-            {/* Summary Cards */}
-            {summary && (
+            {/* Summary Cards - movements only */}
+            {tab === 'movements' && summary && (
                 <div className="grid gap-4 sm:grid-cols-4">
                     <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
                         <p className="text-sm text-gray-500">Total Movimientos</p>
@@ -226,6 +279,7 @@ export default function MovementHistoryView() {
             )}
 
             {/* Movements Table */}
+            {tab === 'movements' && (
             <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 overflow-hidden">
                 {isLoading ? (
                     <div className="flex items-center justify-center py-16">
@@ -308,12 +362,155 @@ export default function MovementHistoryView() {
                     </div>
                 )}
             </div>
+            )}
+
+            {/* Month/Year selector for sales tab */}
+            {tab === 'sales' && (
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div className="flex flex-wrap gap-4 items-end">
+                    <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500">Mes</label>
+                        <select
+                            value={month}
+                            onChange={e => setMonth(parseInt(e.target.value))}
+                            className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        >
+                            {MONTHS.map((m, i) => (
+                                <option key={i} value={i + 1}>{m}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-500">Año</label>
+                        <select
+                            value={year}
+                            onChange={e => setYear(parseInt(e.target.value))}
+                            className="rounded-lg border border-gray-200 px-3 py-2.5 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                        >
+                            {[2024, 2025, 2026, 2027].map(y => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            )}
+
+            {/* Sales tab - ventas del mes por operación */}
+            {tab === 'sales' && (
+            <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 overflow-hidden">
+                {salesLoading ? (
+                    <div className="flex justify-center py-16">
+                        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-amber-500"></div>
+                    </div>
+                ) : sales.length === 0 ? (
+                    <div className="py-16 text-center text-gray-500">
+                        <span className="text-4xl">🛒</span>
+                        <p className="mt-3 text-lg font-medium">No hay ventas para {MONTHS[month - 1]} {year}</p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
+                                <tr>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Orden #</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Fecha / Hora</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Cliente</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">Método Pago</th>
+                                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-gray-500">Total</th>
+                                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-gray-500">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                                {sales.map(sale => (
+                                    <React.Fragment key={sale.id}>
+                                        <tr
+                                            className="hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer"
+                                            onClick={() => setExpandedSaleId(expandedSaleId === sale.id ? null : sale.id)}
+                                        >
+                                            <td className="px-4 py-3 font-bold text-blue-600 dark:text-blue-400">{sale.orderNumber}</td>
+                                            <td className="px-4 py-3 text-gray-700 dark:text-gray-300">
+                                                {formatDate(sale.createdAt)} {formatTime(sale.createdAt)}
+                                            </td>
+                                            <td className="px-4 py-3 truncate max-w-[180px]">{sale.customerName || 'Cliente General'}</td>
+                                            <td className="px-4 py-3">
+                                                <span className="text-xs font-medium">{PAYMENT_LABELS[sale.paymentMethod] || sale.paymentMethod || '-'}</span>
+                                            </td>
+                                            <td className="px-4 py-3 text-right font-bold">{formatMoney(Number(sale.total))}</td>
+                                            <td className="px-4 py-3 text-center">
+                                                {sale.status === 'CANCELLED' ? (
+                                                    <span className="inline-flex rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-700 dark:bg-red-900/40 dark:text-red-300">ANULADA</span>
+                                                ) : (
+                                                    <span className="text-gray-500">—</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                        {expandedSaleId === sale.id && (
+                                            <tr className="bg-gray-50 dark:bg-gray-900/50">
+                                                <td colSpan={6} className="px-6 py-4">
+                                                    {sale.status === 'CANCELLED' && (
+                                                        <div className="mb-3 rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 px-3 py-2">
+                                                            <p className="text-sm font-bold text-red-700 dark:text-red-400">🚫 Anulada</p>
+                                                            {sale.voidReason && <p className="text-sm text-red-600 dark:text-red-300"><strong>Justificación:</strong> {sale.voidReason}</p>}
+                                                            {sale.voidedBy && (
+                                                                <p className="text-xs text-gray-500 mt-1">Por: {sale.voidedBy.firstName} {sale.voidedBy.lastName}
+                                                                    {sale.voidedAt && <> · {new Date(sale.voidedAt).toLocaleString('es-VE')}</>}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {sale.openTab?.notes && String(sale.openTab.notes).includes('[ELIMINADO:') && (
+                                                        <div className="mb-3 rounded border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 px-3 py-2 text-xs">
+                                                            <strong className="text-amber-800 dark:text-amber-400">Notas de cuenta (ítems eliminados):</strong>
+                                                            <pre className="mt-1 whitespace-pre-wrap text-amber-700 dark:text-amber-300">{sale.openTab.notes}</pre>
+                                                        </div>
+                                                    )}
+                                                    {sale.items?.length > 0 ? (
+                                                        <table className="w-full text-xs border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                                                            <thead className="bg-gray-100 dark:bg-gray-800">
+                                                                <tr>
+                                                                    <th className="px-3 py-2 text-left">Producto</th>
+                                                                    <th className="px-3 py-2 text-center">Cant.</th>
+                                                                    <th className="px-3 py-2 text-right">P. Unit.</th>
+                                                                    <th className="px-3 py-2 text-right">Subtotal</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {sale.items.map((item: any, i: number) => (
+                                                                    <tr key={i} className="border-t border-gray-200 dark:border-gray-700">
+                                                                        <td className="px-3 py-1.5">{item.itemName}</td>
+                                                                        <td className="px-3 py-1.5 text-center">×{item.quantity}</td>
+                                                                        <td className="px-3 py-1.5 text-right">{formatMoney(item.unitPrice)}</td>
+                                                                        <td className="px-3 py-1.5 text-right font-bold">{formatMoney(item.lineTotal)}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                        </table>
+                                                    ) : (
+                                                        <p className="text-gray-500 text-sm">Sin detalle de ítems</p>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+            )}
 
             {/* Footer info */}
-            {movements.length > 0 && (
+            {tab === 'movements' && movements.length > 0 && (
                 <p className="text-center text-sm text-gray-400">
                     Mostrando {movements.length} movimientos de {MONTHS[month - 1]} {year}
                     {' '} • Haz clic en "Exportar a Excel" para descargar el reporte completo
+                </p>
+            )}
+            {tab === 'sales' && sales.length > 0 && (
+                <p className="text-center text-sm text-gray-400">
+                    Mostrando {sales.length} ventas de {MONTHS[month - 1]} {year} · Incluye anuladas con justificación
                 </p>
             )}
         </div>
