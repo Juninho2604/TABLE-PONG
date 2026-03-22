@@ -110,6 +110,8 @@ export default function POSRestaurantPage() {
     // Pagos mixtos: lista de métodos + montos
     const [paymentLines, setPaymentLines] = useState<{ method: 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY'; amount: string }[]>([]);
     const [useMultiPayment, setUseMultiPayment] = useState(false);
+    /** 0 = sin cargo; mismo criterio que Sport Bar para propina sobre total con servicio */
+    const [pickupServiceChargeRate, setPickupServiceChargeRate] = useState(0);
 
     // DISCOUNT STATE
     const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33' | 'CORTESIA_100' | 'CORTESIA_PERCENT'>('NONE');
@@ -315,24 +317,26 @@ export default function POSRestaurantPage() {
     const discountAmount = discountType === 'DIVISAS_33' ? cartTotal / 3
         : (discountType === 'CORTESIA_100' ? cartTotal : (discountType === 'CORTESIA_PERCENT' ? cartTotal * (cortesiaPercent / 100) : 0));
     const finalTotal = cartTotal - discountAmount;
+    const pickupServiceAmount = Math.round(finalTotal * pickupServiceChargeRate * 100) / 100;
+    const grandTotalWithService = Math.round((finalTotal + pickupServiceAmount) * 100) / 100;
     const paidAmount = parseFloat(amountReceived) || 0;
-    const changeAmount = paidAmount - finalTotal;
+    const changeAmount = paidAmount - grandTotalWithService;
 
-    // Helpers pagos mixtos (después de finalTotal)
+    // Helpers pagos mixtos (después de total con servicio)
     const multiTotal = paymentLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
-    const multiRemaining = finalTotal - multiTotal;
-    const multiValid = useMultiPayment ? (paymentLines.length > 1 && multiTotal >= finalTotal - 0.001) : true;
+    const multiRemaining = grandTotalWithService - multiTotal;
+    const multiValid = useMultiPayment ? (paymentLines.length > 1 && multiTotal >= grandTotalWithService - 0.001) : true;
 
     // Validaciones estrictas para cobrar
     const canCheckout = cart.length > 0;
-    const needsAmountReceived = !useMultiPayment && paymentMethod === 'CASH' && finalTotal > 0;
-    const amountValid = !needsAmountReceived || (paidAmount >= finalTotal);
+    const needsAmountReceived = !useMultiPayment && paymentMethod === 'CASH' && grandTotalWithService > 0;
+    const amountValid = !needsAmountReceived || (paidAmount >= grandTotalWithService);
     const checkoutBlocked = !canCheckout || !amountValid || (useMultiPayment && !multiValid);
     const checkoutBlockReason = !canCheckout
         ? 'Agregue productos al carrito'
         : (useMultiPayment && !multiValid)
             ? `Faltan $${multiRemaining > 0 ? multiRemaining.toFixed(2) : '0.00'} por asignar`
-            : (needsAmountReceived && paidAmount < finalTotal ? `Ingrese al menos $${finalTotal.toFixed(2)}` : null);
+            : (needsAmountReceived && paidAmount < grandTotalWithService ? `Ingrese al menos $${grandTotalWithService.toFixed(2)}` : null);
 
     const handleCheckout = async () => {
         if (checkoutBlocked) {
@@ -360,12 +364,13 @@ export default function POSRestaurantPage() {
                 customerName: customerName || 'Pick Up',
                 items: cart,
                 paymentMethod: splitsForAction ? 'MULTIPLE' : paymentMethod,
-                amountPaid: splitsForAction ? multiTotal : (paidAmount || finalTotal),
+                amountPaid: splitsForAction ? multiTotal : (paidAmount || grandTotalWithService),
                 discountType: discountType === 'CORTESIA_PERCENT' ? 'CORTESIA_PERCENT' : discountType,
                 discountPercent: discountType === 'CORTESIA_PERCENT' ? cortesiaPercent : undefined,
                 authorizedById: authorizedManager?.id,
                 paymentSplits: splitsForAction,
-                notes: undefined
+                notes: undefined,
+                serviceChargeAmount: pickupServiceAmount > 0.005 ? pickupServiceAmount : undefined,
             });
 
             if (result.success && result.data) {
@@ -384,11 +389,11 @@ export default function POSRestaurantPage() {
 
                 setLastOrder({
                     orderNumber: result.data.orderNumber,
-                    total: finalTotal,
+                    total: grandTotalWithService,
                     subtotal: cartTotal,
                     discount: discountAmount,
                     paymentMethod,
-                    amountPaid: paidAmount || finalTotal,
+                    amountPaid: paidAmount || grandTotalWithService,
                     change: changeAmount,
                     customerName: customerName || undefined,
                     itemsSnapshot: cart.map(item => ({
@@ -410,6 +415,7 @@ export default function POSRestaurantPage() {
                 setShowMobileCart(false);
                 setPaymentLines([]);
                 setUseMultiPayment(false);
+                setPickupServiceChargeRate(0);
             } else {
                 alert(result.message);
             }
@@ -462,7 +468,7 @@ export default function POSRestaurantPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
-                    <CurrencyCalculator totalUsd={Number(finalTotal.toFixed(2))} onRateUpdated={setExchangeRate} className="!bg-amber-900/40 !border-amber-400/30 !text-amber-100 hover:!bg-amber-800/50" />
+                    <CurrencyCalculator totalUsd={Number(grandTotalWithService.toFixed(2))} onRateUpdated={setExchangeRate} className="!bg-amber-900/40 !border-amber-400/30 !text-amber-100 hover:!bg-amber-800/50" />
                     <button className="lg:hidden bg-gray-800 p-2 rounded-lg" onClick={() => setShowMobileCart(true)}>
                         🛒 <b>${cartTotal.toFixed(2)}</b>
                     </button>
@@ -522,7 +528,7 @@ export default function POSRestaurantPage() {
                     <div className="lg:hidden p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800">
                         <h2 className="font-bold text-xl">Carrito</h2>
                         <div className="flex items-center gap-2">
-                            <CurrencyCalculator totalUsd={Number(finalTotal.toFixed(2))} onRateUpdated={setExchangeRate} />
+                            <CurrencyCalculator totalUsd={Number(grandTotalWithService.toFixed(2))} onRateUpdated={setExchangeRate} />
                             <button onClick={() => setShowMobileCart(false)}>✕</button>
                         </div>
                     </div>
@@ -639,13 +645,35 @@ export default function POSRestaurantPage() {
                                     </button>
                                     <div className={`flex justify-between text-xs font-bold px-1 ${multiRemaining > 0.005 ? 'text-red-400' : 'text-green-400'}`}>
                                         <span>Asignado</span>
-                                        <span>${multiTotal.toFixed(2)} / ${finalTotal.toFixed(2)}</span>
+                                        <span>${multiTotal.toFixed(2)} / ${grandTotalWithService.toFixed(2)}</span>
                                     </div>
                                 </div>
                             )}
                         </div>
 
-                        {/* PASO 3: Monto y Total */}
+                        {/* Servicio (opcional) — mismo concepto que Sport Bar */}
+                        <div>
+                            <p className="text-xs font-bold text-gray-400 uppercase mb-2">3. Servicio (opcional)</p>
+                            <div className="flex gap-2">
+                                {[0, 0.05, 0.1, 0.15].map(rate => (
+                                    <button
+                                        key={rate}
+                                        type="button"
+                                        onClick={() => setPickupServiceChargeRate(rate)}
+                                        className={`flex-1 py-2 rounded-lg text-xs font-black transition ${pickupServiceChargeRate === rate ? 'bg-amber-500 text-black ring-2 ring-amber-300' : 'bg-gray-700 hover:bg-gray-600'}`}
+                                    >
+                                        {rate === 0 ? 'Sin' : `${Math.round(rate * 100)}%`}
+                                    </button>
+                                ))}
+                            </div>
+                            {pickupServiceChargeRate > 0 && (
+                                <p className="text-[10px] text-amber-300 mt-1">
+                                    +{Math.round(pickupServiceChargeRate * 100)}% sobre el total después de descuentos → +${pickupServiceAmount.toFixed(2)}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* PASO 4: Monto y Total */}
                         <div className="bg-gray-900 p-4 rounded-xl border-2 border-gray-700 space-y-2">
                             {!useMultiPayment && paymentMethod === 'CASH' && (
                                 <div>
@@ -656,11 +684,11 @@ export default function POSRestaurantPage() {
                                         min="0"
                                         value={amountReceived}
                                         onChange={e => setAmountReceived(e.target.value)}
-                                        placeholder={`Mín. $${finalTotal.toFixed(2)}`}
+                                        placeholder={`Mín. $${grandTotalWithService.toFixed(2)}`}
                                         className={`w-full bg-gray-800 border-2 rounded-lg p-3 text-right text-xl font-bold text-white focus:outline-none ${!amountValid && needsAmountReceived ? 'border-red-500' : 'border-gray-600 focus:border-amber-500'}`}
                                     />
                                     {!amountValid && needsAmountReceived && paidAmount > 0 && (
-                                        <p className="text-red-400 text-xs mt-1">Faltan ${(finalTotal - paidAmount).toFixed(2)}</p>
+                                        <p className="text-red-400 text-xs mt-1">Faltan ${(grandTotalWithService - paidAmount).toFixed(2)}</p>
                                     )}
                                 </div>
                             )}
@@ -674,9 +702,15 @@ export default function POSRestaurantPage() {
                                     <span>-${discountAmount.toFixed(2)}</span>
                                 </div>
                             )}
+                            {pickupServiceAmount > 0 && (
+                                <div className="flex justify-between text-sm text-amber-400">
+                                    <span>Servicio sugerido</span>
+                                    <span>+${pickupServiceAmount.toFixed(2)}</span>
+                                </div>
+                            )}
                             <div className="flex justify-between text-xl font-black pt-2 border-t border-gray-700">
                                 <span>TOTAL</span>
-                                <span className="text-amber-400">${finalTotal.toFixed(2)}</span>
+                                <span className="text-amber-400">${grandTotalWithService.toFixed(2)}</span>
                             </div>
                             {!useMultiPayment && paymentMethod === 'CASH' && changeAmount > 0 && (
                                 <div className="flex justify-between text-green-400 font-bold">
@@ -684,16 +718,16 @@ export default function POSRestaurantPage() {
                                     <span>${changeAmount.toFixed(2)}</span>
                                 </div>
                             )}
-                            {useMultiPayment && multiTotal > finalTotal + 0.005 && (
+                            {useMultiPayment && multiTotal > grandTotalWithService + 0.005 && (
                                 <div className="flex justify-between text-green-400 font-bold">
                                     <span>Propina / Excedente</span>
-                                    <span>${(multiTotal - finalTotal).toFixed(2)}</span>
+                                    <span>${(multiTotal - grandTotalWithService).toFixed(2)}</span>
                                 </div>
                             )}
                         </div>
 
                         {/* CALCULADORA USD/Bs */}
-                        <CurrencyCalculator totalUsd={Number(finalTotal.toFixed(2))} onRateUpdated={setExchangeRate} className="w-full justify-center" />
+                        <CurrencyCalculator totalUsd={Number(grandTotalWithService.toFixed(2))} onRateUpdated={setExchangeRate} className="w-full justify-center" />
 
                         {/* BOTÓN COBRAR */}
                         <button
@@ -703,7 +737,7 @@ export default function POSRestaurantPage() {
                             className={`w-full py-5 rounded-xl font-black text-xl shadow-lg transition-all flex flex-col items-center gap-1 ${checkoutBlocked || isProcessing ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white'}`}
                         >
                             {isProcessing ? 'Procesando...' : 'COBRAR'}
-                            <span className="text-2xl font-black">${finalTotal.toFixed(2)}</span>
+                            <span className="text-2xl font-black">${grandTotalWithService.toFixed(2)}</span>
                             {checkoutBlockReason && <span className="text-xs font-normal opacity-80">{checkoutBlockReason}</span>}
                         </button>
                     </div>

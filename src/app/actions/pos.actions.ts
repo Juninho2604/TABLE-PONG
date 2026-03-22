@@ -47,6 +47,8 @@ export interface CreateOrderData {
     authorizedById?: string; // ID del gerente que autorizó
     // Pagos mixtos: si hay más de uno, paymentMethod se sobreescribe a 'MULTIPLE'
     paymentSplits?: { method: POSPaymentMethod; amount: number }[];
+    /** Cargo por servicio opcional (Pick Up / Delivery): se suma al total antes de calcular propina */
+    serviceChargeAmount?: number;
 }
 
 export interface OpenTabInput {
@@ -71,7 +73,11 @@ export interface RegisterOpenTabPaymentInput {
     paymentMethod: POSPaymentMethod;
     splitLabel?: string;
     notes?: string;
-    discountAmount?: number;        // Descuento divisas (DIVISAS_33) sobre el saldo
+    discountAmount?: number;        // Descuento divisas (DIVISAS_33) o cortesía % sobre el saldo
+    /** Para orden consolidada / historial (DIVISAS_33, CORTESIA_PERCENT, etc.) */
+    saleDiscountType?: string;
+    saleDiscountReason?: string;
+    authorizedById?: string;
     includeServiceCharge?: boolean; // 10% servicio opcional (Sport Bar) — legacy
     /** Tasa de cargo por servicio aplicada (ej: 0.10 = 10%). Reemplaza includeServiceCharge. */
     serviceChargeRate?: number;
@@ -258,7 +264,7 @@ async function resolveSalesAreaForBranch(branchId?: string) {
     return ensureBaseSalesArea();
 }
 
-function calculateCartTotals(data: Pick<CreateOrderData, 'items' | 'discountType' | 'discountPercent' | 'amountPaid'>) {
+function calculateCartTotals(data: Pick<CreateOrderData, 'items' | 'discountType' | 'discountPercent' | 'amountPaid' | 'serviceChargeAmount'>) {
     const subtotal = data.items.reduce((sum, item) => sum + item.lineTotal, 0);
 
     let discount = 0;
@@ -278,7 +284,9 @@ function calculateCartTotals(data: Pick<CreateOrderData, 'items' | 'discountType
 
     if (discount > subtotal) discount = subtotal;
 
-    const total = subtotal - discount;
+    const baseAfterDiscount = subtotal - discount;
+    const serviceCharge = Math.max(0, Number(data.serviceChargeAmount) || 0);
+    const total = baseAfterDiscount + serviceCharge;
     const change = (data.amountPaid || 0) - total;
 
     return {
@@ -286,7 +294,8 @@ function calculateCartTotals(data: Pick<CreateOrderData, 'items' | 'discountType
         discount,
         total,
         change: change > 0 ? change : 0,
-        discountReason
+        discountReason,
+        serviceChargeAmount: serviceCharge,
     };
 }
 
@@ -620,7 +629,7 @@ export async function createSalesOrderAction(
 
         const salesArea = await ensureBaseSalesArea();
         const areaId = salesArea.id;
-        const { subtotal, discount, total, change, discountReason } = calculateCartTotals(data);
+        const { subtotal, discount, total, change, discountReason, serviceChargeAmount: scFromTotals } = calculateCartTotals(data);
 
         // ── Pagos mixtos ──────────────────────────────────────────────────────
         let finalPaymentMethod = data.paymentMethod || 'CASH';
@@ -641,6 +650,10 @@ export async function createSalesOrderAction(
         let finalNotes = data.notes || '';
         if (discountReason) {
             finalNotes = finalNotes ? `${finalNotes} | ${discountReason}` : discountReason;
+        }
+        if (scFromTotals && scFromTotals > 0.005) {
+            const scNote = `Cargo por servicio +$${scFromTotals.toFixed(2)}`;
+            finalNotes = finalNotes ? `${finalNotes} | ${scNote}` : scNote;
         }
         if (splitsNote) {
             finalNotes = finalNotes ? `${finalNotes} | ${splitsNote}` : splitsNote;
@@ -1033,21 +1046,6 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
             return { success: false, message: 'No autorizado' };
         }
 
-        const useMultiSplits = data.paymentSplits && data.paymentSplits.length > 1;
-        const totalAmount = useMultiSplits
-            ? data.paymentSplits!.reduce((s, p) => s + p.amount, 0)
-            : data.amount;
-
-        // Servicio y propina (nuevos campos explícitos de la UI)
-        const serviceChargeRateInput = data.serviceChargeRate ?? 0;
-        const tipAmountInput = data.tipAmount ?? 0;
-        const amountReceivedInput = data.amountReceived ?? data.amount;
-        const changeReturnedInput = data.changeReturned ?? 0;
-
-        if (!data.includeServiceCharge && !(data.serviceChargeAmount && data.serviceChargeAmount > 0) && totalAmount <= 0) {
-            return { success: false, message: 'El monto debe ser mayor a cero' };
-        }
-
         const openTab = await prisma.openTab.findUnique({
             where: { id: data.openTabId },
             include: {
@@ -1060,18 +1058,39 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
             return { success: false, message: 'La cuenta no está disponible para pago' };
         }
 
-        // ── Descuento divisas (DIVISAS_33) ───────────────────────────────────
+        // ── Descuento (divisas / cortesía) ──────────────────────────────────
         const discountAmount = data.discountAmount || 0;
         const newRunningDiscount = openTab.runningDiscount + discountAmount;
         const newRunningTotal = Math.max(0, openTab.runningTotal - discountAmount);
         const effectiveBalance = Math.max(0, openTab.balanceDue - discountAmount);
+
+        const useMultiSplits = data.paymentSplits && data.paymentSplits.length > 1;
+        const totalAmount = useMultiSplits
+            ? data.paymentSplits!.reduce((s, p) => s + p.amount, 0)
+            : data.amount;
+
+        // Servicio y propina (nuevos campos explícitos de la UI)
+        const serviceChargeRateInput = data.serviceChargeRate ?? 0;
+        const tipAmountInput = data.tipAmount ?? 0;
+        const amountReceivedInput = data.amountReceived ?? data.amount;
+        const changeReturnedInput = data.changeReturned ?? 0;
+
+        /** Cortesía 100% u otro descuento que deja saldo 0 sin cobro */
+        const isFullDiscountClose = effectiveBalance <= 0.005 && discountAmount > 0.005;
+
+        if (!isFullDiscountClose && !data.includeServiceCharge && !(data.serviceChargeAmount && data.serviceChargeAmount > 0) && totalAmount <= 0) {
+            return { success: false, message: 'El monto debe ser mayor a cero' };
+        }
 
         // ── 10% Servicio (Sport Bar, opcional) ───────────────────────────────
         let appliedAmount: number;
         let splitsToCreate: { label: string; method: string; amount: number }[] = [];
         let serviceChargeAmount = 0;
 
-        if (useMultiSplits) {
+        if (isFullDiscountClose) {
+            appliedAmount = 0;
+            splitsToCreate = [];
+        } else if (useMultiSplits) {
             appliedAmount = Math.min(totalAmount, effectiveBalance);
             const PAYMENT_LABELS: Record<string, string> = { CASH: 'Efectivo', ZELLE: 'Zelle', CARD: 'Tarjeta', MOBILE_PAY: 'P.Móvil', TRANSFER: 'Transferencia' };
             splitsToCreate = data.paymentSplits!.map((p, i) => ({
@@ -1159,9 +1178,9 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                 });
             }
 
-            // amountPaid total en las órdenes = lo que el cliente realmente pagó
+            // amountPaid total = efectivo recibido: splits (saldo+servicio) + propina extra (no está en split.amount)
             const totalActuallyPaid = newBalance === 0
-                ? (openTab.paymentSplits.reduce((s, p) => s + Number(p.paidAmount), 0) + splitsToCreate.reduce((s, p) => s + p.amount, 0))
+                ? (openTab.paymentSplits.reduce((s, p) => s + Number(p.paidAmount), 0) + splitsToCreate.reduce((s, p) => s + p.amount, 0) + finalTipAmount)
                 : undefined;
 
             await tx.salesOrder.updateMany({
@@ -1200,6 +1219,8 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                     }
                 }
                 const invoiceNumber = await generateOrderNumber('RESTAURANT');
+                const itemsSubtotalGross = allItems.reduce((s, it) => s + it.lineTotal, 0);
+                const discountForInvoice = Math.max(0, itemsSubtotalGross - newRunningTotal);
                 const consolidatedOrder = await tx.salesOrder.create({
                     data: {
                         orderNumber: invoiceNumber,
@@ -1211,7 +1232,11 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                         kitchenStatus: 'NOT_REQUIRED',
                         paymentStatus: 'PAID',
                         paymentMethod: nextPaymentMethod,
-                        subtotal: newRunningTotal,
+                        subtotal: itemsSubtotalGross,
+                        discount: discountForInvoice,
+                        discountType: discountForInvoice > 0.005 ? (data.saleDiscountType ?? null) : null,
+                        discountReason: data.saleDiscountReason ?? null,
+                        authorizedById: data.authorizedById && data.authorizedById !== 'demo-master-id' ? data.authorizedById : undefined,
                         total: newRunningTotal,
                         amountPaid: totalActuallyPaid,
                         areaId: salesArea.id,

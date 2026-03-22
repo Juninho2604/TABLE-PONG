@@ -86,6 +86,9 @@ export async function getSalesHistoryAction(limit = 200) {
                                 splitLabel: true,
                                 paidAmount: true,
                                 paymentMethod: true,
+                                tipAmount: true,
+                                serviceChargeAmount: true,
+                                amountReceived: true,
                             }
                         }
                     }

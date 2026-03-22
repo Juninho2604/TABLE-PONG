@@ -180,6 +180,12 @@ export default function SalesHistoryPage() {
     // Detecta si una orden de Sport Bar cobró el 10% de servicio
     const getServiceChargeInfo = (sale: any): { charged: boolean; amount: number } => {
         const splits: any[] = sale.openTab?.paymentSplits || [];
+        let sum = 0;
+        for (const s of splits) {
+            const sc = Number(s.serviceChargeAmount);
+            if (!Number.isNaN(sc) && sc > 0.005) sum += sc;
+        }
+        if (sum > 0) return { charged: true, amount: sum };
         for (const s of splits) {
             const label: string = s.splitLabel || '';
             const match = label.match(/\+10% serv \(\$([\d.]+)\)/);
@@ -187,6 +193,13 @@ export default function SalesHistoryPage() {
             if (label.includes('+10% serv')) return { charged: true, amount: Number(s.paidAmount) * 0.10 / 1.10 };
         }
         return { charged: false, amount: 0 };
+    };
+
+    /** Propina voluntaria / vuelto a propina (no el cargo por servicio) */
+    const getExtraTipTotal = (sale: any): number => {
+        const splits: any[] = sale.openTab?.paymentSplits || [];
+        if (!splits.length) return 0;
+        return splits.reduce((s: number, p: any) => s + (Number(p.tipAmount) || 0), 0);
     };
 
     // Extrae splits de pago desde el campo notes (pagos mixtos Pick Up)
@@ -203,9 +216,15 @@ export default function SalesHistoryPage() {
 
     // Calcula el total cobrado real para una orden
     const getAmountPaid = (sale: any): number => {
-        // Sport Bar: suma de payment splits del tab
+        // Sport Bar: efectivo real = amountReceived si existe; si no paidAmount + propina extra
         if (sale.openTab?.paymentSplits?.length) {
-            return sale.openTab.paymentSplits.reduce((s: number, p: any) => s + Number(p.paidAmount), 0);
+            return sale.openTab.paymentSplits.reduce((s: number, p: any) => {
+                const ar = Number(p.amountReceived);
+                if (!Number.isNaN(ar) && ar > 0.005) return s + ar;
+                const pa = Number(p.paidAmount) || 0;
+                const tip = Number(p.tipAmount) || 0;
+                return s + pa + tip;
+            }, 0);
         }
         return Number(sale.amountPaid) || Number(sale.total);
     };
@@ -346,8 +365,12 @@ export default function SalesHistoryPage() {
                             <React.Fragment key={sale.id}>
                                 {(() => {
                                     const amountPaid = getAmountPaid(sale);
-                                    const tip = amountPaid - Number(sale.total);
+                                    const extraTip = getExtraTipTotal(sale);
                                     const serviceInfo = getServiceChargeInfo(sale);
+                                    // Pick Up / Delivery: propina en campo `change`; Sport Bar: tipAmount en splits
+                                    const tip = extraTip > 0.005
+                                        ? extraTip
+                                        : Math.max(0, amountPaid - Number(sale.total));
                                     const splits = parseSplitsFromNotes(sale.notes);
                                     const isSportBar = sale.sourceChannel === 'POS_SPORTBAR' || !!sale.openTabId;
                                     return (
@@ -389,7 +412,9 @@ export default function SalesHistoryPage() {
                                         <td className="p-4 text-right">
                                             <div className="font-bold text-emerald-300">{formatMoney(amountPaid)}</div>
                                             {tip > 0.005 && (
-                                                <div className="text-[10px] text-amber-400">+{formatMoney(tip)} propina</div>
+                                                <div className="text-[10px] text-amber-400" title="Propina adicional (vuelto)">
+                                                    +{formatMoney(tip)} propina{extraTip > 0.005 ? ' extra' : ''}
+                                                </div>
                                             )}
                                         </td>
                                         <td className="p-4 text-center">
@@ -509,7 +534,7 @@ export default function SalesHistoryPage() {
                                                     </div>
                                                     {tip > 0.005 && (
                                                         <div className="flex gap-1 items-center text-amber-400">
-                                                            <span>Propina/excedente:</span>
+                                                            <span>{extraTip > 0.005 ? 'Propina adicional (vuelto):' : 'Propina/excedente:'}</span>
                                                             <span className="font-bold">+{formatMoney(tip)}</span>
                                                         </div>
                                                     )}

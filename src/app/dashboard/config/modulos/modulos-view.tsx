@@ -10,6 +10,7 @@ const ALL_MODULES = [
     { href: '/dashboard/inventario/diario', label: 'Inventario Diario', group: 'Operaciones' },
     { href: '/dashboard/inventario', label: 'Inventario', group: 'Operaciones' },
     { href: '/dashboard/inventario/auditorias', label: 'Auditorías', group: 'Operaciones' },
+    { href: '/dashboard/inventario/ciclos', label: 'Ciclos de inventario', group: 'Operaciones' },
     { href: '/dashboard/transferencias', label: 'Transferencias', group: 'Operaciones' },
     { href: '/dashboard/inventario/historial-mensual', label: 'Historial Mensual', group: 'Operaciones' },
     { href: '/dashboard/prestamos', label: 'Préstamos', group: 'Operaciones' },
@@ -31,6 +32,8 @@ const ALL_MODULES = [
     { href: '/dashboard/almacenes', label: 'Almacenes', group: 'Administración' },
     { href: '/dashboard/config/tasa-cambio', label: 'Tasa de Cambio', group: 'Administración' },
     { href: '/dashboard/config/modulos', label: 'Módulos por Usuario', group: 'Administración' },
+    { href: '/dashboard/config/anuncios', label: 'Anuncios gerencia', group: 'Administración' },
+    { href: '/dashboard/config/sku-studio', label: 'SKU Studio (familias / plantillas)', group: 'Administración' },
 ];
 
 const GROUPS = ['Operaciones', 'Ventas', 'Administración'];

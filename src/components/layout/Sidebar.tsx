@@ -16,6 +16,8 @@ interface NavItem {
     href: string;
     icon: string;
     roles?: UserRole[]; // Si no se especifica, todos pueden ver
+    /** Si se indica, el usuario puede ver también por email (además de roles) */
+    emails?: string[];
     archived?: boolean; // Si true, no se muestra en el menú (para pruebas futuras)
 }
 
@@ -43,6 +45,12 @@ const navigation: NavItem[] = [
         href: '/dashboard/inventario/auditorias',
         icon: '📝',
         roles: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CHEF', 'AREA_LEAD']
+    },
+    {
+        label: 'Ciclos de inventario',
+        href: '/dashboard/inventario/ciclos',
+        icon: '🔁',
+        roles: ['OWNER', 'AUDITOR', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD']
     },
     {
         label: 'Transferencias',
@@ -157,6 +165,20 @@ const secondaryNavigation: NavItem[] = [
     { label: 'Almacenes', href: '/dashboard/almacenes', icon: '📦', roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] },
     { label: 'Tasa de Cambio', href: '/dashboard/config/tasa-cambio', icon: '💱', roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] },
     { label: 'Módulos por Usuario', href: '/dashboard/config/modulos', icon: '🔧', roles: ['OWNER'] },
+    {
+        label: 'Anuncios gerencia',
+        href: '/dashboard/config/anuncios',
+        icon: '📣',
+        roles: ['OWNER'],
+        emails: ['admin@tablepong.com'],
+    },
+    {
+        label: 'SKU Studio',
+        href: '/dashboard/config/sku-studio',
+        icon: '🏷️',
+        roles: ['OWNER'],
+        emails: ['admin@tablepong.com'],
+    },
 ];
 
 
@@ -194,7 +216,10 @@ export function Sidebar({ initialUser, allowedModules }: SidebarProps) {
 
     // Helper: check if item passes module override (if set) AND role filter
     const isAllowed = (item: NavItem) => {
-        const passesRole = !item.roles || (userRole && item.roles.includes(userRole));
+        const roleOk = !item.roles || (userRole && item.roles.includes(userRole));
+        const emailOk =
+            item.emails?.some(e => activeUser?.email?.toLowerCase() === e.toLowerCase()) ?? false;
+        const passesRole = roleOk || emailOk;
         if (!passesRole) return false;
         // If allowedModules is set (non-null array), the item's href must be included
         if (allowedModules !== null && allowedModules !== undefined) {

@@ -213,6 +213,12 @@ export default function InventoryView({ initialItems, initialAreas = [] }: Inven
                         >
                             📜 Historial
                         </Link>
+                        <Link
+                            href="/dashboard/inventario/ciclos"
+                            className="inline-flex items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-4 py-2.5 text-sm font-medium text-teal-800 transition-all hover:bg-teal-100 dark:border-teal-900 dark:bg-teal-900/20 dark:text-teal-200"
+                        >
+                            🔁 Ciclos (corte)
+                        </Link>
                     </div>
                 </div>
             </div>

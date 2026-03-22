@@ -38,8 +38,28 @@ export async function middleware(request: NextRequest) {
             }
         }
 
+        // B2. Ciclos de inventario (cortes semanales / histórico)
+        if (path.startsWith('/dashboard/inventario/ciclos')) {
+            const allowed = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR', 'AREA_LEAD'];
+            if (!allowed.includes(userRole)) {
+                return NextResponse.redirect(new URL('/dashboard?error=unauthorized_cycles', request.url));
+            }
+        }
+
         // C. Configuración Global (solo OWNER, salvo tasa-cambio que es también gerentes)
-        if (path.startsWith('/dashboard/config') && !path.startsWith('/dashboard/config/tasa-cambio')) {
+        if (path.startsWith('/dashboard/config/anuncios')) {
+            const canAnuncios =
+                userRole === 'OWNER' || session.email?.toLowerCase() === 'admin@tablepong.com';
+            if (!canAnuncios) {
+                return NextResponse.redirect(new URL('/dashboard?error=unauthorized_config', request.url));
+            }
+        } else if (path.startsWith('/dashboard/config/sku-studio')) {
+            const canSkuStudio =
+                userRole === 'OWNER' || session.email?.toLowerCase() === 'admin@tablepong.com';
+            if (!canSkuStudio) {
+                return NextResponse.redirect(new URL('/dashboard?error=unauthorized_config', request.url));
+            }
+        } else if (path.startsWith('/dashboard/config') && !path.startsWith('/dashboard/config/tasa-cambio')) {
             const allowed = ['OWNER'];
             if (!allowed.includes(userRole)) {
                 return NextResponse.redirect(new URL('/dashboard?error=unauthorized_config', request.url));

@@ -30,7 +30,19 @@ export default async function DashboardLayout({
             {/* Main content area */}
             <div className="md:pl-64">
                 {/* Navbar */}
-                <Navbar />
+                <Navbar
+                    initialUser={
+                        session
+                            ? {
+                                  id: session.id,
+                                  email: session.email,
+                                  firstName: session.firstName,
+                                  lastName: session.lastName,
+                                  role: session.role,
+                              }
+                            : null
+                    }
+                />
 
                 {/* Page content */}
                 <main className="min-h-[calc(100vh-4rem)] p-4 md:p-6">

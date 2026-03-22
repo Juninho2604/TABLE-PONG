@@ -127,7 +127,12 @@ export default function POSSportBarPage() {
     const [closedTabForPrint, setClosedTabForPrint] = useState<OpenTabSummary | null>(null);
 
     // ── Descuento ─────────────────────────────────────────────────────────────
-    const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33'>('NONE');
+    const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33' | 'CORTESIA_PERCENT'>('NONE');
+    const [cortesiaPercent, setCortesiaPercent] = useState(0);
+    const [cortesiaJustification, setCortesiaJustification] = useState('');
+    const [showCortesiaModal, setShowCortesiaModal] = useState(false);
+    const [cortesiaModalPin, setCortesiaModalPin] = useState('');
+    const [cortesiaModalError, setCortesiaModalError] = useState('');
 
     // ── Remove item ───────────────────────────────────────────────────────────
     const [showRemoveModal, setShowRemoveModal] = useState(false);
@@ -190,6 +195,17 @@ export default function POSSportBarPage() {
         }
     }, [paymentMethod, discountType]);
 
+    const cortesiaPctClamped = Math.min(100, Math.max(0, cortesiaPercent));
+
+    useEffect(() => {
+        if (discountType === 'CORTESIA_PERCENT' && cortesiaPctClamped >= 99.99) {
+            setServiceChargeRate(0);
+            setIncludeServiceCharge(false);
+            setAmountReceived('');
+            setKeepChangeAsTip(false);
+        }
+    }, [discountType, cortesiaPctClamped]);
+
     useEffect(() => {
         if (!selectedCategory || !categories.length) return;
         const cat = categories.find(c => c.id === selectedCategory);
@@ -249,8 +265,14 @@ export default function POSSportBarPage() {
     const paidAmount = parseFloat(amountReceived) || 0;
     const isPagoDivisas = paymentMethod === 'CASH' || paymentMethod === 'ZELLE';
 
-    // Balance a cobrar (con descuento divisas si aplica)
-    const amountToCharge = activeTab ? (discountType === 'DIVISAS_33' ? activeTab.balanceDue * 2 / 3 : activeTab.balanceDue) : 0;
+    // Balance a cobrar (divisas / cortesía %)
+    const amountToCharge = activeTab
+        ? (discountType === 'DIVISAS_33'
+            ? activeTab.balanceDue * 2 / 3
+            : discountType === 'CORTESIA_PERCENT'
+                ? activeTab.balanceDue * (1 - cortesiaPctClamped / 100)
+                : activeTab.balanceDue)
+        : 0;
     const serviceCharge = Math.round(amountToCharge * serviceChargeRate * 100) / 100;
     const suggestedTotal = Math.round((amountToCharge + serviceCharge) * 100) / 100;
     const amountWithService = suggestedTotal; // alias para compatibilidad
@@ -384,12 +406,17 @@ export default function POSSportBarPage() {
 
     const handlePaymentPinConfirm = async () => {
         if (!activeTab) return;
-        const totalToPay = includeServiceCharge ? amountWithService : amountToCharge;
+        if (discountType === 'CORTESIA_PERCENT' && !cortesiaJustification.trim()) {
+            setPaymentPinError('La cortesía requiere justificación (configúrela en el botón Cortesía)');
+            return;
+        }
         if (useMultiPayment) {
             if (!multiValid || paymentLines.filter(l => parseFloat(l.amount) > 0).length < 2) {
                 setPaymentPinError('Pago mixto: asigne al menos 2 métodos y cubra el total');
                 return;
             }
+        } else if (discountType === 'CORTESIA_PERCENT' && cortesiaPctClamped >= 99.99) {
+            /* cierre sin cobro: solo PIN */
         } else if (!includeServiceCharge && serviceChargeRate === 0 && paidAmount <= 0) {
             setPaymentPinError('Ingrese el monto a cobrar');
             return;
@@ -405,8 +432,20 @@ export default function POSSportBarPage() {
                 setPaymentPinError('PIN incorrecto o sin permisos de cajera');
                 return;
             }
-            const discountAmount = discountType === 'DIVISAS_33' ? activeTab.balanceDue / 3 : 0;
-            const discountLabel = discountType === 'DIVISAS_33' ? ' · -33.33% Divisas' : '';
+            const discountAmount =
+                discountType === 'DIVISAS_33' ? activeTab.balanceDue / 3
+                    : discountType === 'CORTESIA_PERCENT' ? activeTab.balanceDue * (cortesiaPctClamped / 100)
+                        : 0;
+            const discountLabel =
+                discountType === 'DIVISAS_33' ? ' · -33.33% Divisas'
+                    : discountType === 'CORTESIA_PERCENT' ? ` · Cortesía ${cortesiaPctClamped}%`
+                        : '';
+            const saleDiscountType = discountType === 'DIVISAS_33' ? 'DIVISAS_33' : discountType === 'CORTESIA_PERCENT' ? 'CORTESIA_PERCENT' : undefined;
+            const saleDiscountReason =
+                discountType === 'DIVISAS_33' ? 'Pago en Divisas (33.33%)'
+                    : discountType === 'CORTESIA_PERCENT' ? `Cortesía ${cortesiaPctClamped}% — ${cortesiaJustification.trim()}`
+                        : undefined;
+            const authorizedById = pinResult.data?.managerId && pinResult.data.managerId !== 'demo-master-id' ? pinResult.data.managerId : undefined;
 
             let result;
             if (useMultiPayment && paymentLines.filter(l => parseFloat(l.amount) > 0).length > 1) {
@@ -417,18 +456,39 @@ export default function POSSportBarPage() {
                     paymentMethod: 'CASH',
                     paymentSplits: splits,
                     discountAmount: discountAmount > 0 ? discountAmount : undefined,
+                    saleDiscountType,
+                    saleDiscountReason,
+                    authorizedById,
+                    notes: discountType === 'CORTESIA_PERCENT' ? cortesiaJustification.trim() : undefined,
+                });
+                if (!result.success) { alert(result.message); return; }
+            } else if (discountType === 'CORTESIA_PERCENT' && cortesiaPctClamped >= 99.99) {
+                const baseLabel = `${PAYMENT_LABELS[paymentMethod] || paymentMethod}${discountLabel} – ${pinResult.data?.managerName || ''}`;
+                result = await registerOpenTabPaymentAction({
+                    openTabId: activeTab.id,
+                    amount: 0,
+                    paymentMethod,
+                    splitLabel: baseLabel,
+                    discountAmount,
+                    saleDiscountType: 'CORTESIA_PERCENT',
+                    saleDiscountReason,
+                    authorizedById,
+                    notes: cortesiaJustification.trim(),
                 });
                 if (!result.success) { alert(result.message); return; }
             } else {
                 const baseLabel = `${PAYMENT_LABELS[paymentMethod] || paymentMethod}${discountLabel} – ${pinResult.data?.managerName || ''}`;
                 if (serviceChargeRate > 0 && !includeServiceCharge) {
-                    // Nuevo path: cargo por servicio configurable con vuelto/propina
                     result = await registerOpenTabPaymentAction({
                         openTabId: activeTab.id,
                         amount: amountToCharge,
                         paymentMethod,
                         splitLabel: baseLabel,
                         discountAmount: discountAmount > 0 ? discountAmount : undefined,
+                        saleDiscountType,
+                        saleDiscountReason,
+                        authorizedById,
+                        notes: discountType === 'CORTESIA_PERCENT' ? cortesiaJustification.trim() : undefined,
                         serviceChargeRate,
                         serviceChargeAmount: serviceCharge,
                         tipAmount: computedTip,
@@ -436,14 +496,18 @@ export default function POSSportBarPage() {
                         changeReturned: computedChange,
                     });
                 } else {
-                result = await registerOpenTabPaymentAction({
-                    openTabId: activeTab.id,
-                    amount: includeServiceCharge ? activeTab.balanceDue : paidAmount,
-                    paymentMethod,
-                    splitLabel: baseLabel,
-                    discountAmount: discountAmount > 0 ? discountAmount : undefined,
-                    includeServiceCharge,
-                });
+                    result = await registerOpenTabPaymentAction({
+                        openTabId: activeTab.id,
+                        amount: includeServiceCharge ? activeTab.balanceDue : paidAmount,
+                        paymentMethod,
+                        splitLabel: baseLabel,
+                        discountAmount: discountAmount > 0 ? discountAmount : undefined,
+                        saleDiscountType,
+                        saleDiscountReason,
+                        authorizedById,
+                        notes: discountType === 'CORTESIA_PERCENT' ? cortesiaJustification.trim() : undefined,
+                        includeServiceCharge,
+                    });
                 }
                 if (!result.success) { alert(result.message); return; }
             }
@@ -452,6 +516,8 @@ export default function POSSportBarPage() {
             setUseMultiPayment(false);
             setPaymentPin('');
             setDiscountType('NONE');
+            setCortesiaPercent(0);
+            setCortesiaJustification('');
             setIncludeServiceCharge(false);
             setServiceChargeRate(0.10);
             setKeepChangeAsTip(false);
@@ -460,6 +526,27 @@ export default function POSSportBarPage() {
                 setClosedTabForPrint(result.data as OpenTabSummary);
             }
             await loadData();
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleCortesiaModalConfirm = async () => {
+        if (!cortesiaJustification.trim()) {
+            setCortesiaModalError('La justificación es obligatoria');
+            return;
+        }
+        setCortesiaModalError('');
+        setIsProcessing(true);
+        try {
+            const res = await validateManagerPinAction(cortesiaModalPin);
+            if (!res.success) {
+                setCortesiaModalError('PIN incorrecto o sin permisos');
+                return;
+            }
+            setDiscountType('CORTESIA_PERCENT');
+            setShowCortesiaModal(false);
+            setCortesiaModalPin('');
         } finally {
             setIsProcessing(false);
         }
@@ -843,25 +930,48 @@ export default function POSSportBarPage() {
                                     {/* 1. Descuento */}
                                     <div className="mb-3">
                                         <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">1. Descuento</p>
-                                        <div className="flex gap-1.5">
+                                        <div className="flex gap-1.5 flex-wrap">
                                             <button
-                                                onClick={() => setDiscountType('NONE')}
-                                                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${discountType === 'NONE' ? 'bg-slate-500 text-white ring-1 ring-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-700'}`}
+                                                onClick={() => { setDiscountType('NONE'); setCortesiaPercent(0); setCortesiaJustification(''); }}
+                                                className={`flex-1 min-w-[4.5rem] py-1.5 text-xs font-bold rounded-lg transition ${discountType === 'NONE' ? 'bg-slate-500 text-white ring-1 ring-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-700'}`}
                                             >
                                                 Normal
                                             </button>
                                             <button
-                                                onClick={() => isPagoDivisas && setDiscountType('DIVISAS_33')}
+                                                onClick={() => {
+                                                    if (!isPagoDivisas) return;
+                                                    setDiscountType('DIVISAS_33');
+                                                    setCortesiaPercent(0);
+                                                    setCortesiaJustification('');
+                                                }}
                                                 disabled={!isPagoDivisas}
                                                 title={!isPagoDivisas ? 'Solo con Efectivo o Zelle' : 'Descuento por pago en divisas'}
-                                                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition ${discountType === 'DIVISAS_33' ? 'bg-blue-600 text-white ring-1 ring-white' : isPagoDivisas ? 'bg-slate-900 text-slate-300 hover:bg-slate-700' : 'bg-slate-900 text-slate-600 cursor-not-allowed opacity-50'}`}
+                                                className={`flex-1 min-w-[4.5rem] py-1.5 text-xs font-bold rounded-lg transition ${discountType === 'DIVISAS_33' ? 'bg-blue-600 text-white ring-1 ring-white' : isPagoDivisas ? 'bg-slate-900 text-slate-300 hover:bg-slate-700' : 'bg-slate-900 text-slate-600 cursor-not-allowed opacity-50'}`}
                                             >
                                                 -33.33%
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setCortesiaModalPin('');
+                                                    setCortesiaModalError('');
+                                                    if (cortesiaPercent < 0.01) setCortesiaPercent(50);
+                                                    setShowCortesiaModal(true);
+                                                }}
+                                                className={`flex-1 min-w-[4.5rem] py-1.5 text-xs font-bold rounded-lg transition ${discountType === 'CORTESIA_PERCENT' ? 'bg-purple-600 text-white ring-1 ring-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-700'}`}
+                                            >
+                                                Cortesía
                                             </button>
                                         </div>
                                         {discountType === 'DIVISAS_33' && (
                                             <p className="text-[10px] text-blue-400 mt-1">
                                                 Descuento: -${(activeTab.balanceDue / 3).toFixed(2)} → Total: ${(activeTab.balanceDue * 2 / 3).toFixed(2)}
+                                            </p>
+                                        )}
+                                        {discountType === 'CORTESIA_PERCENT' && (
+                                            <p className="text-[10px] text-purple-300 mt-1">
+                                                Cortesía {cortesiaPctClamped}%: -${(activeTab.balanceDue * (cortesiaPctClamped / 100)).toFixed(2)} → A cobrar: ${amountToCharge.toFixed(2)}
+                                                {cortesiaJustification.trim() ? <span className="block text-slate-500 truncate" title={cortesiaJustification}>“{cortesiaJustification.trim()}”</span> : null}
                                             </p>
                                         )}
                                     </div>
@@ -1013,10 +1123,14 @@ export default function POSSportBarPage() {
                                     {/* Register payment (requiere PIN) */}
                                     <button
                                         onClick={() => { setPaymentPin(''); setPaymentPinError(''); setShowPaymentPinModal(true); }}
-                                        disabled={(useMultiPayment ? !multiValid : (serviceChargeRate > 0 ? receivedFloat <= 0 : (!includeServiceCharge && paidAmount <= 0))) || isProcessing}
+                                        disabled={(useMultiPayment ? !multiValid : (
+                                            discountType === 'CORTESIA_PERCENT' && cortesiaPctClamped >= 99.99
+                                                ? false
+                                                : (serviceChargeRate > 0 ? receivedFloat <= 0 : (!includeServiceCharge && paidAmount <= 0))
+                                        )) || isProcessing}
                                         className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-sm font-black transition disabled:opacity-40"
                                     >
-                                        🔐 Registrar pago ${useMultiPayment
+                                        🔐 {discountType === 'CORTESIA_PERCENT' && cortesiaPctClamped >= 99.99 ? 'Registrar cortesía (cerrar)' : 'Registrar pago'} ${useMultiPayment
                                             ? multiTotal.toFixed(2)
                                             : includeServiceCharge
                                                 ? amountWithService.toFixed(2)
@@ -1122,6 +1236,71 @@ export default function POSSportBarPage() {
             )}
 
             {/* ══════════════════════════════════════════════════════════════════ */}
+            {/* MODAL: CORTESÍA (PIN + % + justificación)                         */}
+            {/* ══════════════════════════════════════════════════════════════════ */}
+            {showCortesiaModal && activeTab && (
+                <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-purple-800/50 rounded-2xl w-full max-w-md shadow-2xl">
+                        <div className="border-b border-slate-800 p-5 flex items-center justify-between">
+                            <h3 className="text-lg font-black text-purple-300">🎁 Cortesía</h3>
+                            <button type="button" onClick={() => setShowCortesiaModal(false)} className="text-slate-400 hover:text-white text-2xl leading-none">×</button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1">Descuento (0–100%)</label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={100}
+                                        step={0.5}
+                                        value={cortesiaPercent}
+                                        onChange={e => setCortesiaPercent(parseFloat(e.target.value))}
+                                        className="flex-1 accent-purple-500"
+                                    />
+                                    <span className="text-sm font-black text-purple-300 w-14 text-right">{cortesiaPctClamped}%</span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-1">Saldo ${activeTab.balanceDue.toFixed(2)} → A cobrar ${(activeTab.balanceDue * (1 - cortesiaPctClamped / 100)).toFixed(2)}</p>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1">Justificación <span className="text-red-400">*</span></label>
+                                <textarea
+                                    value={cortesiaJustification}
+                                    onChange={e => setCortesiaJustification(e.target.value)}
+                                    rows={3}
+                                    placeholder="Motivo de la cortesía (obligatorio)"
+                                    className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-white text-sm focus:border-purple-500 focus:outline-none resize-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1">PIN gerente / cajera</label>
+                                <input
+                                    type="password"
+                                    inputMode="numeric"
+                                    value={cortesiaModalPin}
+                                    onChange={e => { setCortesiaModalPin(e.target.value); setCortesiaModalError(''); }}
+                                    className="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2.5 text-white text-center tracking-widest focus:border-purple-500 focus:outline-none"
+                                    placeholder="••••••"
+                                />
+                                {cortesiaModalError && <p className="text-red-400 text-xs mt-1">{cortesiaModalError}</p>}
+                            </div>
+                        </div>
+                        <div className="border-t border-slate-800 p-4 flex gap-3">
+                            <button type="button" onClick={() => setShowCortesiaModal(false)} className="flex-1 py-3 bg-slate-800 rounded-xl font-bold text-sm">Cancelar</button>
+                            <button
+                                type="button"
+                                onClick={handleCortesiaModalConfirm}
+                                disabled={isProcessing}
+                                className="flex-[2] py-3 bg-purple-600 hover:bg-purple-500 rounded-xl font-black text-sm disabled:opacity-50"
+                            >
+                                {isProcessing ? '...' : '✓ Aplicar cortesía'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ══════════════════════════════════════════════════════════════════ */}
             {/* MODAL: PIN CAJERA — REGISTRAR PAGO                               */}
             {/* ══════════════════════════════════════════════════════════════════ */}
             {showPaymentPinModal && activeTab && (
@@ -1136,6 +1315,9 @@ export default function POSSportBarPage() {
                                 <div className="flex justify-between"><span className="text-slate-400">Método:</span><span className="font-bold">{PAYMENT_LABELS[paymentMethod]}</span></div>
                                 {discountType === 'DIVISAS_33' && activeTab && (
                                     <div className="flex justify-between text-blue-400 text-xs"><span>Descuento -33.33%:</span><span>-${(activeTab.balanceDue / 3).toFixed(2)}</span></div>
+                                )}
+                                {discountType === 'CORTESIA_PERCENT' && activeTab && (
+                                    <div className="flex justify-between text-purple-400 text-xs"><span>Cortesía {cortesiaPctClamped}%:</span><span>-${(activeTab.balanceDue * (cortesiaPctClamped / 100)).toFixed(2)}</span></div>
                                 )}
                                 <div className="flex justify-between"><span className="text-slate-400">Monto:</span><span className="font-black text-emerald-400 text-base">${paidAmount.toFixed(2)}</span></div>
                                 {exchangeRate && <div className="flex justify-between text-slate-500 text-xs"><span>Equivalente Bs:</span><span>Bs. {(paidAmount * exchangeRate).toFixed(2)}</span></div>}
