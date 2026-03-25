@@ -45,7 +45,10 @@ export function printReceipt(data: ReceiptData) {
     const subtotal = data.subtotal ?? data.items.reduce((s, i) => s + i.total, 0);
     const discountAmount = data.discount ?? 0;
     const netTotal = data.total;
-    const serviceFee = netTotal * 0.10;
+    /** Si viene definido (p. ej. Pick Up = 0, Sport Bar con/sin 10%), se respeta; si no, se mantiene línea sugerida +10% */
+    const explicitService = typeof data.serviceFee === 'number';
+    const serviceFee = explicitService ? Math.max(0, data.serviceFee!) : netTotal * 0.10;
+    const showServiceBlock = explicitService ? serviceFee > 0.001 : true;
     const totalConServicio = netTotal + serviceFee;
 
     // Número corto de orden (últimos dígitos)
@@ -82,10 +85,12 @@ export function printReceipt(data: ReceiptData) {
     font-family: 'Courier New', Courier, 'Lucida Console', monospace;
     font-size: 11px;
     line-height: 1.4;
-    color: #000;
-    background: #fff;
+    color: #000000;
+    background: #ffffff;
     width: 76mm;
     padding: 3mm 2mm;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   /* ── CABECERA ── */
@@ -164,10 +169,10 @@ export function printReceipt(data: ReceiptData) {
   .col-qty   { width: 14%; text-align: center; padding: 3px 1px; }
   .col-price { width: 19%; text-align: right;  padding: 3px 1px; }
   .col-total { width: 19%; text-align: right;  padding: 3px 1px; }
-  .item-name { font-weight: bold; font-size: 10px; }
-  .mod  { font-style: italic; font-size: 9px; color: #333; }
-  .note { font-style: italic; font-size: 9px; }
-  tbody tr { border-bottom: 1px dotted #ccc; }
+  .item-name { font-weight: 900; font-size: 10px; color: #000000; }
+  .mod  { font-style: italic; font-size: 9px; color: #000000; font-weight: 700; }
+  .note { font-style: italic; font-size: 9px; color: #000000; font-weight: 600; }
+  tbody tr { border-bottom: 1px dotted #000000; }
 
   /* ── TOTALES ── */
   .totals { margin-top: 4px; }
@@ -185,7 +190,8 @@ export function printReceipt(data: ReceiptData) {
   .tot-row.service {
     font-size: 10px;
     font-style: italic;
-    color: #333;
+    color: #000000;
+    font-weight: 800;
   }
   .tot-row.grand {
     font-size: 14px;
@@ -213,7 +219,8 @@ export function printReceipt(data: ReceiptData) {
 
   @media print {
     @page { margin: 0; size: 80mm auto; }
-    body  { padding: 2mm; }
+    body  { padding: 2mm; color: #000000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    * { color: #000000 !important; }
   }
 </style>
 </head>
@@ -270,9 +277,11 @@ export function printReceipt(data: ReceiptData) {
   <div class="tot-row"><span>Subtotal:</span><span>$${subtotal.toFixed(2)}</span></div>
   ${discountAmount > 0 ? `<div class="tot-row"><span>Descuento:</span><span>-$${discountAmount.toFixed(2)}</span></div>` : ''}
   <div class="tot-row big"><span>TOTAL:</span><span>$${netTotal.toFixed(2)}</span></div>
+  ${showServiceBlock ? `
   <div class="sep"></div>
-  <div class="tot-row service"><span>+ 10% Servicio (sugerido):</span><span>$${serviceFee.toFixed(2)}</span></div>
+  <div class="tot-row service"><span>${explicitService ? '+ 10% Servicio:' : '+ 10% Servicio (sugerido):'}</span><span>$${serviceFee.toFixed(2)}</span></div>
   <div class="tot-row grand"><span>TOTAL C/SERVICIO:</span><span>$${totalConServicio.toFixed(2)}</span></div>
+  ` : ''}
 </div>
 
 <div class="sep"></div>
