@@ -569,7 +569,7 @@ export default function POSSportBarPage() {
         paymentMethod,
         splitLabel: `${PAYMENT_LABELS[paymentMethod] || paymentMethod}${discountLabel} – ${pinResult.data?.managerName || ""}`,
         discountAmount: discountAmount > 0 ? discountAmount : undefined,
-        serviceFeeIncluded,
+        includeServiceCharge: serviceFeeIncluded,
       });
       if (!result.success) {
         alert(result.message);
