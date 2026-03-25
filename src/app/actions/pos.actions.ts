@@ -788,6 +788,11 @@ export async function getSportBarLayoutAction(): Promise<ActionResult> {
     }
 }
 
+/** POS Restaurante / Pick Up: mismo layout de mesas y zonas que Sport Bar */
+export async function getRestaurantLayoutAction(): Promise<ActionResult> {
+    return getSportBarLayoutAction();
+}
+
 export async function openTabAction(data: OpenTabInput): Promise<ActionResult> {
     try {
         const session = await getSession();

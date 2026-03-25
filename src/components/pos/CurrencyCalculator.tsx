@@ -8,6 +8,10 @@ interface CurrencyCalculatorProps {
     className?: string;
     totalUsd?: number;
     onRateUpdated?: (rate: number) => void;
+    /** Informativo (Delivery); el total en USD ya debe incluir cargo si aplica */
+    deliveryFee?: number;
+    /** Si false, no se suma 10% servicio al equivalente (cuando se use en UI extendida) */
+    hasServiceFee?: boolean;
 }
 
 export function CurrencyCalculator({ className, totalUsd, onRateUpdated }: CurrencyCalculatorProps) {
