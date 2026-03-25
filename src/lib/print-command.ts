@@ -25,6 +25,7 @@ interface ReceiptData {
     items: ReceiptItem[];
     subtotal?: number;
     discount?: number;
+    discountReason?: string;
     total: number;
     serviceFee?: number;
 }
