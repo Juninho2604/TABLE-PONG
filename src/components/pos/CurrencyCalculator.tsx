@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { getExchangeRateValue, setExchangeRateAction } from '@/app/actions/exchange.actions';
 import { usdToBs } from '@/lib/currency';
 
@@ -67,7 +68,7 @@ export function CurrencyCalculator({ className, totalUsd, onRateUpdated }: Curre
                 <span>USD → Bs</span>
             </button>
 
-            {isOpen && (
+            {isOpen && typeof document !== 'undefined' && createPortal(
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={() => setIsOpen(false)}>
                     <div
                         className="rounded-2xl border border-slate-600 bg-slate-900 p-6 w-full max-w-sm shadow-2xl"
@@ -123,7 +124,8 @@ export function CurrencyCalculator({ className, totalUsd, onRateUpdated }: Curre
                             </div>
                         )}
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </>
     );
