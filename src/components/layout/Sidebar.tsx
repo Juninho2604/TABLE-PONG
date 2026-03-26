@@ -108,19 +108,18 @@ const navigation: NavItem[] = [
     },
 ];
 
-// Navegación POS (archived = oculto por ahora, para pruebas futuras)
 const posNavigation: NavItem[] = [
     {
-        label: 'POS Sport Bar',
-        href: '/dashboard/pos/sportbar',
-        icon: '🍺',
+        label: 'POS',
+        href: '/dashboard/pos/restaurante',
+        icon: '🍽️',
         roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'AREA_LEAD', 'CHEF'],
     },
     {
-        label: 'POS Pick Up',
-        href: '/dashboard/pos/restaurante',
-        icon: '🥙',
-        roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT'],
+        label: 'POS Mesero',
+        href: '/dashboard/pos/mesero',
+        icon: '🧑‍🍳',
+        roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'AREA_LEAD'],
     },
     {
         label: 'POS Delivery',

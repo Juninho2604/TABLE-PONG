@@ -301,24 +301,22 @@ function calculateCartTotals(data: Pick<CreateOrderData, 'items' | 'discountType
 
 async function generateTabCode(): Promise<string> {
     const today = new Date();
-    const startOfDay = new Date(today);
-    startOfDay.setHours(0, 0, 0, 0);
+    const dateStr = today.toISOString().split('T')[0];
+    const prefix = `TAB-${dateStr}-`;
 
-    const endOfDay = new Date(today);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const count = await prisma.openTab.count({
-        where: {
-            openedAt: {
-                gte: startOfDay,
-                lte: endOfDay
-            }
-        }
+    const last = await prisma.openTab.findFirst({
+        where: { tabCode: { startsWith: prefix } },
+        orderBy: { tabCode: 'desc' },
+        select: { tabCode: true }
     });
 
-    const sequence = String(count + 1).padStart(3, '0');
-    const dateStr = today.toISOString().split('T')[0];
-    return `TAB-${dateStr}-${sequence}`;
+    let nextSeq = 1;
+    if (last) {
+        const seq = parseInt(last.tabCode.slice(prefix.length), 10);
+        if (!isNaN(seq)) nextSeq = seq + 1;
+    }
+
+    return `${prefix}${String(nextSeq).padStart(3, '0')}`;
 }
 
 async function getMenuItemMetadata(menuItemIds: string[]) {
@@ -829,39 +827,50 @@ export async function openTabAction(data: OpenTabInput): Promise<ActionResult> {
             };
         }
 
-        const tabCode = await generateTabCode();
+        let tab;
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                const tabCode = await generateTabCode();
+                tab = await prisma.$transaction(async (tx) => {
+                    const createdTab = await tx.openTab.create({
+                        data: {
+                            branchId: table.branchId,
+                            serviceZoneId: table.serviceZoneId,
+                            tableOrStationId: table.id,
+                            tabCode,
+                            customerLabel: data.customerLabel || table.name,
+                            customerPhone: data.customerPhone,
+                            guestCount: data.guestCount || 1,
+                            notes: data.notes,
+                            openedById: session.id,
+                            waiterLabel: data.waiterLabel || null,
+                        },
+                        include: {
+                            openedBy: { select: { id: true, firstName: true, lastName: true, role: true } },
+                            paymentSplits: true,
+                            orders: {
+                                include: { items: true },
+                                orderBy: { createdAt: 'desc' }
+                            }
+                        }
+                    });
 
-        const tab = await prisma.$transaction(async (tx) => {
-            const createdTab = await tx.openTab.create({
-                data: {
-                    branchId: table.branchId,
-                    serviceZoneId: table.serviceZoneId,
-                    tableOrStationId: table.id,
-                    tabCode,
-                    customerLabel: data.customerLabel || table.name,
-                    customerPhone: data.customerPhone,
-                    guestCount: data.guestCount || 1,
-                    notes: data.notes,
-                    openedById: session.id,
-                    waiterLabel: data.waiterLabel || null, // Guardar label del mesonero (ej: "Mesonero 1")
-                },
-                include: {
-                    openedBy: { select: { id: true, firstName: true, lastName: true, role: true } },
-                    paymentSplits: true,
-                    orders: {
-                        include: { items: true },
-                        orderBy: { createdAt: 'desc' }
-                    }
+                    await tx.tableOrStation.update({
+                        where: { id: table.id },
+                        data: { currentStatus: 'OCCUPIED' }
+                    });
+
+                    return createdTab;
+                });
+                break;
+            } catch (err: any) {
+                if (err?.code === 'P2002' && err?.meta?.target?.includes('tabCode')) {
+                    continue;
                 }
-            });
-
-            await tx.tableOrStation.update({
-                where: { id: table.id },
-                data: { currentStatus: 'OCCUPIED' }
-            });
-
-            return createdTab;
-        });
+                throw err;
+            }
+        }
+        if (!tab) throw new Error('No se pudo generar un código único para la cuenta');
 
         revalidatePath('/dashboard/pos/sportbar');
 

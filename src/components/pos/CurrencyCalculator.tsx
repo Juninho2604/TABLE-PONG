@@ -68,7 +68,7 @@ export function CurrencyCalculator({ className, totalUsd, onRateUpdated }: Curre
             </button>
 
             {isOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setIsOpen(false)}>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" onClick={() => setIsOpen(false)}>
                     <div
                         className="rounded-2xl border border-slate-600 bg-slate-900 p-6 w-full max-w-sm shadow-2xl"
                         onClick={(e) => e.stopPropagation()}

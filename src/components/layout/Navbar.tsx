@@ -3,6 +3,7 @@
 import { useAuthStore } from '@/stores/auth.store';
 import { useUIStore } from '@/stores/ui.store';
 import { DashboardNotifications } from '@/components/layout/DashboardNotifications';
+import { useTheme } from 'next-themes';
 
 type SessionUser = {
     id: string;
@@ -19,6 +20,7 @@ interface NavbarProps {
 export function Navbar({ initialUser }: NavbarProps) {
     const { user } = useAuthStore();
     const { toggleSidebar } = useUIStore();
+    const { theme, setTheme } = useTheme();
 
     const active = user || initialUser;
 
