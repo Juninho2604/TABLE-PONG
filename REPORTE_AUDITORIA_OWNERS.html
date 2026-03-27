@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Reporte de Auditoria - Table Pong ERP</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 13px;
+    color: #1a1a2e;
+    background: #f0f2f5;
+    line-height: 1.6;
+  }
+
+  /* COVER */
+  .cover {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0a0a1a 0%, #0f0f2e 50%, #0a1628 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px 40px;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -150px; left: -150px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(245,158,11,0.12) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .cover::after {
+    content: '';
+    position: absolute;
+    bottom: -100px; right: -100px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(99,102,241,0.1) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .cover-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: #f59e0b;
+    margin-bottom: 20px;
+    position: relative; z-index: 1;
+  }
+
+  .cover-logo { font-size: 70px; margin-bottom: 16px; position: relative; z-index: 1; }
+
+  .cover-title {
+    font-size: 48px;
+    font-weight: 900;
+    color: #fff;
+    letter-spacing: -1px;
+    position: relative; z-index: 1;
+  }
+
+  .cover-title span { color: #f59e0b; }
+
+  .cover-sub {
+    font-size: 18px;
+    color: rgba(255,255,255,0.6);
+    margin-top: 8px;
+    font-weight: 300;
+    letter-spacing: 1px;
+    position: relative; z-index: 1;
+  }
+
+  .cover-line {
+    width: 60px; height: 3px;
+    background: linear-gradient(90deg, #f59e0b, #ef4444);
+    border-radius: 2px;
+    margin: 28px auto;
+    position: relative; z-index: 1;
+  }
+
+  .cover-meta {
+    display: flex;
+    gap: 40px;
+    position: relative; z-index: 1;
+  }
+
+  .cover-meta-item { text-align: center; }
+  .cover-meta-label { display: block; font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; }
+  .cover-meta-value { display: block; font-size: 14px; color: #f59e0b; font-weight: 700; margin-top: 4px; }
+
+  .cover-stamp {
+    margin-top: 40px;
+    border: 2px solid rgba(245,158,11,0.4);
+    color: #f59e0b;
+    padding: 8px 24px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    position: relative; z-index: 1;
+  }
+
+  /* LAYOUT */
+  .section-header {
+    background: linear-gradient(135deg, #0f0f2e 0%, #1a1a4e 100%);
+    color: white;
+    padding: 40px 60px;
+    page-break-before: always;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .section-header::after {
+    content: attr(data-icon);
+    position: absolute;
+    right: 50px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 70px;
+    opacity: 0.12;
+  }
+
+  .section-num {
+    font-size: 10px;
+    font-weight: 700;
+    color: #f59e0b;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+  }
+
+  .section-title {
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: -0.5px;
+  }
+
+  .section-desc {
+    font-size: 13px;
+    color: rgba(255,255,255,0.6);
+    margin-top: 6px;
+  }
+
+  .content {
+    background: white;
+    padding: 40px 60px;
+    margin-bottom: 2px;
+  }
+
+  h2 {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f0f2e;
+    margin: 32px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #f3f4f6;
+  }
+
+  h2:first-child { margin-top: 0; }
+  h3 { font-size: 14px; font-weight: 700; color: #374151; margin: 22px 0 8px; }
+  p { color: #4b5563; margin-bottom: 10px; line-height: 1.75; }
+
+  /* KPI GRID */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin: 20px 0;
+  }
+
+  .kpi-card {
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    border: 1px solid #e5e7eb;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--accent, #f59e0b);
+  }
+
+  .kpi-icon { font-size: 28px; display: block; margin-bottom: 8px; }
+  .kpi-val { font-size: 30px; font-weight: 900; color: #0f0f2e; display: block; }
+  .kpi-lbl { font-size: 11px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; display: block; }
+  .kpi-sub { font-size: 10px; color: #d1d5db; margin-top: 2px; display: block; }
+
+  .kpi-live {
+    background: #f0fdf4;
+    border: 1px dashed #86efac;
+    border-radius: 8px;
+    padding: 10px 14px;
+    text-align: center;
+    font-size: 11px;
+    color: #15803d;
+    font-weight: 600;
+    margin-top: 6px;
+  }
+
+  /* MODULE CARDS */
+  .module-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin: 20px 0;
+  }
+
+  .module-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 18px;
+    position: relative;
+  }
+
+  .module-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .module-card-icon { font-size: 24px; }
+
+  .module-card-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f0f2e;
+  }
+
+  .module-card-sub {
+    font-size: 11px;
+    color: #9ca3af;
+  }
+
+  .module-status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 50px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .status-active { background: #dcfce7; color: #15803d; }
+  .status-partial { background: #fef3c7; color: #92400e; }
+  .status-pending { background: #f3f4f6; color: #6b7280; }
+
+  .module-items {
+    list-style: none;
+    margin-top: 10px;
+  }
+
+  .module-items li {
+    font-size: 11px;
+    color: #6b7280;
+    padding: 3px 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .module-items li::before {
+    content: '→';
+    color: #f59e0b;
+    font-size: 10px;
+    font-weight: 700;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+
+  /* AUDIT ROWS */
+  .audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 12px;
+  }
+
+  .audit-table th {
+    background: #0f0f2e;
+    color: white;
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .audit-table th:first-child { border-radius: 8px 0 0 0; }
+  .audit-table th:last-child { border-radius: 0 8px 0 0; }
+
+  .audit-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f3f4f6;
+    color: #374151;
+    vertical-align: top;
+  }
+
+  .audit-table tr:last-child td { border-bottom: none; }
+  .audit-table tr:nth-child(even) td { background: #fafafa; }
+
+  /* LIVE BOX */
+  .live-box {
+    background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
+    border: 1px solid #86efac;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 14px 0;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .live-icon { font-size: 20px; flex-shrink: 0; }
+  .live-text { flex: 1; }
+  .live-title { font-size: 13px; font-weight: 700; color: #15803d; margin-bottom: 4px; }
+  .live-desc { font-size: 11px; color: #166534; line-height: 1.5; }
+
+  /* ALERT */
+  .alert {
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin: 12px 0;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-size: 12px;
+  }
+
+  .alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .alert-body { flex: 1; color: #374151; line-height: 1.5; }
+  .alert-body strong { display: block; margin-bottom: 3px; font-size: 13px; }
+
+  .alert-info    { background: #eff6ff; border-left: 4px solid #3b82f6; }
+  .alert-warn    { background: #fffbeb; border-left: 4px solid #f59e0b; }
+  .alert-success { background: #f0fdf4; border-left: 4px solid #22c55e; }
+
+  /* TIMELINE */
+  .timeline { position: relative; margin: 20px 0; }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 20px; top: 0; bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, #f59e0b, #ef4444, #6366f1);
+  }
+
+  .tl-item {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 18px;
+    padding-left: 10px;
+  }
+
+  .tl-dot {
+    width: 22px; height: 22px;
+    background: #f59e0b;
+    border-radius: 50%;
+    border: 3px solid white;
+    box-shadow: 0 0 0 2px #f59e0b;
+    flex-shrink: 0;
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: white;
+    font-weight: 900;
+  }
+
+  .tl-content { flex: 1; }
+  .tl-title { font-size: 13px; font-weight: 700; color: #0f0f2e; }
+  .tl-date { font-size: 10px; color: #9ca3af; margin-bottom: 3px; }
+  .tl-desc { font-size: 11px; color: #6b7280; line-height: 1.5; }
+
+  /* ROLE TABLE */
+  .role-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 12px;
+  }
+
+  .role-table th {
+    background: #1e1e4e;
+    color: #f59e0b;
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .role-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    color: #374151;
+  }
+
+  .role-table tr:last-child td { border-bottom: none; }
+
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+  .dot-green  { background: #22c55e; }
+  .dot-yellow { background: #f59e0b; }
+  .dot-gray   { background: #d1d5db; }
+
+  /* TWO COL */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+  .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+
+  /* BOX */
+  .info-box {
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px;
+  }
+
+  .info-box-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #374151;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .list-plain { list-style: none; }
+  .list-plain li { font-size: 11px; color: #6b7280; padding: 4px 0; border-bottom: 1px solid #f9fafb; }
+  .list-plain li:last-child { border-bottom: none; }
+  .list-plain li::before { content: '•'; color: #f59e0b; margin-right: 6px; font-weight: 700; }
+
+  /* HIGHLIGHT */
+  .highlight {
+    background: linear-gradient(135deg, #fffbeb, #fff7ed);
+    border: 1px solid #fde68a;
+    border-left: 4px solid #f59e0b;
+    border-radius: 0 10px 10px 0;
+    padding: 16px 20px;
+    margin: 14px 0;
+  }
+
+  .highlight-title { font-size: 13px; font-weight: 800; color: #92400e; margin-bottom: 6px; }
+  .highlight p { color: #78350f; font-size: 12px; margin: 0; }
+
+  /* PRINT */
+  @media print {
+    body { background: white; }
+    .section-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .no-print { display: none !important; }
+  }
+
+  .print-btn {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    color: white;
+    border: none;
+    padding: 12px 22px;
+    border-radius: 50px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(245,158,11,0.35);
+    z-index: 9999;
+    transition: transform 0.2s;
+  }
+
+  .print-btn:hover { transform: scale(1.05); }
+
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px; }
+  .tag-green  { background: #dcfce7; color: #15803d; }
+  .tag-blue   { background: #dbeafe; color: #1d4ed8; }
+  .tag-orange { background: #ffedd5; color: #c2410c; }
+  .tag-red    { background: #fee2e2; color: #b91c1c; }
+  .tag-gray   { background: #f3f4f6; color: #374151; }
+  .tag-purple { background: #ede9fe; color: #6d28d9; }
+</style>
+</head>
+<body>
+
+<!-- ======================== PORTADA ======================== -->
+<div class="cover">
+  <div class="cover-label">Documento Confidencial</div>
+  <div class="cover-logo">🏓</div>
+  <div class="cover-title">TABLE <span>PONG</span></div>
+  <div class="cover-sub">Reporte de Auditoria del Sistema ERP</div>
+  <div class="cover-line"></div>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Fecha</span>
+      <span class="cover-meta-value">27 Marzo 2026</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Tipo</span>
+      <span class="cover-meta-value">Auditoria Operativa</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Sistema</span>
+      <span class="cover-meta-value">ERP v1.0</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Estado</span>
+      <span class="cover-meta-value">En Produccion</span>
+    </div>
+  </div>
+  <div class="cover-stamp">Auditoria Interna - Dueños del Local</div>
+</div>
+
+<!-- ======================== SECCION 1: RESUMEN EJECUTIVO ======================== -->
+<div class="section-header" data-icon="📊">
+  <div class="section-num">Seccion 1</div>
+  <div class="section-title">Resumen Ejecutivo del Sistema</div>
+  <div class="section-desc">Vision general del estado actual del ERP y sus modulos activos.</div>
+</div>
+
+<div class="content">
+  <h2>Estado General del Sistema</h2>
+  <p>
+    El sistema ERP de Table Pong esta activo en produccion, accesible en
+    <strong>table-pong.vercel.app</strong>. La base de datos opera en la nube (Neon PostgreSQL),
+    con backups automaticos. A continuacion se presenta el estado de todos los modulos
+    segun el registro actual.
+  </p>
+
+  <div class="kpi-grid">
+    <div class="kpi-card" style="--accent: #f59e0b;">
+      <span class="kpi-icon">👥</span>
+      <span class="kpi-val">—</span>
+      <span class="kpi-lbl">Usuarios Activos</span>
+      <span class="kpi-sub">Dashboard > Usuarios</span>
+      <div class="kpi-live">Ver en vivo en el sistema</div>
+    </div>
+    <div class="kpi-card" style="--accent: #22c55e;">
+      <span class="kpi-icon">📦</span>
+      <span class="kpi-val">—</span>
+      <span class="kpi-lbl">Insumos Registrados</span>
+      <span class="kpi-sub">Inventario > Lista</span>
+      <div class="kpi-live">Ver en vivo en el sistema</div>
+    </div>
+    <div class="kpi-card" style="--accent: #6366f1;">
+      <span class="kpi-icon">🍳</span>
+      <span class="kpi-val">—</span>
+      <span class="kpi-lbl">Recetas Activas</span>
+      <span class="kpi-sub">Recetas > Lista</span>
+      <div class="kpi-live">Ver en vivo en el sistema</div>
+    </div>
+    <div class="kpi-card" style="--accent: #ef4444;">
+      <span class="kpi-icon">💰</span>
+      <span class="kpi-val">—</span>
+      <span class="kpi-lbl">Ventas Totales</span>
+      <span class="kpi-sub">Ventas > Historial</span>
+      <div class="kpi-live">Ver en vivo en el sistema</div>
+    </div>
+  </div>
+
+  <div class="alert alert-info">
+    <span class="alert-icon">ℹ️</span>
+    <div class="alert-body">
+      <strong>Como leer este reporte</strong>
+      Las secciones marcadas con <span class="tag tag-green">VER EN SISTEMA</span> requieren abrir el ERP en el navegador para ver los numeros reales en tiempo real. Este documento sirve como guia estructurada de la auditoria.
+    </div>
+  </div>
+
+  <h2>Modulos Implementados</h2>
+
+  <div class="module-grid">
+    <div class="module-card">
+      <div class="module-card-header">
+        <span class="module-card-icon">🔐</span>
+        <div>
+          <div class="module-card-title">Autenticacion y Roles</div>
+          <div class="module-card-sub"><span class="module-status status-active">Activo</span></div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>Login seguro con JWT + cookies cifradas</li>
+        <li>10 roles diferentes con permisos granulares</li>
+        <li>Cambio de contrasena por el propio usuario</li>
+        <li>Sesiones con expiracion automatica</li>
+      </ul>
+    </div>
+
+    <div class="module-card">
+      <div class="module-card-header">
+        <span class="module-card-icon">💳</span>
+        <div>
+          <div class="module-card-title">Punto de Venta (POS)</div>
+          <div class="module-card-sub"><span class="module-status status-active">Activo</span></div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>POS Restaurante con tasa de cambio en tiempo real</li>
+        <li>POS Delivery con datos de cliente</li>
+        <li>POS Sport Bar con cuentas abiertas por mesa</li>
+        <li>Multiples metodos de pago (efectivo, transferencia, tarjeta)</li>
+      </ul>
+    </div>
+
+    <div class="module-card">
+      <div class="module-card-header">
+        <span class="module-card-icon">📦</span>
+        <div>
+          <div class="module-card-title">Inventario</div>
+          <div class="module-card-sub"><span class="module-status status-active">Activo</span></div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>Control de insumos con stock minimo y alertas</li>
+        <li>Entradas de mercancia con registro de proveedor</li>
+        <li>Historial completo de movimientos por insumo</li>
+        <li>Auditorias y ciclos de inventario</li>
+      </ul>
+    </div>
+
+    <div class="module-card">
+      <div class="module-card-header">
+        <span class="module-card-icon">🍳</span>
+        <div>
+          <div class="module-card-title">Recetas</div>
+          <div class="module-card-sub"><span class="module-status status-active">Activo</span></div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>Recetas con ingredientes y cantidades exactas</li>
+        <li>Calculo automatico de costo por porcion</li>
+        <li>Tipos: estandar, coctel, bucket, pre-batch</li>
+        <li>Vinculadas al menu del POS</li>
+      </ul>
+    </div>
+
+    <div class="module-card">
+      <div class="module-card-header">
+        <span class="module-card-icon">🏭</span>
+        <div>
+          <div class="module-card-title">Produccion</div>
+          <div class="module-card-sub"><span class="module-status status-active">Activo</span></div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>Registro diario de produccion por receta</li>
+        <li>Descuento automatico de inventario al producir</li>
+        <li>Historial con fecha, hora y responsable</li>
+      </ul>
+    </div>
+
+    <div class="module-card">
+      <div class="module-card-header">
+        <span class="module-card-icon">📈</span>
+        <div>
+          <div class="module-card-title">Ventas e Historial</div>
+          <div class="module-card-sub"><span class="module-status status-active">Activo</span></div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>Historial completo de todas las ventas</li>
+        <li>Filtros por fecha, cajero, metodo de pago</li>
+        <li>Totales por dia, semana y mes</li>
+        <li>Exportacion de datos</li>
+      </ul>
+    </div>
+
+    <div class="module-card">
+      <div class="module-card-header">
+        <span class="module-card-icon">🛒</span>
+        <div>
+          <div class="module-card-title">Compras y Proveedores</div>
+          <div class="module-card-sub"><span class="module-status status-active">Activo</span></div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>Ordenes de compra a proveedores</li>
+        <li>Historial de compras con precios</li>
+        <li>Flujo de aprobacion por jerarquia</li>
+      </ul>
+    </div>
+
+    <div class="module-card">
+      <div class="module-card-header">
+        <span class="module-card-icon">🏪</span>
+        <div>
+          <div class="module-card-title">Almacenes y Transferencias</div>
+          <div class="module-card-sub"><span class="module-status status-active">Activo</span></div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>Multiples almacenes/areas con stock independiente</li>
+        <li>Transferencias de reabastecimiento barra-bodega</li>
+        <li>Registro de movimientos entre areas</li>
+      </ul>
+    </div>
+
+    <div class="module-card">
+      <div class="module-card-header">
+        <span class="module-card-icon">🤝</span>
+        <div>
+          <div class="module-card-title">Intercompany Shanklish</div>
+          <div class="module-card-sub"><span class="module-status status-active">Activo</span></div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>Seguimiento de ventas de cocina Shanklish</li>
+        <li>Liquidacion semanal automatica</li>
+        <li>Reporte detallado por periodo</li>
+      </ul>
+    </div>
+
+    <div class="module-card">
+      <div class="module-card-header">
+        <span class="module-card-icon">👨‍🍳</span>
+        <div>
+          <div class="module-card-title">Cocina Digital (Comandera)</div>
+          <div class="module-card-sub"><span class="module-status status-active">Activo</span></div>
+        </div>
+      </div>
+      <ul class="module-items">
+        <li>Pantalla exclusiva para cocina en tiempo real</li>
+        <li>Pedidos del POS llegan automaticamente</li>
+        <li>Marcado de estado: pendiente / en prep / listo</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== SECCION 2: INVENTARIO ======================== -->
+<div class="section-header" data-icon="📦">
+  <div class="section-num">Seccion 2</div>
+  <div class="section-title">Auditoria de Inventario</div>
+  <div class="section-desc">Estado de insumos, movimientos registrados y alertas activas.</div>
+</div>
+
+<div class="content">
+  <h2>Como Se Lleva el Inventario</h2>
+  <p>
+    Cada insumo del negocio tiene un registro en el sistema con su nombre, unidad de medida,
+    stock actual, stock minimo y proveedor asociado. El inventario se actualiza automaticamente
+    con cada entrada de mercancia, produccion registrada y venta del POS.
+  </p>
+
+  <div class="live-box">
+    <span class="live-icon">🔴</span>
+    <div class="live-text">
+      <div class="live-title">Ver en el Sistema: Inventario > Lista de Insumos</div>
+      <div class="live-desc">
+        Muestra todos los insumos activos con su stock actual en tiempo real.
+        Los que aparecen en rojo o amarillo tienen stock por debajo del minimo definido.
+        <br/>Filtrar por categoria para ver: Licores, Comida, Bebidas, Insumos de Barra, etc.
+      </div>
+    </div>
+  </div>
+
+  <h2>Movimientos de Inventario Registrados</h2>
+  <p>El sistema categoriza todos los movimientos de inventario en los siguientes tipos:</p>
+
+  <table class="audit-table">
+    <thead>
+      <tr>
+        <th>Tipo de Movimiento</th>
+        <th>Descripcion</th>
+        <th>Como se genera</th>
+        <th>Donde Verificar</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tag tag-green">ENTRADA</span></td>
+        <td>Mercancia recibida de proveedor</td>
+        <td>Manual por el encargado al recibir mercancia</td>
+        <td>Inventario > Entrada</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-blue">VENTA</span></td>
+        <td>Descuento por venta registrada en el POS</td>
+        <td>Automatico al confirmar una venta</td>
+        <td>Ventas > Historial</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-orange">PRODUCCION</span></td>
+        <td>Descuento de insumos al registrar produccion</td>
+        <td>Automatico al registrar produccion</td>
+        <td>Produccion > Historial</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-purple">TRANSFERENCIA SALIDA</span></td>
+        <td>Insumo sale de un almacen hacia otro</td>
+        <td>Manual en modulo de Transferencias</td>
+        <td>Transferencias</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-purple">TRANSFERENCIA ENTRADA</span></td>
+        <td>Insumo llega a un almacen desde otro</td>
+        <td>Automatico al crear transferencia</td>
+        <td>Transferencias</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-red">MERMA</span></td>
+        <td>Producto danado, vencido o perdido</td>
+        <td>Manual con justificacion</td>
+        <td>Inventario > Historial</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-gray">AJUSTE</span></td>
+        <td>Correccion de discrepancia en auditoria</td>
+        <td>Manual durante auditoria/ciclo</td>
+        <td>Inventario > Auditorias</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="live-box">
+    <span class="live-icon">🔴</span>
+    <div class="live-text">
+      <div class="live-title">Ver en el Sistema: Inventario > Historial de Movimientos</div>
+      <div class="live-desc">
+        Filtra por tipo de movimiento, fecha y area para ver todos los movimientos registrados.
+        Cada movimiento muestra: fecha, hora, usuario responsable, cantidad y motivo.
+      </div>
+    </div>
+  </div>
+
+  <h2>Auditorias Realizadas</h2>
+  <p>Las auditorias comparan el inventario fisico real vs. lo que dice el sistema, detectando diferencias y permitiendo ajustes documentados.</p>
+
+  <div class="live-box">
+    <span class="live-icon">🔴</span>
+    <div class="live-text">
+      <div class="live-title">Ver en el Sistema: Inventario > Auditorias</div>
+      <div class="live-desc">
+        Muestra todas las auditorias realizadas con fecha, responsable, items auditados y diferencias encontradas.
+        Permite verificar que el inventario fisico coincide con el sistema.
+      </div>
+    </div>
+  </div>
+
+  <h2>Alertas de Stock Bajo Activas</h2>
+
+  <div class="live-box">
+    <span class="live-icon">🔴</span>
+    <div class="live-text">
+      <div class="live-title">Ver en el Sistema: Dashboard Principal</div>
+      <div class="live-desc">
+        La seccion "Stock Bajo" del dashboard muestra todos los insumos que estan por debajo de su nivel minimo definido.
+        Esto permite tomar accion de reposicion antes de que afecte el servicio.
+      </div>
+    </div>
+  </div>
+
+  <h2>Almacenes y Areas Configuradas</h2>
+
+  <div class="live-box">
+    <span class="live-icon">🔴</span>
+    <div class="live-text">
+      <div class="live-title">Ver en el Sistema: Almacenes</div>
+      <div class="live-desc">
+        Lista de todas las areas o almacenes configurados en el sistema (Bodega Principal, Barra Principal, Barra Auxiliar, Cocina, etc.)
+        con el stock actual en cada area.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== SECCION 3: VENTAS ======================== -->
+<div class="section-header" data-icon="💰">
+  <div class="section-num">Seccion 3</div>
+  <div class="section-title">Auditoria de Ventas</div>
+  <div class="section-desc">Registro completo de transacciones, metodos de pago y cajeros.</div>
+</div>
+
+<div class="content">
+  <h2>Como Se Registran las Ventas</h2>
+  <p>
+    Cada venta queda registrada con: fecha y hora exacta, items vendidos, cantidades,
+    precios, metodo de pago, monto en bolivares, monto en dolares, tasa de cambio aplicada
+    y cajero responsable. No es posible eliminar una venta sin dejar traza.
+  </p>
+
+  <h2>Puntos de Venta Activos</h2>
+
+  <div class="three-col">
+    <div class="info-box">
+      <div class="info-box-title">🍽️ POS Restaurante</div>
+      <ul class="list-plain">
+        <li>Ventas en salon y barra</li>
+        <li>Items de cocina y bebidas</li>
+        <li>Comanda automatica a cocina</li>
+        <li>Impresion de recibo</li>
+      </ul>
+    </div>
+    <div class="info-box">
+      <div class="info-box-title">🛵 POS Delivery</div>
+      <ul class="list-plain">
+        <li>Pedidos de delivery</li>
+        <li>Datos de cliente registrados</li>
+        <li>Calculo con tasa del dia</li>
+        <li>Historial por cajera</li>
+      </ul>
+    </div>
+    <div class="info-box">
+      <div class="info-box-title">🏓 POS Sport Bar</div>
+      <ul class="list-plain">
+        <li>Cuentas abiertas por mesa</li>
+        <li>Consumo incremental</li>
+        <li>Division de cuenta</li>
+        <li>Zonas: salon, barra, VIP</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="live-box">
+    <span class="live-icon">🔴</span>
+    <div class="live-text">
+      <div class="live-title">Ver en el Sistema: Ventas > Historial</div>
+      <div class="live-desc">
+        Filtra por rango de fechas para ver TODAS las ventas del periodo deseado.
+        Puedes ver: total por dia, total por cajera, desglose por metodo de pago (efectivo/transferencia/tarjeta),
+        totales en bolivares y dolares.
+      </div>
+    </div>
+  </div>
+
+  <h2>Metodos de Pago Registrados</h2>
+
+  <table class="audit-table">
+    <thead>
+      <tr>
+        <th>Metodo de Pago</th>
+        <th>Como se Registra</th>
+        <th>Trazabilidad</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tag tag-green">Efectivo Bolivares</span></td>
+        <td>Monto en Bs. ingresado por la cajera</td>
+        <td>Registrado con fecha, hora y cajera</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-green">Efectivo Dolares</span></td>
+        <td>Monto en USD convertido segun tasa del dia</td>
+        <td>Tasa de cambio guardada en la transaccion</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-blue">Transferencia</span></td>
+        <td>Referencia de transferencia registrada</td>
+        <td>Numero de referencia + banco</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-orange">Punto de Venta</span></td>
+        <td>Monto cargado por punto de venta</td>
+        <td>Ultimos digitos de tarjeta (opcional)</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-purple">Pago Mixto</span></td>
+        <td>Combinacion de varios metodos</td>
+        <td>Desglose por cada metodo en la venta</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="live-box">
+    <span class="live-icon">🔴</span>
+    <div class="live-text">
+      <div class="live-title">Ver en el Sistema: Dashboard > Estadisticas del Dia</div>
+      <div class="live-desc">
+        El dashboard muestra el desglose de ventas del dia actual por metodo de pago.
+        Para periodos anteriores, ir a Ventas > Historial y aplicar filtros de fecha.
+      </div>
+    </div>
+  </div>
+
+  <h2>Control de Cajeros</h2>
+  <p>Cada venta queda vinculada al usuario que la registró. Esto permite:</p>
+
+  <ul class="list-plain">
+    <li>Saber exactamente cuanto vendio cada cajera por dia/semana/mes</li>
+    <li>Identificar discrepancias entre ventas registradas y efectivo en caja</li>
+    <li>Detectar patrones inusuales (descuentos excesivos, anulaciones, etc.)</li>
+    <li>Hacer cierre de caja individual por cajera</li>
+  </ul>
+</div>
+
+<!-- ======================== SECCION 4: PRODUCCION Y RECETAS ======================== -->
+<div class="section-header" data-icon="🍳">
+  <div class="section-num">Seccion 4</div>
+  <div class="section-title">Produccion y Recetas</div>
+  <div class="section-desc">Control de lo que se produce, como se calcula el costo y el descargo de inventario.</div>
+</div>
+
+<div class="content">
+  <h2>Recetas Registradas en el Sistema</h2>
+  <p>
+    Las recetas definen exactamente que ingredientes y en que cantidad se necesitan para
+    producir un plato o bebida. El sistema calcula el costo automaticamente segun los
+    precios actuales del inventario.
+  </p>
+
+  <div class="live-box">
+    <span class="live-icon">🔴</span>
+    <div class="live-text">
+      <div class="live-title">Ver en el Sistema: Recetas > Lista Completa</div>
+      <div class="live-desc">
+        Lista de todas las recetas activas con su costo calculado, categoria y estado.
+        Puedes hacer clic en cada receta para ver el detalle de ingredientes y porciones.
+        Las recetas de cocteles estan en proceso de actualizacion con medidas en ml (se hara hoy).
+      </div>
+    </div>
+  </div>
+
+  <h2>Produccion Diaria Registrada</h2>
+  <p>
+    Cada vez que el equipo de cocina produce un lote, se registra en el sistema indicando
+    la receta, la cantidad producida, la fecha y el responsable. Automaticamente se descuentan
+    los ingredientes del inventario.
+  </p>
+
+  <div class="live-box">
+    <span class="live-icon">🔴</span>
+    <div class="live-text">
+      <div class="live-title">Ver en el Sistema: Produccion > Historial</div>
+      <div class="live-desc">
+        Muestra todas las producciones registradas con fecha, receta, cantidad y responsable.
+        Filtra por rango de fechas para ver la produccion de un periodo especifico.
+      </div>
+    </div>
+  </div>
+
+  <h2>Calculo de Costos por Receta</h2>
+
+  <div class="highlight">
+    <div class="highlight-title">Como se calcula el costo</div>
+    <p>
+      El sistema calcula el costo de cada receta multiplicando la cantidad de cada ingrediente
+      por el precio de costo actual del insumo en el inventario. Si el precio de un insumo
+      cambia al registrar una nueva entrada, el costo de todas las recetas que lo usen se
+      actualiza automaticamente.
+    </p>
+  </div>
+
+  <h2>Recetas de Cocteles - Actualizacion Pendiente</h2>
+
+  <div class="alert alert-warn">
+    <span class="alert-icon">🔧</span>
+    <div class="alert-body">
+      <strong>En proceso de actualizacion hoy</strong>
+      Las recetas de cocteles y tragos han sido recibidas del bartender y se estan convirtiendo de onzas (Oz) a mililitros (ml) para estandarizar con el sistema de inventario. Ver el documento <strong>"RECETARIO_COCTELES_ML.html"</strong> para el detalle completo.
+    </div>
+  </div>
+</div>
+
+<!-- ======================== SECCION 5: COMPRAS ======================== -->
+<div class="section-header" data-icon="🛒">
+  <div class="section-num">Seccion 5</div>
+  <div class="section-title">Compras y Proveedores</div>
+  <div class="section-desc">Registro de todas las ordenes de compra y relacion con proveedores.</div>
+</div>
+
+<div class="content">
+  <h2>Proveedores Registrados</h2>
+
+  <div class="live-box">
+    <span class="live-icon">🔴</span>
+    <div class="live-text">
+      <div class="live-title">Ver en el Sistema: Compras > Proveedores</div>
+      <div class="live-desc">
+        Lista completa de proveedores activos. Incluye: nombre, tipo (regular o intercompany),
+        datos de contacto, e historial de todas las compras realizadas a cada uno.
+      </div>
+    </div>
+  </div>
+
+  <h2>Ordenes de Compra</h2>
+  <p>Cada compra realizada queda registrada como una orden con los siguientes estados:</p>
+
+  <table class="audit-table">
+    <thead>
+      <tr>
+        <th>Estado</th>
+        <th>Descripcion</th>
+        <th>Quien Actua</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="tag tag-gray">BORRADOR</span></td>
+        <td>Orden creada, pendiente de aprobacion</td>
+        <td>Cualquier gerente autorizado</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-orange">PENDIENTE</span></td>
+        <td>Enviada al proveedor, esperando llegada</td>
+        <td>Gerente Operativo / Dueno</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-blue">APROBADA</span></td>
+        <td>Aprobada internamente</td>
+        <td>Nivel jerarquico superior</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag-green">RECIBIDA</span></td>
+        <td>Mercancia recibida, inventario actualizado</td>
+        <td>Encargado de recepcion</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="live-box">
+    <span class="live-icon">🔴</span>
+    <div class="live-text">
+      <div class="live-title">Ver en el Sistema: Compras > Historial de Ordenes</div>
+      <div class="live-desc">
+        Muestra todas las ordenes de compra con su estado, monto total, proveedor y fecha.
+        Permite verificar que cada compra quedo correctamente registrada y el inventario actualizado.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== SECCION 6: INTERCOMPANY SHANKLISH ======================== -->
+<div class="section-header" data-icon="🤝">
+  <div class="section-num">Seccion 6</div>
+  <div class="section-title">Relacion Intercompany con Shanklish</div>
+  <div class="section-desc">Control y transparencia de la deuda semanal de Table Pong con Shanklish.</div>
+</div>
+
+<div class="content">
+  <h2>Como Funciona el Control</h2>
+  <p>
+    Shanklish actua como proveedor interno de cocina. Cuando Table Pong vende un producto
+    de cocina Shanklish, el sistema identifica esa venta y la acumula para la liquidacion
+    semanal. Esto garantiza que el calculo sea exacto y basado en datos reales de ventas,
+    no en estimaciones manuales.
+  </p>
+
+  <div class="highlight">
+    <div class="highlight-title">Principio de Transparencia</div>
+    <p>
+      El monto que Table Pong le debe a Shanklish cada semana se calcula automaticamente
+      desde las ventas reales registradas en el POS. Ambas partes pueden verificar el
+      calculo auditando el historial de ventas del periodo correspondiente.
+    </p>
+  </div>
+
+  <h2>Ciclo de Liquidacion Semanal</h2>
+
+  <div class="timeline">
+    <div class="tl-item">
+      <div class="tl-dot">1</div>
+      <div class="tl-content">
+        <div class="tl-title">Lunes a Domingo: Ventas Registradas</div>
+        <div class="tl-desc">Cada venta de producto de cocina Shanklish queda registrada automaticamente en el POS con fecha y hora.</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot">2</div>
+      <div class="tl-content">
+        <div class="tl-title">Fin de Semana: Generar Liquidacion</div>
+        <div class="tl-desc">El gerente genera el reporte intercompany para la semana. El sistema calcula: ventas brutas, IVA, descuentos y monto neto.</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot">3</div>
+      <div class="tl-content">
+        <div class="tl-title">Revision del Reporte</div>
+        <div class="tl-desc">Ambas partes revisan el reporte. Puede incluir descuentos por cortesias o ajustes justificados.</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot">4</div>
+      <div class="tl-content">
+        <div class="tl-title">Aprobacion y Pago</div>
+        <div class="tl-desc">El reporte pasa de "Borrador" a "Aprobado". Se registra el pago y queda documentado en el sistema.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="live-box">
+    <span class="live-icon">🔴</span>
+    <div class="live-text">
+      <div class="live-title">Ver en el Sistema: Intercompany</div>
+      <div class="live-desc">
+        Muestra todas las liquidaciones generadas con su estado (borrador, revisado, aprobado, pagado),
+        monto total, periodo y desglose por semana.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== SECCION 7: USUARIOS Y SEGURIDAD ======================== -->
+<div class="section-header" data-icon="🔐">
+  <div class="section-num">Seccion 7</div>
+  <div class="section-title">Usuarios y Seguridad del Sistema</div>
+  <div class="section-desc">Control de accesos, auditoria de usuarios y trazabilidad de acciones.</div>
+</div>
+
+<div class="content">
+  <h2>Usuarios del Sistema</h2>
+
+  <div class="live-box">
+    <span class="live-icon">🔴</span>
+    <div class="live-text">
+      <div class="live-title">Ver en el Sistema: Usuarios</div>
+      <div class="live-desc">
+        Lista de todos los usuarios registrados con su nombre, rol asignado y estado (activo/inactivo).
+        Ninguna persona puede acceder al sistema sin ser creada por un administrador autorizado.
+      </div>
+    </div>
+  </div>
+
+  <h2>Jerarquia de Roles y Principio de Seguridad</h2>
+
+  <table class="role-table">
+    <thead>
+      <tr>
+        <th>Rol</th>
+        <th>Nivel</th>
+        <th>Acceso Clave</th>
+        <th>Puede Ver Costos</th>
+        <th>Puede Borrar</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Dueno</td>
+        <td>1 (maximo)</td>
+        <td>Todo el sistema</td>
+        <td><span class="dot dot-green"></span>Si</td>
+        <td><span class="dot dot-green"></span>Si</td>
+      </tr>
+      <tr>
+        <td>Auditor</td>
+        <td>2</td>
+        <td>Solo lectura total</td>
+        <td><span class="dot dot-green"></span>Si</td>
+        <td><span class="dot dot-gray"></span>No</td>
+      </tr>
+      <tr>
+        <td>Gerente Administrativo</td>
+        <td>3</td>
+        <td>Finanzas y usuarios</td>
+        <td><span class="dot dot-green"></span>Si</td>
+        <td><span class="dot dot-yellow"></span>Limitado</td>
+      </tr>
+      <tr>
+        <td>Gerente Operativo</td>
+        <td>4</td>
+        <td>Operaciones completas</td>
+        <td><span class="dot dot-green"></span>Si</td>
+        <td><span class="dot dot-yellow"></span>Limitado</td>
+      </tr>
+      <tr>
+        <td>Chef</td>
+        <td>6</td>
+        <td>Recetas y produccion</td>
+        <td><span class="dot dot-yellow"></span>Basico</td>
+        <td><span class="dot dot-gray"></span>No</td>
+      </tr>
+      <tr>
+        <td>Jefe de Area</td>
+        <td>7</td>
+        <td>Inventario de su area</td>
+        <td><span class="dot dot-gray"></span>No</td>
+        <td><span class="dot dot-gray"></span>No</td>
+      </tr>
+      <tr>
+        <td>Cajera Restaurante</td>
+        <td>8</td>
+        <td>Solo POS Restaurante</td>
+        <td><span class="dot dot-gray"></span>No</td>
+        <td><span class="dot dot-gray"></span>No</td>
+      </tr>
+      <tr>
+        <td>Cajera Delivery</td>
+        <td>8</td>
+        <td>Solo POS Delivery</td>
+        <td><span class="dot dot-gray"></span>No</td>
+        <td><span class="dot dot-gray"></span>No</td>
+      </tr>
+      <tr>
+        <td>Jefe de Cocina</td>
+        <td>7</td>
+        <td>Solo comandera digital</td>
+        <td><span class="dot dot-gray"></span>No</td>
+        <td><span class="dot dot-gray"></span>No</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Trazabilidad: Todo Queda Registrado</h2>
+
+  <div class="highlight">
+    <div class="highlight-title">Principio de No Repudio</div>
+    <p>
+      Cada accion en el sistema (venta, ajuste de inventario, cambio de receta, transferencia)
+      queda registrada con el nombre del usuario que la realizo, la fecha y la hora exacta.
+      Es imposible realizar una accion importante en el sistema sin dejar registro.
+      Esto protege al negocio y a cada empleado honesto.
+    </p>
+  </div>
+</div>
+
+<!-- ======================== SECCION 8: INFRAESTRUCTURA ======================== -->
+<div class="section-header" data-icon="☁️">
+  <div class="section-num">Seccion 8</div>
+  <div class="section-title">Infraestructura y Disponibilidad</div>
+  <div class="section-desc">Donde vive el sistema, como se protegen los datos y la continuidad del negocio.</div>
+</div>
+
+<div class="content">
+  <h2>Arquitectura del Sistema</h2>
+
+  <div class="three-col">
+    <div class="info-box">
+      <div class="info-box-title">🌐 Aplicacion Web</div>
+      <ul class="list-plain">
+        <li>Plataforma: Vercel</li>
+        <li>URL: table-pong.vercel.app</li>
+        <li>Disponible 24/7 desde cualquier lugar</li>
+        <li>HTTPS (conexion cifrada)</li>
+        <li>Sin necesidad de instalar nada</li>
+      </ul>
+    </div>
+    <div class="info-box">
+      <div class="info-box-title">🗄️ Base de Datos</div>
+      <ul class="list-plain">
+        <li>Plataforma: Neon PostgreSQL</li>
+        <li>Region: US East (baja latencia)</li>
+        <li>Backups automaticos diarios</li>
+        <li>Conexion cifrada SSL</li>
+        <li>Alta disponibilidad gestionada</li>
+      </ul>
+    </div>
+    <div class="info-box">
+      <div class="info-box-title">🔒 Seguridad</div>
+      <ul class="list-plain">
+        <li>Contrasenas con hash bcrypt</li>
+        <li>Sesiones con JWT firmado</li>
+        <li>Variables de entorno cifradas</li>
+        <li>Sin datos sensibles en codigo</li>
+        <li>Acceso por rol validado en servidor</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Plan de Continuidad</h2>
+
+  <table class="audit-table">
+    <thead>
+      <tr>
+        <th>Escenario</th>
+        <th>Impacto</th>
+        <th>Solucion</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Sin internet en el local</td>
+        <td>No se puede acceder al sistema</td>
+        <td>Datos moviles (hotspot) como respaldo. Ventas manuales temporales.</td>
+      </tr>
+      <tr>
+        <td>Fallo de Vercel (hosting)</td>
+        <td>App no disponible temporalmente</td>
+        <td>Vercel tiene 99.99% uptime SLA. Incidentes raramente duran mas de minutos.</td>
+      </tr>
+      <tr>
+        <td>Perdida de datos</td>
+        <td>Datos perdidos</td>
+        <td>Backups diarios automaticos en Neon. Restauracion posible a cualquier punto del ultimo dia.</td>
+      </tr>
+      <tr>
+        <td>Usuario bloqueado</td>
+        <td>No puede entrar al sistema</td>
+        <td>El administrador puede restablecer la contrasena en menos de 2 minutos.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Proximos Pasos del Sistema</h2>
+
+  <div class="timeline">
+    <div class="tl-item">
+      <div class="tl-dot" style="background:#22c55e;">✓</div>
+      <div class="tl-content">
+        <div class="tl-title">Hoy: Actualizacion de Recetas de Cocteles</div>
+        <div class="tl-desc">Conversion de recetas de onzas a mililitros y carga al sistema con cantidades exactas.</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot" style="background:#6366f1;">2</div>
+      <div class="tl-content">
+        <div class="tl-title">Proximo: Modulo de Juegos</div>
+        <div class="tl-desc">Integracion del modulo de gestion de estaciones de juego, reservas y control de tiempo de sesion.</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot" style="background:#6366f1;">3</div>
+      <div class="tl-content">
+        <div class="tl-title">Proximo: Migracion a Servidor Propio (Contabo)</div>
+        <div class="tl-desc">Mayor control, menor costo y capacidad de impresion de comandas en red local.</div>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot" style="background:#6366f1;">4</div>
+      <div class="tl-content">
+        <div class="tl-title">Futuro: Reportes Avanzados y Cierre de Caja</div>
+        <div class="tl-desc">Reporte Z de cierre de caja, reportes de rentabilidad por producto y analisis de tendencias.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== CIERRE ======================== -->
+<div class="content" style="page-break-before: always;">
+  <div style="padding: 40px; background: linear-gradient(135deg, #0f0f2e, #1a1a4e); border-radius: 16px; color: white; text-align: center; margin-bottom: 30px;">
+    <div style="font-size: 40px; margin-bottom: 12px;">🏓</div>
+    <div style="font-size: 22px; font-weight: 900; color: #f59e0b;">TABLE PONG ERP</div>
+    <div style="font-size: 14px; color: rgba(255,255,255,0.7); margin-top: 8px;">Reporte de Auditoria &bull; 27 de Marzo de 2026</div>
+    <div style="margin-top: 20px; font-size: 12px; color: rgba(255,255,255,0.5);">
+      Sistema en produccion activa &bull; Base de datos en la nube con backup diario<br/>
+      Documento generado para presentacion interna a los duenos del local
+    </div>
+  </div>
+
+  <h2>Guia de Presentacion para los Duenos</h2>
+  <p>Durante la reunion de auditoria, se recomienda el siguiente orden para mostrar el sistema en vivo:</p>
+
+  <table class="audit-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Que Mostrar</th>
+        <th>Donde en el Sistema</th>
+        <th>Duracion Aprox.</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td>Dashboard general con estadisticas del dia</td>
+        <td>Pantalla de inicio al hacer login</td>
+        <td>3 min</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>Lista de insumos y stock actual con alertas</td>
+        <td>Inventario > Lista</td>
+        <td>5 min</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>Historial de movimientos de inventario</td>
+        <td>Inventario > Historial</td>
+        <td>5 min</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>Ventas del periodo con desglose por pago</td>
+        <td>Ventas > Historial (filtrar por fechas)</td>
+        <td>5 min</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>Demo de venta en el POS</td>
+        <td>Dashboard > POS Restaurante</td>
+        <td>5 min</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td>Recetas con costos calculados</td>
+        <td>Recetas > Lista</td>
+        <td>3 min</td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td>Produccion registrada</td>
+        <td>Produccion > Historial</td>
+        <td>3 min</td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td>Intercompany Shanklish</td>
+        <td>Intercompany</td>
+        <td>5 min</td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td>Usuarios y roles del equipo</td>
+        <td>Usuarios</td>
+        <td>3 min</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<button class="print-btn no-print" onclick="window.print()">
+  Imprimir / Guardar PDF
+</button>
+
+</body>
+</html>

@@ -1,0 +1,1647 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Recetario de Cocteles y Tragos - Table Pong (en ml)</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 13px;
+    color: #1a1a2e;
+    background: #f0f2f5;
+    line-height: 1.6;
+  }
+
+  .cover {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0a0a1a 0%, #1a0a2e 60%, #0a1628 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px 40px;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -100px; left: -100px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(168,85,247,0.15), transparent 70%);
+    border-radius: 50%;
+  }
+
+  .cover::after {
+    content: '';
+    position: absolute;
+    bottom: -100px; right: -100px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(245,158,11,0.15), transparent 70%);
+    border-radius: 50%;
+  }
+
+  .cover-logo { font-size: 80px; margin-bottom: 16px; position: relative; z-index: 1; }
+  .cover-title {
+    font-size: 48px; font-weight: 900; color: #fff; letter-spacing: -1px;
+    position: relative; z-index: 1;
+  }
+  .cover-title span { color: #a855f7; }
+  .cover-sub {
+    font-size: 16px; color: rgba(255,255,255,0.6); margin-top: 8px;
+    position: relative; z-index: 1;
+  }
+  .cover-line {
+    width: 60px; height: 3px; margin: 24px auto;
+    background: linear-gradient(90deg, #a855f7, #f59e0b);
+    border-radius: 2px; position: relative; z-index: 1;
+  }
+  .cover-desc {
+    font-size: 14px; color: rgba(255,255,255,0.75); max-width: 540px; line-height: 1.8;
+    position: relative; z-index: 1;
+  }
+  .cover-meta {
+    display: flex; gap: 36px; margin-top: 36px;
+    position: relative; z-index: 1;
+  }
+  .cover-meta-item { text-align: center; }
+  .cover-meta-label { display: block; font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; }
+  .cover-meta-value { display: block; font-size: 14px; color: #a855f7; font-weight: 700; margin-top: 4px; }
+
+  /* CONVERSION BOX */
+  .conversion-page {
+    background: white;
+    padding: 50px 60px;
+    page-break-after: always;
+  }
+
+  /* SECTION HEADER */
+  .section-hdr {
+    background: linear-gradient(135deg, #1a0a2e 0%, #2d1461 100%);
+    color: white;
+    padding: 36px 50px;
+    position: relative;
+    overflow: hidden;
+    page-break-before: always;
+  }
+
+  .section-hdr::after {
+    content: attr(data-icon);
+    position: absolute;
+    right: 40px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 60px;
+    opacity: 0.15;
+  }
+
+  .section-hdr-num { font-size: 10px; font-weight: 700; color: #a855f7; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 6px; }
+  .section-hdr-title { font-size: 26px; font-weight: 900; }
+  .section-hdr-sub { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 4px; }
+
+  /* RECIPE CARDS */
+  .recipes-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin: 20px 0;
+  }
+
+  .recipe-card {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    page-break-inside: avoid;
+  }
+
+  .recipe-header {
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .recipe-icon { font-size: 28px; flex-shrink: 0; }
+
+  .recipe-name {
+    font-size: 15px;
+    font-weight: 800;
+    color: white;
+  }
+
+  .recipe-category {
+    font-size: 10px;
+    color: rgba(255,255,255,0.65);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 2px;
+  }
+
+  .recipe-body { padding: 14px 18px; background: white; }
+
+  .ingredient {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid #f9fafb;
+    font-size: 12px;
+  }
+
+  .ingredient:last-child { border-bottom: none; }
+
+  .ing-name { color: #374151; font-weight: 500; }
+  .ing-original { color: #9ca3af; font-size: 10px; }
+  .ing-ml {
+    font-weight: 800;
+    color: #1a0a2e;
+    font-size: 13px;
+    white-space: nowrap;
+    margin-left: 8px;
+  }
+  .ing-unit {
+    font-size: 10px;
+    color: #9ca3af;
+    font-weight: 400;
+  }
+
+  .recipe-total {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+  }
+
+  .recipe-total-label { color: #6b7280; font-weight: 600; }
+  .recipe-total-value { font-weight: 900; font-size: 14px; }
+
+  /* SOLO CARDS */
+  .solo-card {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 16px;
+  }
+
+  /* TRAGO GRID */
+  .trago-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 20px 0;
+  }
+
+  .trago-card {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    text-align: center;
+    padding-bottom: 16px;
+  }
+
+  .trago-header {
+    padding: 16px;
+    margin-bottom: 8px;
+  }
+
+  .trago-icon { font-size: 36px; display: block; margin-bottom: 6px; }
+  .trago-name { font-size: 14px; font-weight: 800; color: white; }
+  .trago-ml { font-size: 32px; font-weight: 900; color: #1a0a2e; display: block; margin: 8px 0 2px; }
+  .trago-unit { font-size: 11px; color: #6b7280; }
+  .trago-orig { font-size: 10px; color: #9ca3af; margin-top: 4px; }
+
+  /* CONVERSION TABLE */
+  .conv-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 12px;
+  }
+
+  .conv-table th {
+    background: #1a0a2e;
+    color: #a855f7;
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .conv-table th:first-child { border-radius: 8px 0 0 0; }
+  .conv-table th:last-child { border-radius: 0 8px 0 0; }
+
+  .conv-table td {
+    padding: 9px 14px;
+    border-bottom: 1px solid #f3f4f6;
+    color: #374151;
+  }
+
+  .conv-table tr:last-child td { border-bottom: none; }
+  .conv-table tr:nth-child(even) td { background: #fafafa; }
+
+  .conv-val { font-weight: 900; color: #1a0a2e; font-size: 14px; }
+
+  /* CONTENT */
+  .content {
+    background: white;
+    padding: 40px 50px;
+    margin-bottom: 2px;
+  }
+
+  h2 {
+    font-size: 18px; font-weight: 800; color: #1a0a2e;
+    margin: 28px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #f3f4f6;
+  }
+
+  h2:first-child { margin-top: 0; }
+  h3 { font-size: 14px; font-weight: 700; color: #374151; margin: 20px 0 8px; }
+  p { color: #4b5563; margin-bottom: 10px; }
+
+  .alert {
+    border-radius: 10px; padding: 12px 16px; margin: 12px 0;
+    display: flex; gap: 10px; align-items: flex-start; font-size: 12px;
+  }
+
+  .alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .alert-body { flex: 1; color: #374151; line-height: 1.5; }
+  .alert-body strong { display: block; margin-bottom: 3px; font-size: 13px; }
+
+  .alert-info    { background: #eff6ff; border-left: 4px solid #3b82f6; }
+  .alert-warn    { background: #fffbeb; border-left: 4px solid #f59e0b; }
+  .alert-success { background: #f0fdf4; border-left: 4px solid #22c55e; }
+  .alert-purple  { background: #faf5ff; border-left: 4px solid #a855f7; }
+
+  /* Colors for recipe headers */
+  .bg-purple  { background: linear-gradient(135deg, #7c3aed, #a855f7); }
+  .bg-amber   { background: linear-gradient(135deg, #d97706, #f59e0b); }
+  .bg-rose    { background: linear-gradient(135deg, #e11d48, #f43f5e); }
+  .bg-teal    { background: linear-gradient(135deg, #0d9488, #14b8a6); }
+  .bg-indigo  { background: linear-gradient(135deg, #4338ca, #6366f1); }
+  .bg-orange  { background: linear-gradient(135deg, #ea580c, #f97316); }
+  .bg-green   { background: linear-gradient(135deg, #15803d, #22c55e); }
+  .bg-cyan    { background: linear-gradient(135deg, #0e7490, #06b6d4); }
+  .bg-pink    { background: linear-gradient(135deg, #be185d, #ec4899); }
+  .bg-lime    { background: linear-gradient(135deg, #4d7c0f, #84cc16); }
+  .bg-red     { background: linear-gradient(135deg, #b91c1c, #ef4444); }
+  .bg-dark    { background: linear-gradient(135deg, #1e1b4b, #312e81); }
+
+  .total-purple { background: #faf5ff; }
+  .total-purple .recipe-total-value { color: #7c3aed; }
+  .total-amber  { background: #fffbeb; }
+  .total-amber  .recipe-total-value { color: #d97706; }
+  .total-rose   { background: #fff1f2; }
+  .total-rose   .recipe-total-value { color: #e11d48; }
+  .total-teal   { background: #f0fdfa; }
+  .total-teal   .recipe-total-value { color: #0d9488; }
+  .total-indigo { background: #eef2ff; }
+  .total-indigo .recipe-total-value { color: #4338ca; }
+  .total-orange { background: #fff7ed; }
+  .total-orange .recipe-total-value { color: #ea580c; }
+  .total-green  { background: #f0fdf4; }
+  .total-green  .recipe-total-value { color: #15803d; }
+  .total-cyan   { background: #ecfeff; }
+  .total-cyan   .recipe-total-value { color: #0e7490; }
+
+  @media print {
+    body { background: white; }
+    .cover, .section-hdr { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .recipe-header, .trago-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .no-print { display: none !important; }
+  }
+
+  .print-btn {
+    position: fixed; bottom: 24px; right: 24px;
+    background: linear-gradient(135deg, #a855f7, #f59e0b);
+    color: white; border: none; padding: 12px 22px;
+    border-radius: 50px; font-size: 13px; font-weight: 700;
+    cursor: pointer; box-shadow: 0 8px 20px rgba(168,85,247,0.35);
+    z-index: 9999; transition: transform 0.2s;
+  }
+
+  .print-btn:hover { transform: scale(1.05); }
+
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+  .tag-purple { background: #ede9fe; color: #6d28d9; }
+  .tag-green  { background: #dcfce7; color: #15803d; }
+  .tag-orange { background: #ffedd5; color: #c2410c; }
+  .tag-blue   { background: #dbeafe; color: #1d4ed8; }
+  .tag-gray   { background: #f3f4f6; color: #374151; }
+</style>
+</head>
+<body>
+
+<!-- PORTADA -->
+<div class="cover">
+  <div class="cover-logo">🍹</div>
+  <div class="cover-title">RECETARIO <span>TABLE PONG</span></div>
+  <div class="cover-sub">Cocteles, Tragos y Especiales</div>
+  <div class="cover-line"></div>
+  <div class="cover-desc">
+    Recetario oficial con todas las medidas convertidas de onzas (Oz) a mililitros (ml)
+    y gramos (g) para estandarizar con el sistema de inventario del ERP.
+    Conversion base: <strong style="color:#a855f7;">1 Oz = 29.57 ml ≈ 30 ml</strong>
+  </div>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Total Recetas</span>
+      <span class="cover-meta-value">24</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Cocteles</span>
+      <span class="cover-meta-value">16</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Tragos</span>
+      <span class="cover-meta-value">6</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Especiales</span>
+      <span class="cover-meta-value">2</span>
+    </div>
+  </div>
+</div>
+
+<!-- TABLA DE CONVERSION -->
+<div class="conversion-page">
+  <h2 style="color:#1a0a2e; font-size:22px; border-bottom: 2px solid #f3f4f6; padding-bottom:10px; margin-bottom:20px;">
+    Tabla de Conversion Oz → ml
+  </h2>
+  <p style="color:#6b7280; margin-bottom:20px;">
+    Referencia estandar usada en todas las recetas de este documento.
+    Factor exacto: <strong>1 Oz = 29.5735 ml</strong>. Para uso practico en barra se usa <strong>1 Oz = 30 ml</strong>.
+  </p>
+
+  <table class="conv-table">
+    <thead>
+      <tr>
+        <th>Medida en Onzas</th>
+        <th>Equivalente Exacto (ml)</th>
+        <th>Valor Practico Usado</th>
+        <th>Notas</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>1/4 Oz</td>
+        <td>7.39 ml</td>
+        <td class="conv-val">8 ml</td>
+        <td>Usado para limones en garnish</td>
+      </tr>
+      <tr>
+        <td>1/2 Oz</td>
+        <td>14.79 ml</td>
+        <td class="conv-val">15 ml</td>
+        <td>Media onza estandar</td>
+      </tr>
+      <tr>
+        <td>3/4 Oz</td>
+        <td>22.18 ml</td>
+        <td class="conv-val">22 ml</td>
+        <td>Tres cuartos de onza</td>
+      </tr>
+      <tr>
+        <td>1 Oz</td>
+        <td>29.57 ml</td>
+        <td class="conv-val">30 ml</td>
+        <td>Medida base estandar de barra</td>
+      </tr>
+      <tr>
+        <td>1.5 Oz</td>
+        <td>44.36 ml</td>
+        <td class="conv-val">45 ml</td>
+        <td>Jigger doble</td>
+      </tr>
+      <tr>
+        <td>2 Oz</td>
+        <td>59.15 ml</td>
+        <td class="conv-val">60 ml</td>
+        <td>Medida estandar de tragos</td>
+      </tr>
+      <tr>
+        <td>3 Oz</td>
+        <td>88.72 ml</td>
+        <td class="conv-val">90 ml</td>
+        <td>Soda / agua mineral en cocteles</td>
+      </tr>
+      <tr>
+        <td>4 Oz</td>
+        <td>118.29 ml</td>
+        <td class="conv-val">120 ml</td>
+        <td>Cuarto de vaso / porcion generosa</td>
+      </tr>
+      <tr>
+        <td>5 Oz</td>
+        <td>147.87 ml</td>
+        <td class="conv-val">150 ml / 150 g</td>
+        <td>Usado para hielo (en gramos)</td>
+      </tr>
+      <tr>
+        <td>6 Oz</td>
+        <td>177.44 ml</td>
+        <td class="conv-val">180 ml</td>
+        <td>Agua tonica, ginger beer</td>
+      </tr>
+      <tr>
+        <td>7 Oz</td>
+        <td>207.01 ml</td>
+        <td class="conv-val">210 g</td>
+        <td>Hielo (medido en gramos)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="alert alert-info">
+    <span class="alert-icon">💡</span>
+    <div class="alert-body">
+      <strong>Nota sobre el Hielo</strong>
+      El hielo se mide en gramos (g) ya que el sistema de inventario maneja insumos solidos por peso.
+      La equivalencia aproximada es 1 Oz de hielo = 30g (puede variar segun el tipo de hielo: cubos, crush, etc.).
+    </div>
+  </div>
+
+  <div class="alert alert-purple">
+    <span class="alert-icon">📊</span>
+    <div class="alert-body">
+      <strong>Como cargar estas recetas en el sistema</strong>
+      Para cada receta de coctel, ir a: <strong>Recetas > Nueva Receta > Tipo: Coctel</strong>.
+      Agregar cada ingrediente con su cantidad en ml o g segun corresponda. El sistema calculara automaticamente
+      el costo por preparacion y el margen de ganancia.
+    </div>
+  </div>
+</div>
+
+<!-- ======================== TRAGOS SIMPLES ======================== -->
+<div class="section-hdr" data-icon="🥃">
+  <div class="section-hdr-num">Seccion 1</div>
+  <div class="section-hdr-title">Tragos Simples</div>
+  <div class="section-hdr-sub">6 tragos con medida estandar de 2 Oz (60 ml) por servicio</div>
+</div>
+
+<div class="content">
+  <p>Los tragos simples consisten en un solo licor servido en vaso corto con hielo (o sin hielo segun el cliente). La medida estandar es <strong>2 Oz = 60 ml</strong> por servicio en todos los casos.</p>
+
+  <div class="trago-grid">
+    <div class="trago-card">
+      <div class="trago-header bg-amber">
+        <span class="trago-icon">🥃</span>
+        <div class="trago-name">Whiskey</div>
+      </div>
+      <span class="trago-ml">60</span>
+      <div class="trago-unit">ml de Whiskey</div>
+      <div class="trago-orig">Original: 2 Oz</div>
+    </div>
+
+    <div class="trago-card">
+      <div class="trago-header bg-indigo">
+        <span class="trago-icon">🍸</span>
+        <div class="trago-name">Vodka</div>
+      </div>
+      <span class="trago-ml">60</span>
+      <div class="trago-unit">ml de Vodka</div>
+      <div class="trago-orig">Original: 2 Oz</div>
+    </div>
+
+    <div class="trago-card">
+      <div class="trago-header bg-orange">
+        <span class="trago-icon">🍹</span>
+        <div class="trago-name">Ron</div>
+      </div>
+      <span class="trago-ml">60</span>
+      <div class="trago-unit">ml de Ron</div>
+      <div class="trago-orig">Original: 2 Oz</div>
+    </div>
+
+    <div class="trago-card">
+      <div class="trago-header bg-teal">
+        <span class="trago-icon">🍶</span>
+        <div class="trago-name">Ginebra</div>
+      </div>
+      <span class="trago-ml">60</span>
+      <div class="trago-unit">ml de Ginebra</div>
+      <div class="trago-orig">Original: 2 Oz</div>
+    </div>
+
+    <div class="trago-card">
+      <div class="trago-header bg-dark">
+        <span class="trago-icon">🫧</span>
+        <div class="trago-name">Sambuca</div>
+      </div>
+      <span class="trago-ml">60</span>
+      <div class="trago-unit">ml de Sambuca</div>
+      <div class="trago-orig">Original: 2 Oz</div>
+    </div>
+
+    <div class="trago-card">
+      <div class="trago-header bg-rose">
+        <span class="trago-icon">🍷</span>
+        <div class="trago-name">Amaretto</div>
+      </div>
+      <span class="trago-ml">60</span>
+      <div class="trago-unit">ml de Amaretto</div>
+      <div class="trago-orig">Original: 2 Oz</div>
+    </div>
+  </div>
+
+  <div class="alert alert-success">
+    <span class="alert-icon">✅</span>
+    <div class="alert-body">
+      <strong>Para el Sistema ERP</strong>
+      En el inventario, cada botella de licor se registra en mililitros. Una botella estandar = 750 ml.
+      Por lo tanto, cada trago simple consume 60 ml del inventario de ese licor.
+      Eso equivale a 12.5 tragos por botella de 750 ml.
+    </div>
+  </div>
+</div>
+
+<!-- ======================== ESPECIALES ======================== -->
+<div class="section-hdr" data-icon="⭐">
+  <div class="section-hdr-num">Seccion 2</div>
+  <div class="section-hdr-title">Especiales</div>
+  <div class="section-hdr-sub">2 bebidas especiales con preparacion propia</div>
+</div>
+
+<div class="content">
+  <div class="recipes-grid">
+
+    <!-- DISARONNO SOUR -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-amber">
+        <span class="recipe-icon">🍋</span>
+        <div>
+          <div class="recipe-name">Disaronno Sour</div>
+          <div class="recipe-category">Especial • Sour Style</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Disaronno (Amaretto)</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jugo de Limon</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Clara de Huevo</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="recipe-total total-amber">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">120 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ESPRESSO MARTINI -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-dark">
+        <span class="recipe-icon">☕</span>
+        <div>
+          <div class="recipe-name">Espresso Martini</div>
+          <div class="recipe-category">Especial • Martini Style</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Vodka</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Kahlua (Licor de Cafe)</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Cafe Espresso</div>
+            <div class="ing-original">Original: 30 ml</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="recipe-total total-indigo">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">120 ml</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ======================== COCTELES ======================== -->
+<div class="section-hdr" data-icon="🍹">
+  <div class="section-hdr-num">Seccion 3</div>
+  <div class="section-hdr-title">Cocteles</div>
+  <div class="section-hdr-sub">10 cocteles con ingredientes y cantidades exactas en ml y g</div>
+</div>
+
+<div class="content">
+  <div class="recipes-grid">
+
+    <!-- TINTO DE VERANO -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-rose">
+        <span class="recipe-icon">🍷</span>
+        <div>
+          <div class="recipe-name">Tinto de Verano</div>
+          <div class="recipe-category">Coctel • Vino</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Vino Tinto</div>
+            <div class="ing-original">Original: 4 Oz</div>
+          </div>
+          <div class="ing-ml">120 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">7up (Refresco Limon)</div>
+            <div class="ing-original">Original: 4 Oz</div>
+          </div>
+          <div class="ing-ml">120 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Hielo</div>
+            <div class="ing-original">Original: 7 Oz</div>
+          </div>
+          <div class="ing-ml">210 <span class="ing-unit">g</span></div>
+        </div>
+        <div class="recipe-total total-rose">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">240 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MOJITO -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-green">
+        <span class="recipe-icon">🌿</span>
+        <div>
+          <div class="recipe-name">Mojito</div>
+          <div class="recipe-category">Coctel • Clasico</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Ron Blanco</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jugo de Limon</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jarabe Simple</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Soda / Agua con Gas</div>
+            <div class="ing-original">Original: 3 Oz</div>
+          </div>
+          <div class="ing-ml">90 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Azucar</div>
+            <div class="ing-original">Sin conversion</div>
+          </div>
+          <div class="ing-ml">10 <span class="ing-unit">g</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Hojas de Hierbabuena</div>
+            <div class="ing-original">Sin conversion</div>
+          </div>
+          <div class="ing-ml">5 <span class="ing-unit">und</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Hielo</div>
+            <div class="ing-original">Original: 5 Oz</div>
+          </div>
+          <div class="ing-ml">150 <span class="ing-unit">g</span></div>
+        </div>
+        <div class="recipe-total total-green">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">210 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- JAGGER MOJITO -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-indigo">
+        <span class="recipe-icon">🖤</span>
+        <div>
+          <div class="recipe-name">Jagger Mojito</div>
+          <div class="recipe-category">Coctel • Fusion</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jagermeister</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jugo de Limon</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jarabe Simple</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Soda / Agua con Gas</div>
+            <div class="ing-original">Original: 3 Oz</div>
+          </div>
+          <div class="ing-ml">90 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Hojas de Hierbabuena</div>
+            <div class="ing-original">Sin conversion</div>
+          </div>
+          <div class="ing-ml">5 <span class="ing-unit">und</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Hielo</div>
+            <div class="ing-original">Original: 5 Oz</div>
+          </div>
+          <div class="ing-ml">150 <span class="ing-unit">g</span></div>
+        </div>
+        <div class="recipe-total total-indigo">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">210 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- DAIQUIRI -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-cyan">
+        <span class="recipe-icon">🫐</span>
+        <div>
+          <div class="recipe-name">Daiquiri</div>
+          <div class="recipe-category">Coctel • Frozen / Frutal</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Ron Dorado</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Fruta (pulpa)</div>
+            <div class="ing-original">Original: 200 ml</div>
+          </div>
+          <div class="ing-ml">200 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jugo de Limon</div>
+            <div class="ing-original">Original: 3/4 Oz</div>
+          </div>
+          <div class="ing-ml">22 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Azucar</div>
+            <div class="ing-original">Sin conversion</div>
+          </div>
+          <div class="ing-ml">80 <span class="ing-unit">g</span></div>
+        </div>
+        <div class="recipe-total total-cyan">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">282 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- GIN TONIC -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-teal">
+        <span class="recipe-icon">🫙</span>
+        <div>
+          <div class="recipe-name">Gin Tonic</div>
+          <div class="recipe-category">Coctel • Clasico</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Tanqueray (Ginebra)</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Agua Tonica</div>
+            <div class="ing-original">Original: 6 Oz</div>
+          </div>
+          <div class="ing-ml">180 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jugo de Limon</div>
+            <div class="ing-original">Original: 1/4 Oz</div>
+          </div>
+          <div class="ing-ml">8 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Hielo</div>
+            <div class="ing-original">Original: 7 Oz</div>
+          </div>
+          <div class="ing-ml">210 <span class="ing-unit">g</span></div>
+        </div>
+        <div class="recipe-total total-teal">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">248 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- NEGRONI -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-rose">
+        <span class="recipe-icon">🍊</span>
+        <div>
+          <div class="recipe-name">Negroni</div>
+          <div class="recipe-category">Coctel • Clasico Italiano</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Vermouth Rosso</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Tanqueray (Ginebra)</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Campari</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Hielo</div>
+            <div class="ing-original">Original: 5 Oz</div>
+          </div>
+          <div class="ing-ml">150 <span class="ing-unit">g</span></div>
+        </div>
+        <div class="recipe-total total-rose">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">90 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CLOVER CLUB -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-pink">
+        <span class="recipe-icon">🩷</span>
+        <div>
+          <div class="recipe-name">Clover Club</div>
+          <div class="recipe-category">Coctel • Frutal / Sour</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Ginebra</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Clara de Huevo</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Zumo de Limon</div>
+            <div class="ing-original">Original: 1/2 Oz</div>
+          </div>
+          <div class="ing-ml">15 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jarabe de Mora</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jarabe Simple</div>
+            <div class="ing-original">Original: 1/2 Oz</div>
+          </div>
+          <div class="ing-ml">15 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="recipe-total" style="background:#fdf2f8;">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value" style="color:#be185d;">150 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- MOSCOW MULE -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-lime">
+        <span class="recipe-icon">🫚</span>
+        <div>
+          <div class="recipe-name">Moscow Mule</div>
+          <div class="recipe-category">Coctel • Clasico</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Vodka</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jarabe de Jengibre</div>
+            <div class="ing-original">Original: 3/4 Oz</div>
+          </div>
+          <div class="ing-ml">22 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jugo de Limon</div>
+            <div class="ing-original">Original: 3/4 Oz</div>
+          </div>
+          <div class="ing-ml">22 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="recipe-total total-green">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">104 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- PINA COLADA -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-amber">
+        <span class="recipe-icon">🍍</span>
+        <div>
+          <div class="recipe-name">Piña Colada</div>
+          <div class="recipe-category">Coctel • Tropical / Cremoso</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Ron Dorado</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Crema de Coco</div>
+            <div class="ing-original">Original: 3 Oz</div>
+          </div>
+          <div class="ing-ml">90 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Leche Condensada</div>
+            <div class="ing-original">Original: 4 Oz</div>
+          </div>
+          <div class="ing-ml">120 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Piña (pulpa/trozos)</div>
+            <div class="ing-original">Sin conversion</div>
+          </div>
+          <div class="ing-ml">200 <span class="ing-unit">g</span></div>
+        </div>
+        <div class="recipe-total total-amber">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">270 ml</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="alert alert-purple">
+    <span class="alert-icon">📝</span>
+    <div class="alert-body">
+      <strong>Nota para el Sistema de Inventario</strong>
+      Todos los licores deben estar registrados en el inventario en <strong>mililitros (ml)</strong>.
+      Al registrar una botella de 750ml, el sistema puede calcular cuantas porciones de cada coctel
+      puede prepararse con esa botella. Ejemplo: una botella de Ron de 750ml = 12 Mojitos (60ml c/u).
+    </div>
+  </div>
+</div>
+
+<!-- ======================== COCTELES NUEVOS ======================== -->
+<div class="section-hdr" data-icon="🆕">
+  <div class="section-hdr-num">Seccion 4</div>
+  <div class="section-hdr-title">Cocteles Adicionales</div>
+  <div class="section-hdr-sub">7 nuevas recetas: Berlin Mule, Orgasmo, Kaipiroska, Cosmopolitan, Paloma, Aperol Spritz</div>
+</div>
+
+<div class="content">
+  <div class="recipes-grid">
+
+    <!-- BERLIN MULE -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-indigo">
+        <span class="recipe-icon">🐻</span>
+        <div>
+          <div class="recipe-name">Berlin Mule</div>
+          <div class="recipe-category">Coctel • Mule Style</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jagermeister</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jugo de Limon</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jarabe de Jengibre</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="recipe-total total-indigo">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">120 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ORGASMO -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-purple">
+        <span class="recipe-icon">🍨</span>
+        <div>
+          <div class="recipe-name">Orgasmo</div>
+          <div class="recipe-category">Coctel • Cremoso / Helado</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Helado Mantecado</div>
+            <div class="ing-original">Sin conversion (ya en ml)</div>
+          </div>
+          <div class="ing-ml">200 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Ron Dorado</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Kahlua (Licor de Cafe)</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Amaretto</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="recipe-total total-purple">
+          <span class="recipe-total-label">Total</span>
+          <span class="recipe-total-value">290 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- KAIPIROSKA -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-cyan">
+        <span class="recipe-icon">🍋</span>
+        <div>
+          <div class="recipe-name">Kaipiroska</div>
+          <div class="recipe-category">Coctel • Frutal / Machacar</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Vodka</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Limon (para machacar)</div>
+            <div class="ing-original">Sin conversion</div>
+          </div>
+          <div class="ing-ml">80 <span class="ing-unit">g</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Azucar</div>
+            <div class="ing-original">Sin conversion</div>
+          </div>
+          <div class="ing-ml">80 <span class="ing-unit">g</span></div>
+        </div>
+        <div class="recipe-total total-cyan">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">60 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- COSMOPOLITAN -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-pink">
+        <span class="recipe-icon">🩷</span>
+        <div>
+          <div class="recipe-name">Cosmopolitan</div>
+          <div class="recipe-category">Coctel • Clasico / Frutal</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Vodka</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jugo de Arandano</div>
+            <div class="ing-original">Original: 4 Oz</div>
+          </div>
+          <div class="ing-ml">120 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jarabe Simple</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jugo de Limon</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="recipe-total" style="background:#fdf2f8;">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value" style="color:#be185d;">240 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- PALOMA -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-orange">
+        <span class="recipe-icon">🍊</span>
+        <div>
+          <div class="recipe-name">Paloma</div>
+          <div class="recipe-category">Coctel • Mexicano / Citrico</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Tequila Silver</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jugo de Toronja</div>
+            <div class="ing-original">Original: 4 Oz</div>
+          </div>
+          <div class="ing-ml">120 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jarabe Simple</div>
+            <div class="ing-original">Original: 1/2 Oz</div>
+          </div>
+          <div class="ing-ml">15 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Jugo de Limon</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="recipe-total total-orange">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">225 ml</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- APEROL SPRITZ -->
+    <div class="recipe-card">
+      <div class="recipe-header bg-rose">
+        <span class="recipe-icon">🍾</span>
+        <div>
+          <div class="recipe-name">Aperol Spritz</div>
+          <div class="recipe-category">Coctel • Aperitivo / Espumante</div>
+        </div>
+      </div>
+      <div class="recipe-body">
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Aperol</div>
+            <div class="ing-original">Original: 2 Oz</div>
+          </div>
+          <div class="ing-ml">60 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Espumante / Prosecco</div>
+            <div class="ing-original">Original: 4 Oz</div>
+          </div>
+          <div class="ing-ml">120 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="ingredient">
+          <div>
+            <div class="ing-name">Soda / Agua con Gas</div>
+            <div class="ing-original">Original: 1 Oz</div>
+          </div>
+          <div class="ing-ml">30 <span class="ing-unit">ml</span></div>
+        </div>
+        <div class="recipe-total total-rose">
+          <span class="recipe-total-label">Total liquido</span>
+          <span class="recipe-total-value">210 ml</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="alert alert-purple">
+    <span class="alert-icon">📝</span>
+    <div class="alert-body">
+      <strong>Nota para el Sistema de Inventario</strong>
+      Todos los licores deben estar registrados en el inventario en <strong>mililitros (ml)</strong>.
+      Al registrar una botella de 750ml, el sistema puede calcular cuantas porciones de cada coctel
+      puede prepararse con esa botella. Ejemplo: una botella de Ron de 750ml = 12 Mojitos (60ml c/u).
+    </div>
+  </div>
+</div>
+
+<!-- RESUMEN INSUMOS -->
+<div class="section-hdr" data-icon="📦">
+  <div class="section-hdr-num">Seccion 5</div>
+  <div class="section-hdr-title">Insumos Necesarios en Inventario</div>
+  <div class="section-hdr-sub">Lista completa de licores y bases requeridos para todas las recetas</div>
+</div>
+
+<div class="content">
+  <h2>Licores y Bases (Registrar en ml)</h2>
+
+  <table class="conv-table">
+    <thead>
+      <tr>
+        <th>Insumo</th>
+        <th>Unidad en Sistema</th>
+        <th>Usado En</th>
+        <th>Consumo por Servicio</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Vodka</td>
+        <td>ml</td>
+        <td>Vodka Trago, Espresso Martini, Moscow Mule, Kaipiroska, Cosmopolitan</td>
+        <td>60 ml por servicio</td>
+      </tr>
+      <tr>
+        <td>Whiskey (cualquier marca)</td>
+        <td>ml</td>
+        <td>Whiskey Trago</td>
+        <td>60 ml</td>
+      </tr>
+      <tr>
+        <td>Ron Blanco</td>
+        <td>ml</td>
+        <td>Ron Trago, Mojito</td>
+        <td>60 ml</td>
+      </tr>
+      <tr>
+        <td>Ron Dorado</td>
+        <td>ml</td>
+        <td>Daiquiri, Piña Colada</td>
+        <td>60 ml</td>
+      </tr>
+      <tr>
+        <td>Ginebra / Tanqueray</td>
+        <td>ml</td>
+        <td>Ginebra Trago, Gin Tonic, Negroni, Clover Club</td>
+        <td>30-60 ml segun receta</td>
+      </tr>
+      <tr>
+        <td>Jagermeister</td>
+        <td>ml</td>
+        <td>Jagger Mojito, Berlin Mule</td>
+        <td>60 ml</td>
+      </tr>
+      <tr>
+        <td>Tequila Silver</td>
+        <td>ml</td>
+        <td>Paloma</td>
+        <td>60 ml</td>
+      </tr>
+      <tr>
+        <td>Aperol</td>
+        <td>ml</td>
+        <td>Aperol Spritz</td>
+        <td>60 ml</td>
+      </tr>
+      <tr>
+        <td>Sambuca</td>
+        <td>ml</td>
+        <td>Sambuca Trago</td>
+        <td>60 ml</td>
+      </tr>
+      <tr>
+        <td>Amaretto / Disaronno</td>
+        <td>ml</td>
+        <td>Amaretto Trago, Disaronno Sour, Orgasmo</td>
+        <td>30-60 ml segun receta</td>
+      </tr>
+      <tr>
+        <td>Kahlua (Licor de Cafe)</td>
+        <td>ml</td>
+        <td>Espresso Martini, Orgasmo</td>
+        <td>30 ml</td>
+      </tr>
+      <tr>
+        <td>Campari</td>
+        <td>ml</td>
+        <td>Negroni</td>
+        <td>30 ml</td>
+      </tr>
+      <tr>
+        <td>Vermouth Rosso</td>
+        <td>ml</td>
+        <td>Negroni</td>
+        <td>30 ml</td>
+      </tr>
+      <tr>
+        <td>Vino Tinto</td>
+        <td>ml</td>
+        <td>Tinto de Verano</td>
+        <td>120 ml</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Insumos de Barra (Registrar en ml o g)</h2>
+
+  <table class="conv-table">
+    <thead>
+      <tr>
+        <th>Insumo</th>
+        <th>Unidad</th>
+        <th>Usado En</th>
+        <th>Consumo por Servicio</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Jugo de Limon (fresco)</td>
+        <td>ml</td>
+        <td>Mojito, Jagger Mojito, Gin Tonic, Clover Club, Moscow Mule, Daiquiri, Disaronno Sour</td>
+        <td>8 a 30 ml segun receta</td>
+      </tr>
+      <tr>
+        <td>Jarabe Simple</td>
+        <td>ml</td>
+        <td>Mojito, Jagger Mojito, Clover Club</td>
+        <td>15 a 30 ml segun receta</td>
+      </tr>
+      <tr>
+        <td>Jarabe de Mora</td>
+        <td>ml</td>
+        <td>Clover Club</td>
+        <td>30 ml</td>
+      </tr>
+      <tr>
+        <td>Jarabe de Jengibre</td>
+        <td>ml</td>
+        <td>Moscow Mule</td>
+        <td>22 ml</td>
+      </tr>
+      <tr>
+        <td>Agua Tonica</td>
+        <td>ml</td>
+        <td>Gin Tonic</td>
+        <td>180 ml</td>
+      </tr>
+      <tr>
+        <td>Soda / Agua con Gas</td>
+        <td>ml</td>
+        <td>Mojito, Jagger Mojito</td>
+        <td>90 ml</td>
+      </tr>
+      <tr>
+        <td>7up</td>
+        <td>ml</td>
+        <td>Tinto de Verano</td>
+        <td>120 ml</td>
+      </tr>
+      <tr>
+        <td>Cafe Espresso</td>
+        <td>ml</td>
+        <td>Espresso Martini</td>
+        <td>30 ml</td>
+      </tr>
+      <tr>
+        <td>Clara de Huevo</td>
+        <td>ml / und</td>
+        <td>Disaronno Sour, Clover Club</td>
+        <td>30 ml (≈ 1 clara)</td>
+      </tr>
+      <tr>
+        <td>Azucar</td>
+        <td>g</td>
+        <td>Mojito, Daiquiri</td>
+        <td>10-80 g segun receta</td>
+      </tr>
+      <tr>
+        <td>Hierbabuena (hojas)</td>
+        <td>und</td>
+        <td>Mojito, Jagger Mojito</td>
+        <td>5 hojas</td>
+      </tr>
+      <tr>
+        <td>Hielo</td>
+        <td>g</td>
+        <td>Todos los cocteles</td>
+        <td>150-210 g segun receta</td>
+      </tr>
+      <tr>
+        <td>Pulpa de Fruta (variable)</td>
+        <td>ml</td>
+        <td>Daiquiri</td>
+        <td>200 ml</td>
+      </tr>
+      <tr>
+        <td>Piña (trozos / pulpa)</td>
+        <td>g</td>
+        <td>Piña Colada</td>
+        <td>200 g</td>
+      </tr>
+      <tr>
+        <td>Crema de Coco</td>
+        <td>ml</td>
+        <td>Piña Colada</td>
+        <td>90 ml</td>
+      </tr>
+      <tr>
+        <td>Leche Condensada</td>
+        <td>ml</td>
+        <td>Piña Colada</td>
+        <td>120 ml</td>
+      </tr>
+      <tr>
+        <td>Helado Mantecado</td>
+        <td>ml / g</td>
+        <td>Orgasmo</td>
+        <td>200 ml</td>
+      </tr>
+      <tr>
+        <td>Jugo de Arandano</td>
+        <td>ml</td>
+        <td>Cosmopolitan</td>
+        <td>120 ml</td>
+      </tr>
+      <tr>
+        <td>Jugo de Toronja</td>
+        <td>ml</td>
+        <td>Paloma</td>
+        <td>120 ml</td>
+      </tr>
+      <tr>
+        <td>Espumante / Prosecco</td>
+        <td>ml</td>
+        <td>Aperol Spritz</td>
+        <td>120 ml</td>
+      </tr>
+      <tr>
+        <td>Limon (entero para machacar)</td>
+        <td>g / und</td>
+        <td>Kaipiroska</td>
+        <td>80 g (aprox. 2 limones)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:40px; padding:30px; background: linear-gradient(135deg, #1a0a2e, #2d1461); border-radius: 16px; color: white; text-align: center;">
+    <div style="font-size: 36px; margin-bottom: 10px;">🍹</div>
+    <div style="font-size: 18px; font-weight: 900; color: #a855f7;">RECETARIO TABLE PONG</div>
+    <div style="font-size: 12px; color: rgba(255,255,255,0.5); margin-top: 8px;">
+      24 recetas completas &bull; Conversion 1 Oz = 30 ml &bull; Marzo 2026<br/>
+      6 Tragos &bull; 2 Especiales &bull; 16 Cocteles
+    </div>
+  </div>
+</div>
+
+<button class="print-btn no-print" onclick="window.print()">
+  Imprimir / Guardar PDF
+</button>
+
+</body>
+</html>

@@ -1,0 +1,2061 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Manual de Usuario - Table Pong ERP</title>
+<style>
+  /* ===================== BASE ===================== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 13px;
+    color: #1a1a2e;
+    background: #f5f6fa;
+    line-height: 1.6;
+  }
+
+  /* ===================== COVER PAGE ===================== */
+  .cover {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 40%, #16213e 70%, #0f3460 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px 40px;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -100px; left: -100px;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(255,165,0,0.15) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .cover::after {
+    content: '';
+    position: absolute;
+    bottom: -80px; right: -80px;
+    width: 350px; height: 350px;
+    background: radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%);
+    border-radius: 50%;
+  }
+
+  .cover-logo {
+    font-size: 80px;
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cover-title {
+    font-size: 52px;
+    font-weight: 900;
+    color: #ffffff;
+    letter-spacing: -1px;
+    position: relative;
+    z-index: 1;
+    text-shadow: 0 0 40px rgba(255,165,0,0.4);
+  }
+
+  .cover-title span {
+    color: #f59e0b;
+  }
+
+  .cover-subtitle {
+    font-size: 20px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 12px;
+    font-weight: 300;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cover-divider {
+    width: 80px;
+    height: 4px;
+    background: linear-gradient(90deg, #f59e0b, #ef4444);
+    border-radius: 2px;
+    margin: 30px auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cover-description {
+    font-size: 16px;
+    color: rgba(255,255,255,0.8);
+    max-width: 600px;
+    line-height: 1.8;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cover-meta {
+    margin-top: 50px;
+    display: flex;
+    gap: 40px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .cover-meta-item {
+    text-align: center;
+  }
+
+  .cover-meta-label {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    display: block;
+  }
+
+  .cover-meta-value {
+    font-size: 14px;
+    color: #f59e0b;
+    font-weight: 600;
+    display: block;
+    margin-top: 4px;
+  }
+
+  .cover-badge {
+    margin-top: 40px;
+    display: inline-block;
+    background: rgba(245,158,11,0.15);
+    border: 1px solid rgba(245,158,11,0.4);
+    color: #f59e0b;
+    padding: 8px 24px;
+    border-radius: 50px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ===================== LAYOUT ===================== */
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px;
+  }
+
+  /* ===================== TOC ===================== */
+  .toc-page {
+    background: white;
+    padding: 60px 80px;
+    page-break-after: always;
+  }
+
+  .toc-title {
+    font-size: 28px;
+    font-weight: 800;
+    color: #0f0f23;
+    margin-bottom: 8px;
+  }
+
+  .toc-subtitle {
+    color: #6b7280;
+    font-size: 13px;
+    margin-bottom: 40px;
+  }
+
+  .toc-section {
+    margin-bottom: 20px;
+  }
+
+  .toc-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #9ca3af;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .toc-item {
+    display: flex;
+    align-items: center;
+    padding: 6px 0;
+    color: #374151;
+    text-decoration: none;
+    font-size: 13px;
+  }
+
+  .toc-item:hover { color: #f59e0b; }
+
+  .toc-num {
+    font-weight: 700;
+    color: #f59e0b;
+    min-width: 30px;
+    font-size: 12px;
+  }
+
+  .toc-dots {
+    flex: 1;
+    border-bottom: 1px dotted #d1d5db;
+    margin: 0 10px;
+    position: relative;
+    top: -3px;
+  }
+
+  .toc-page-num {
+    color: #9ca3af;
+    font-size: 12px;
+  }
+
+  /* ===================== SECTION HEADERS ===================== */
+  .section-hero {
+    background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 100%);
+    color: white;
+    padding: 50px 60px;
+    margin-bottom: 0;
+    page-break-before: always;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .section-hero::after {
+    content: attr(data-icon);
+    position: absolute;
+    right: 50px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 80px;
+    opacity: 0.15;
+  }
+
+  .section-hero-num {
+    font-size: 12px;
+    font-weight: 700;
+    color: #f59e0b;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 12px;
+  }
+
+  .section-hero-title {
+    font-size: 36px;
+    font-weight: 900;
+    letter-spacing: -1px;
+  }
+
+  .section-hero-desc {
+    font-size: 14px;
+    color: rgba(255,255,255,0.65);
+    margin-top: 10px;
+    max-width: 500px;
+  }
+
+  /* ===================== CONTENT ===================== */
+  .content-block {
+    background: white;
+    padding: 50px 60px;
+    margin-bottom: 2px;
+  }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: #0f0f23;
+    margin: 36px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #f3f4f6;
+  }
+
+  h2:first-child { margin-top: 0; }
+
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #374151;
+    margin: 28px 0 10px;
+  }
+
+  h4 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 20px 0 8px;
+  }
+
+  p {
+    color: #4b5563;
+    margin-bottom: 12px;
+    line-height: 1.75;
+  }
+
+  /* ===================== BENEFIT CARDS ===================== */
+  .benefit-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin: 24px 0;
+  }
+
+  .benefit-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .benefit-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--color, #f59e0b);
+  }
+
+  .benefit-icon {
+    font-size: 28px;
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  .benefit-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f0f23;
+    margin-bottom: 6px;
+  }
+
+  .benefit-text {
+    font-size: 12px;
+    color: #6b7280;
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  /* ===================== MODULE CARDS ===================== */
+  .module-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 20px 0;
+  }
+
+  .module-card {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+
+  .module-icon { font-size: 32px; display: block; margin-bottom: 8px; }
+  .module-name { font-size: 12px; font-weight: 700; color: #374151; }
+  .module-role { font-size: 10px; color: #9ca3af; margin-top: 4px; }
+
+  /* ===================== STEPS ===================== */
+  .steps {
+    margin: 20px 0;
+    counter-reset: step;
+  }
+
+  .step {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    align-items: flex-start;
+  }
+
+  .step-num {
+    min-width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .step-content { flex: 1; padding-top: 4px; }
+  .step-title { font-weight: 700; color: #0f0f23; font-size: 13px; }
+  .step-desc { color: #6b7280; font-size: 12px; margin-top: 3px; }
+
+  /* ===================== ALERTS ===================== */
+  .alert {
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 16px 0;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .alert-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .alert-text { font-size: 12px; color: #374151; line-height: 1.6; }
+  .alert-text strong { display: block; margin-bottom: 3px; font-size: 13px; }
+
+  .alert-info    { background: #eff6ff; border-left: 4px solid #3b82f6; }
+  .alert-warning { background: #fffbeb; border-left: 4px solid #f59e0b; }
+  .alert-success { background: #f0fdf4; border-left: 4px solid #22c55e; }
+  .alert-danger  { background: #fef2f2; border-left: 4px solid #ef4444; }
+
+  /* ===================== ROLES TABLE ===================== */
+  .roles-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 12px;
+  }
+
+  .roles-table th {
+    background: #0f0f23;
+    color: white;
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .roles-table th:first-child { border-radius: 8px 0 0 0; }
+  .roles-table th:last-child  { border-radius: 0 8px 0 0; }
+
+  .roles-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f3f4f6;
+    color: #374151;
+    vertical-align: top;
+  }
+
+  .roles-table tr:last-child td { border-bottom: none; }
+  .roles-table tr:nth-child(even) td { background: #fafafa; }
+
+  .role-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 50px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  /* ===================== MODULE DETAIL ===================== */
+  .module-detail {
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 20px 0;
+  }
+
+  .module-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .module-header-icon { font-size: 28px; }
+
+  .module-header-info h3 {
+    margin: 0 0 2px;
+    font-size: 15px;
+    font-weight: 700;
+    color: #0f0f23;
+  }
+
+  .module-header-info p {
+    margin: 0;
+    font-size: 12px;
+    color: #6b7280;
+  }
+
+  .module-body { padding: 20px; }
+
+  .feature-list {
+    list-style: none;
+    margin: 10px 0;
+  }
+
+  .feature-list li {
+    padding: 6px 0;
+    border-bottom: 1px solid #f9fafb;
+    font-size: 12px;
+    color: #374151;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .feature-list li:last-child { border-bottom: none; }
+
+  .feature-list li::before {
+    content: '✓';
+    color: #22c55e;
+    font-weight: 700;
+    font-size: 11px;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+
+  /* ===================== HIGHLIGHT BOX ===================== */
+  .highlight-box {
+    background: linear-gradient(135deg, #fffbeb, #fff7ed);
+    border: 1px solid #fde68a;
+    border-radius: 12px;
+    padding: 24px;
+    margin: 20px 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .highlight-box::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px; height: 100%;
+    background: linear-gradient(180deg, #f59e0b, #ef4444);
+  }
+
+  .highlight-box-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: #92400e;
+    margin-bottom: 8px;
+  }
+
+  .highlight-box p { color: #78350f; font-size: 12px; margin: 0; }
+
+  /* ===================== COMPARISON TABLE ===================== */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 12px;
+  }
+
+  .compare-table th {
+    padding: 12px 16px;
+    text-align: center;
+    font-size: 13px;
+  }
+
+  .compare-table th:first-child { text-align: left; background: transparent; }
+  .compare-table th.before { background: #fef2f2; color: #b91c1c; border-radius: 8px 8px 0 0; }
+  .compare-table th.after  { background: #f0fdf4; color: #15803d; border-radius: 8px 8px 0 0; }
+
+  .compare-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .compare-table td:first-child { font-weight: 600; color: #374151; }
+  .compare-table td.before { background: #fef9f9; text-align: center; color: #6b7280; }
+  .compare-table td.after  { background: #f9fff9; text-align: center; color: #15803d; font-weight: 600; }
+
+  /* ===================== PRINT ===================== */
+  @media print {
+    body { background: white; }
+    .cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .section-hero { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .no-print { display: none; }
+    .page-break { page-break-before: always; }
+    .content-block { box-shadow: none; }
+  }
+
+  /* ===================== PRINT BUTTON ===================== */
+  .print-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+    color: white;
+    border: none;
+    padding: 14px 24px;
+    border-radius: 50px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(245,158,11,0.4);
+    z-index: 1000;
+    transition: transform 0.2s;
+  }
+
+  .print-btn:hover { transform: scale(1.05); }
+
+  /* ===================== TAG ===================== */
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .tag-green  { background: #dcfce7; color: #15803d; }
+  .tag-blue   { background: #dbeafe; color: #1d4ed8; }
+  .tag-orange { background: #ffedd5; color: #c2410c; }
+  .tag-purple { background: #ede9fe; color: #6d28d9; }
+  .tag-gray   { background: #f3f4f6; color: #374151; }
+
+  /* ===================== KPI STRIP ===================== */
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin: 24px 0;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+  }
+
+  .kpi-item {
+    padding: 20px;
+    text-align: center;
+    border-right: 1px solid #e5e7eb;
+    background: white;
+  }
+
+  .kpi-item:last-child { border-right: none; }
+
+  .kpi-value {
+    font-size: 28px;
+    font-weight: 900;
+    color: #0f0f23;
+    display: block;
+  }
+
+  .kpi-label {
+    font-size: 11px;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 4px;
+    display: block;
+  }
+
+  /* Two column layout */
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- PORTADA                                                       -->
+<!-- ============================================================ -->
+<div class="cover">
+  <div class="cover-logo">🏓</div>
+  <div class="cover-title">TABLE <span>PONG</span></div>
+  <div class="cover-subtitle">Sistema ERP - Manual de Usuario</div>
+  <div class="cover-divider"></div>
+  <div class="cover-description">
+    Guia completa del sistema de gestion operativa, inventario, ventas y punto de venta
+    para el equipo de Table Pong Sport Bar & Restaurant.
+  </div>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Version</span>
+      <span class="cover-meta-value">1.0</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Fecha</span>
+      <span class="cover-meta-value">Marzo 2026</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Modulos</span>
+      <span class="cover-meta-value">14 Activos</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="cover-meta-label">Roles</span>
+      <span class="cover-meta-value">10 Perfiles</span>
+    </div>
+  </div>
+  <div class="cover-badge">Uso Interno - Confidencial</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- TABLA DE CONTENIDOS                                           -->
+<!-- ============================================================ -->
+<div class="toc-page">
+  <div class="toc-title">Contenido</div>
+  <div class="toc-subtitle">Indice completo del manual de usuario Table Pong ERP</div>
+
+  <div class="toc-section">
+    <div class="toc-section-title">Introduccion</div>
+    <div class="toc-item"><span class="toc-num">1</span> Que es el Sistema ERP de Table Pong <span class="toc-dots"></span><span class="toc-page-num">3</span></div>
+    <div class="toc-item"><span class="toc-num">2</span> Por que usar este sistema - Beneficios clave <span class="toc-dots"></span><span class="toc-page-num">4</span></div>
+    <div class="toc-item"><span class="toc-num">3</span> Antes vs. Despues del ERP <span class="toc-dots"></span><span class="toc-page-num">5</span></div>
+  </div>
+
+  <div class="toc-section">
+    <div class="toc-section-title">Acceso y Roles</div>
+    <div class="toc-item"><span class="toc-num">4</span> Como Ingresar al Sistema <span class="toc-dots"></span><span class="toc-page-num">6</span></div>
+    <div class="toc-item"><span class="toc-num">5</span> Roles de Usuario y Permisos <span class="toc-dots"></span><span class="toc-page-num">6</span></div>
+  </div>
+
+  <div class="toc-section">
+    <div class="toc-section-title">Modulos del Sistema</div>
+    <div class="toc-item"><span class="toc-num">6</span> Dashboard - Panel de Control <span class="toc-dots"></span><span class="toc-page-num">8</span></div>
+    <div class="toc-item"><span class="toc-num">7</span> Punto de Venta (POS) - Restaurante y Delivery <span class="toc-dots"></span><span class="toc-page-num">9</span></div>
+    <div class="toc-item"><span class="toc-num">8</span> Inventario - Control de Insumos <span class="toc-dots"></span><span class="toc-page-num">11</span></div>
+    <div class="toc-item"><span class="toc-num">9</span> Recetas <span class="toc-dots"></span><span class="toc-page-num">13</span></div>
+    <div class="toc-item"><span class="toc-num">10</span> Produccion <span class="toc-dots"></span><span class="toc-page-num">14</span></div>
+    <div class="toc-item"><span class="toc-num">11</span> Ventas e Historial <span class="toc-dots"></span><span class="toc-page-num">15</span></div>
+    <div class="toc-item"><span class="toc-num">12</span> Compras y Proveedores <span class="toc-dots"></span><span class="toc-page-num">16</span></div>
+    <div class="toc-item"><span class="toc-num">13</span> Almacenes y Transferencias <span class="toc-dots"></span><span class="toc-page-num">17</span></div>
+    <div class="toc-item"><span class="toc-num">14</span> Menu del Restaurante <span class="toc-dots"></span><span class="toc-page-num">18</span></div>
+    <div class="toc-item"><span class="toc-num">15</span> Costos <span class="toc-dots"></span><span class="toc-page-num">18</span></div>
+    <div class="toc-item"><span class="toc-num">16</span> Intercompany - Relacion Shanklish <span class="toc-dots"></span><span class="toc-page-num">19</span></div>
+    <div class="toc-item"><span class="toc-num">17</span> Cocina - Comandera Digital <span class="toc-dots"></span><span class="toc-page-num">20</span></div>
+    <div class="toc-item"><span class="toc-num">18</span> Usuarios y Configuracion <span class="toc-dots"></span><span class="toc-page-num">20</span></div>
+  </div>
+
+  <div class="toc-section">
+    <div class="toc-section-title">Guia Rapida</div>
+    <div class="toc-item"><span class="toc-num">19</span> Flujo de una Jornada Operativa Completa <span class="toc-dots"></span><span class="toc-page-num">21</span></div>
+    <div class="toc-item"><span class="toc-num">20</span> Preguntas Frecuentes <span class="toc-dots"></span><span class="toc-page-num">22</span></div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 1: QUE ES EL SISTEMA                                  -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="🏓">
+  <div class="section-hero-num">Seccion 1</div>
+  <div class="section-hero-title">Que es el Sistema ERP de Table Pong</div>
+  <div class="section-hero-desc">Conoce la herramienta que va a transformar como operamos cada dia.</div>
+</div>
+
+<div class="content-block">
+  <h2>Definicion Simple</h2>
+  <p>
+    El <strong>ERP de Table Pong</strong> es un sistema web desarrollado a medida para controlar
+    <em>todas</em> las operaciones del negocio desde un solo lugar. ERP significa
+    <em>Enterprise Resource Planning</em> (Planificacion de Recursos Empresariales).
+  </p>
+  <p>
+    En terminos practicos: es una plataforma que conecta el punto de venta, el inventario,
+    la cocina, las compras, los costos y los reportes en tiempo real. Cualquier persona
+    autorizada puede ver lo que esta pasando en el negocio desde su computadora o tablet,
+    sin importar donde este.
+  </p>
+
+  <div class="kpi-strip">
+    <div class="kpi-item">
+      <span class="kpi-value">14</span>
+      <span class="kpi-label">Modulos Activos</span>
+    </div>
+    <div class="kpi-item">
+      <span class="kpi-value">10</span>
+      <span class="kpi-label">Roles de Usuario</span>
+    </div>
+    <div class="kpi-item">
+      <span class="kpi-value">100%</span>
+      <span class="kpi-label">En la Nube</span>
+    </div>
+    <div class="kpi-item">
+      <span class="kpi-value">24/7</span>
+      <span class="kpi-label">Disponible</span>
+    </div>
+  </div>
+
+  <h2>Para Que Sirve Exactamente</h2>
+
+  <div class="two-col">
+    <div class="module-card">
+      <span class="module-icon">💰</span>
+      <div class="module-name">Vender con POS</div>
+      <div class="module-role">Restaurante y Delivery</div>
+    </div>
+    <div class="module-card">
+      <span class="module-icon">📦</span>
+      <div class="module-name">Controlar Inventario</div>
+      <div class="module-role">Insumos en tiempo real</div>
+    </div>
+    <div class="module-card">
+      <span class="module-icon">🍳</span>
+      <div class="module-name">Gestionar Recetas</div>
+      <div class="module-role">Costos y produccion</div>
+    </div>
+    <div class="module-card">
+      <span class="module-icon">📊</span>
+      <div class="module-name">Ver Reportes</div>
+      <div class="module-role">Ventas y costos</div>
+    </div>
+    <div class="module-card">
+      <span class="module-icon">🛒</span>
+      <div class="module-name">Gestionar Compras</div>
+      <div class="module-role">Ordenes a proveedores</div>
+    </div>
+    <div class="module-card">
+      <span class="module-icon">👥</span>
+      <div class="module-name">Administrar Equipo</div>
+      <div class="module-role">Usuarios y permisos</div>
+    </div>
+  </div>
+
+  <div class="alert alert-info">
+    <span class="alert-icon">💡</span>
+    <div class="alert-text">
+      <strong>Importante saber</strong>
+      El sistema funciona desde cualquier navegador web (Chrome, Firefox, Edge). No necesitas instalar ninguna aplicacion. Solo necesitas internet y tus credenciales de acceso.
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 2: BENEFICIOS                                         -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="🚀">
+  <div class="section-hero-num">Seccion 2</div>
+  <div class="section-hero-title">Por Que Usar Este Sistema</div>
+  <div class="section-hero-desc">Lo que gana Table Pong al adoptar este ERP en su operacion diaria.</div>
+</div>
+
+<div class="content-block">
+  <h2>Beneficios Concretos para el Negocio</h2>
+
+  <div class="benefit-grid">
+    <div class="benefit-card" style="--color: #f59e0b;">
+      <span class="benefit-icon">💸</span>
+      <div class="benefit-title">Reduce Perdidas de Inventario</div>
+      <p class="benefit-text">
+        Cada insumo que entra y sale queda registrado. Se acabaron las "perdidas misteriosas"
+        de productos. El sistema detecta cuando el inventario real no coincide con lo que
+        deberia haber segun las ventas y la produccion.
+      </p>
+    </div>
+
+    <div class="benefit-card" style="--color: #22c55e;">
+      <span class="benefit-icon">⚡</span>
+      <div class="benefit-title">Ventas Mas Rapidas</div>
+      <p class="benefit-text">
+        El punto de venta digital elimina errores en pedidos y acelera el cobro.
+        La comanda llega directo a cocina sin papel de por medio. Menos errores,
+        menos tiempo de espera para el cliente.
+      </p>
+    </div>
+
+    <div class="benefit-card" style="--color: #6366f1;">
+      <span class="benefit-icon">📈</span>
+      <div class="benefit-title">Control de Costos en Tiempo Real</div>
+      <p class="benefit-text">
+        Sabes exactamente cuanto cuesta producir cada plato o bebida. Si un insumo
+        sube de precio, el sistema refleja el impacto en los costos de inmediato,
+        permitiendo ajustar precios de venta a tiempo.
+      </p>
+    </div>
+
+    <div class="benefit-card" style="--color: #ef4444;">
+      <span class="benefit-icon">🚨</span>
+      <div class="benefit-title">Alertas de Stock Bajo</div>
+      <p class="benefit-text">
+        El sistema te avisa cuando un insumo esta por agotarse, antes de que
+        afecte el servicio. Nunca mas quedarse sin ingredientes claves
+        en medio de un evento o noche de alta demanda.
+      </p>
+    </div>
+
+    <div class="benefit-card" style="--color: #8b5cf6;">
+      <span class="benefit-icon">🔐</span>
+      <div class="benefit-title">Seguridad y Control de Acceso</div>
+      <p class="benefit-text">
+        Cada usuario tiene un perfil con permisos especificos. Un cajero
+        no puede ver los costos ni modificar el inventario. Un auditor
+        solo puede leer. El dueno tiene vision total del negocio.
+      </p>
+    </div>
+
+    <div class="benefit-card" style="--color: #06b6d4;">
+      <span class="benefit-icon">📱</span>
+      <div class="benefit-title">Acceso Desde Cualquier Lugar</div>
+      <p class="benefit-text">
+        El gerente puede revisar ventas y costos desde casa o en movimiento.
+        El sistema esta en la nube, disponible las 24 horas. No depende
+        de una computadora fisica en el local.
+      </p>
+    </div>
+
+    <div class="benefit-card" style="--color: #10b981;">
+      <span class="benefit-icon">🤝</span>
+      <div class="benefit-title">Control del Acuerdo con Shanklish</div>
+      <p class="benefit-text">
+        El modulo Intercompany registra y calcula automaticamente la deuda
+        semanal con Shanklish segun las ventas de cocina. Elimina discrepancias
+        y hace la liquidacion semanal transparente y verificable.
+      </p>
+    </div>
+
+    <div class="benefit-card" style="--color: #f97316;">
+      <span class="benefit-icon">📋</span>
+      <div class="benefit-title">Trazabilidad Total</div>
+      <p class="benefit-text">
+        Todo queda registrado con usuario, fecha y hora. Si hay un error o
+        discrepancia, se puede rastrear quien lo hizo y cuando.
+        Ideal para auditorias y disputas internas.
+      </p>
+    </div>
+  </div>
+
+  <h2>Lo Que el Sistema Elimina</h2>
+  <div class="alert alert-success">
+    <span class="alert-icon">✅</span>
+    <div class="alert-text">
+      <strong>Adios a estas situaciones problematicas:</strong>
+      Conteos de inventario manuales en papel &bull;
+      Comandas en papel que se pierden o se leen mal &bull;
+      No saber el costo real de un plato &bull;
+      Calcular la deuda con Shanklish a mano en Excel &bull;
+      No saber cuanto se vendio ayer sin llamar al cajero &bull;
+      Compras de emergencia porque se acabo un insumo sin aviso &bull;
+      No poder demostrar quien cambio un precio o borro una venta
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 3: ANTES vs DESPUES                                   -->
+<!-- ============================================================ -->
+<div class="content-block" style="page-break-before: always;">
+  <h2>Antes vs. Despues del ERP</h2>
+
+  <table class="compare-table">
+    <thead>
+      <tr>
+        <th></th>
+        <th class="before">SIN el Sistema</th>
+        <th class="after">CON el Sistema</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Inventario</td>
+        <td class="before">Conteo manual, cuadernos, errores frecuentes</td>
+        <td class="after">Actualizado automaticamente con cada venta o produccion</td>
+      </tr>
+      <tr>
+        <td>Ventas del dia</td>
+        <td class="before">Hay que sumar tickets o esperar reporte manual</td>
+        <td class="after">Dashboard en tiempo real con totales, metodos de pago y mas</td>
+      </tr>
+      <tr>
+        <td>Costos por plato</td>
+        <td class="before">Estimaciones o calculos en Excel desactualizados</td>
+        <td class="after">Costo calculado automatico segun receta e inventario actual</td>
+      </tr>
+      <tr>
+        <td>Deuda con Shanklish</td>
+        <td class="before">Calculo manual semanal propenso a discrepancias</td>
+        <td class="after">Liquidacion automatica basada en ventas registradas</td>
+      </tr>
+      <tr>
+        <td>Comandas a cocina</td>
+        <td class="before">Papel, letra ilegible, pedidos perdidos</td>
+        <td class="after">Pantalla digital en cocina, orden inmediata y clara</td>
+      </tr>
+      <tr>
+        <td>Alertas de stock</td>
+        <td class="before">Te enteras cuando ya se acabo el producto</td>
+        <td class="after">Alerta preventiva cuando el stock llega al minimo definido</td>
+      </tr>
+      <tr>
+        <td>Control de acceso</td>
+        <td class="before">Todos ven y tocan todo sin trazabilidad</td>
+        <td class="after">Cada usuario solo accede a lo que corresponde a su rol</td>
+      </tr>
+      <tr>
+        <td>Reportes</td>
+        <td class="before">Tardaban dias y eran imprecisos</td>
+        <td class="after">Disponibles al instante con filtros por fecha, area, producto</td>
+      </tr>
+      <tr>
+        <td>Compras</td>
+        <td class="before">Sin historial ni comparacion de precios</td>
+        <td class="after">Ordenes de compra registradas, historial por proveedor</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 4: COMO INGRESAR                                      -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="🔑">
+  <div class="section-hero-num">Seccion 4</div>
+  <div class="section-hero-title">Como Ingresar al Sistema</div>
+  <div class="section-hero-desc">Acceso desde cualquier navegador web con tus credenciales.</div>
+</div>
+
+<div class="content-block">
+  <h2>Pasos para Acceder</h2>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Abrir el navegador</div>
+        <div class="step-desc">Usa Google Chrome, Microsoft Edge o Firefox. Abre el navegador en tu computadora o tablet.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Ir a la direccion del sistema</div>
+        <div class="step-desc">Escribe la URL del sistema en la barra de direcciones. Tu administrador te la proporcionara.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Ingresar usuario y contrasena</div>
+        <div class="step-desc">Escribe el email y la contrasena que te asignaron. Haz clic en "Iniciar Sesion".</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Ver tu panel segun tu rol</div>
+        <div class="step-desc">El sistema te llevara automaticamente a la pantalla correspondiente a tu perfil de usuario.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-warning">
+    <span class="alert-icon">⚠️</span>
+    <div class="alert-text">
+      <strong>Seguridad de tu cuenta</strong>
+      No compartas tu contrasena con nadie. Si crees que alguien mas conoce tu contrasena, cambiala desde el menu de perfil o notifica al administrador. Cada accion queda registrada con tu usuario.
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 5: ROLES                                              -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="👤">
+  <div class="section-hero-num">Seccion 5</div>
+  <div class="section-hero-title">Roles de Usuario y Permisos</div>
+  <div class="section-hero-desc">Cada persona del equipo tiene un perfil adaptado a su funcion.</div>
+</div>
+
+<div class="content-block">
+  <h2>Jerarquia de Roles</h2>
+  <p>El sistema tiene 10 roles definidos. Cada rol determina que modulos puede ver y que acciones puede realizar cada usuario.</p>
+
+  <table class="roles-table">
+    <thead>
+      <tr>
+        <th>Rol</th>
+        <th>Descripcion</th>
+        <th>Acceso Principal</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="role-badge" style="background:#ede9fe;color:#6d28d9;">Dueno</span></td>
+        <td>Acceso total al sistema. Ve todo, edita todo, aprueba todo.</td>
+        <td>Todos los modulos</td>
+      </tr>
+      <tr>
+        <td><span class="role-badge" style="background:#dbeafe;color:#1d4ed8;">Auditor</span></td>
+        <td>Solo lectura. Puede ver y exportar todo pero no modificar nada.</td>
+        <td>Lectura + Exportacion</td>
+      </tr>
+      <tr>
+        <td><span class="role-badge" style="background:#dbeafe;color:#1e40af;">Gerente Administrativo</span></td>
+        <td>Gestion administrativa, financiera y de usuarios.</td>
+        <td>Finanzas, usuarios, configuracion</td>
+      </tr>
+      <tr>
+        <td><span class="role-badge" style="background:#dcfce7;color:#15803d;">Gerente Operativo</span></td>
+        <td>Control total de operaciones, inventario, produccion y POS.</td>
+        <td>Inventario, recetas, produccion, POS, ventas</td>
+      </tr>
+      <tr>
+        <td><span class="role-badge" style="background:#fef3c7;color:#92400e;">Gerente RRHH</span></td>
+        <td>Gestion del personal y recursos humanos.</td>
+        <td>Usuarios, RRHH, reportes</td>
+      </tr>
+      <tr>
+        <td><span class="role-badge" style="background:#fee2e2;color:#b91c1c;">Chef</span></td>
+        <td>Crea y edita recetas. Registra produccion diaria.</td>
+        <td>Recetas, produccion, inventario (lectura)</td>
+      </tr>
+      <tr>
+        <td><span class="role-badge" style="background:#f3f4f6;color:#374151;">Jefe de Area</span></td>
+        <td>Gestion del inventario de su area especifica. No ve ventas.</td>
+        <td>Inventario (su area), produccion (reporte)</td>
+      </tr>
+      <tr>
+        <td><span class="role-badge" style="background:#dcfce7;color:#065f46;">Cajera Restaurante</span></td>
+        <td>Solo accede al POS de restaurante. Ve sus ventas del dia.</td>
+        <td>POS Restaurante, historial (solo el suyo)</td>
+      </tr>
+      <tr>
+        <td><span class="role-badge" style="background:#ede9fe;color:#5b21b6;">Cajera Delivery</span></td>
+        <td>Solo accede al POS de delivery. Ve sus ventas del dia.</td>
+        <td>POS Delivery, historial (solo el suyo)</td>
+      </tr>
+      <tr>
+        <td><span class="role-badge" style="background:#fee2e2;color:#991b1b;">Jefe de Cocina</span></td>
+        <td>Solo ve la comandera digital de cocina. No accede a ventas ni inventario.</td>
+        <td>Pantalla de cocina (comandera)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="alert alert-info">
+    <span class="alert-icon">ℹ️</span>
+    <div class="alert-text">
+      <strong>Principio de minimo privilegio</strong>
+      Cada usuario solo ve lo que necesita para hacer su trabajo. Esto protege la informacion sensible del negocio y reduce el riesgo de errores accidentales.
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 6: DASHBOARD                                          -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="📊">
+  <div class="section-hero-num">Seccion 6</div>
+  <div class="section-hero-title">Dashboard - Panel de Control</div>
+  <div class="section-hero-desc">La primera pantalla que ves al entrar. Tu resumen ejecutivo del negocio.</div>
+</div>
+
+<div class="content-block">
+  <h2>Que Muestra el Dashboard</h2>
+  <p>El panel principal ofrece una vision rapida del estado actual del negocio. Se actualiza en tiempo real con datos de ventas, inventario y produccion.</p>
+
+  <div class="two-col">
+    <div>
+      <h3>Tarjetas de Resumen</h3>
+      <ul class="feature-list">
+        <li>Total de insumos registrados en el sistema</li>
+        <li>Ventas del dia con monto total</li>
+        <li>Recetas activas en el sistema</li>
+        <li>Producciones registradas</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Alertas Importantes</h3>
+      <ul class="feature-list">
+        <li>Insumos con stock bajo (destacados en rojo)</li>
+        <li>Nombre personalizado de bienvenida</li>
+        <li>Acceso rapido a crear nueva receta</li>
+        <li>Redireccion automatica segun tu rol</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="alert alert-info">
+    <span class="alert-icon">🔄</span>
+    <div class="alert-text">
+      <strong>Redireccion automatica</strong>
+      Las cajeras de restaurante son enviadas directamente al POS de restaurante al iniciar sesion.
+      Las cajeras de delivery son enviadas al POS de delivery. No necesitan navegar.
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 7: POS                                                -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="💳">
+  <div class="section-hero-num">Seccion 7</div>
+  <div class="section-hero-title">Punto de Venta (POS)</div>
+  <div class="section-hero-desc">El corazon de la operacion diaria. Registra ventas de restaurante y delivery.</div>
+</div>
+
+<div class="content-block">
+  <h2>Tipos de POS Disponibles</h2>
+
+  <div class="module-detail">
+    <div class="module-header">
+      <span class="module-header-icon">🍽️</span>
+      <div class="module-header-info">
+        <h3>POS Restaurante</h3>
+        <p>Para ventas en el local. Mesas, consumo en barra, pedidos en salon.</p>
+      </div>
+    </div>
+    <div class="module-body">
+      <ul class="feature-list">
+        <li>Seleccionar items del menu con precio actualizado</li>
+        <li>Agregar cantidad y observaciones por item</li>
+        <li>Asignar mesa o cliente al pedido</li>
+        <li>Seleccionar metodo de pago (efectivo, transferencia, punto de venta)</li>
+        <li>Registrar montos en bolivares y dolares</li>
+        <li>Tasa de cambio configurable</li>
+        <li>Generar e imprimir recibo</li>
+        <li>Enviar pedido a cocina automaticamente</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="module-detail">
+    <div class="module-header">
+      <span class="module-header-icon">🛵</span>
+      <div class="module-header-info">
+        <h3>POS Delivery</h3>
+        <p>Para pedidos de delivery. Datos del cliente y zona de entrega.</p>
+      </div>
+    </div>
+    <div class="module-body">
+      <ul class="feature-list">
+        <li>Busqueda y seleccion de productos del menu</li>
+        <li>Registrar datos del cliente para el pedido</li>
+        <li>Calcular totales con tasa de cambio actualizada</li>
+        <li>Imprimir recibo de delivery</li>
+        <li>Historial de pedidos del dia</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="module-detail">
+    <div class="module-header">
+      <span class="module-header-icon">🏓</span>
+      <div class="module-header-info">
+        <h3>POS Sport Bar</h3>
+        <p>Vista especializada para la operacion del sport bar con cuentas abiertas y mesas.</p>
+      </div>
+    </div>
+    <div class="module-body">
+      <ul class="feature-list">
+        <li>Gestion de mesas y estaciones de juego</li>
+        <li>Cuentas abiertas con consumo incremental</li>
+        <li>Division de cuenta entre varios clientes</li>
+        <li>Control de zona: salon, barra, VIP, area de juegos</li>
+        <li>Envio selectivo de items a cocina o barra</li>
+        <li>Pre-cierre con calculo de deuda en tiempo real</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Como Registrar una Venta en el POS</h2>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Seleccionar los productos</div>
+        <div class="step-desc">Haz clic en los items del menu que el cliente desea. Puedes ajustar la cantidad con los botones + y -.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Revisar el carrito</div>
+        <div class="step-desc">Verifica el resumen del pedido en el panel lateral. El total se calcula automaticamente en bolivares y dolares.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Elegir metodo de pago</div>
+        <div class="step-desc">Selecciona como paga el cliente: efectivo, transferencia, tarjeta de debito/credito o mixto.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Confirmar y registrar</div>
+        <div class="step-desc">Haz clic en "Registrar Venta". La venta queda guardada, el inventario se actualiza y el pedido llega a cocina.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <div class="step-title">Imprimir recibo (opcional)</div>
+        <div class="step-desc">El sistema genera el comprobante. Puedes imprimirlo o enviarlo segun el flujo del local.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-warning">
+    <span class="alert-icon">⚠️</span>
+    <div class="alert-text">
+      <strong>Sobre la tasa de cambio</strong>
+      La tasa de cambio debe mantenerse actualizada diariamente por el gerente o administrador. Una tasa desactualizada afectara el calculo de todos los precios en dolares del POS.
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 8: INVENTARIO                                         -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="📦">
+  <div class="section-hero-num">Seccion 8</div>
+  <div class="section-hero-title">Inventario - Control de Insumos</div>
+  <div class="section-hero-desc">El corazon operativo del negocio. Control total de lo que entra y sale.</div>
+</div>
+
+<div class="content-block">
+  <h2>Que Controla el Modulo de Inventario</h2>
+  <p>El inventario registra todos los insumos del negocio: desde ingredientes de cocina hasta licores, bebidas, utensilios y materias primas.</p>
+
+  <div class="two-col">
+    <div>
+      <h3>Funciones Principales</h3>
+      <ul class="feature-list">
+        <li>Registrar insumos con nombre, unidad, categoria y proveedor</li>
+        <li>Definir stock minimo para alertas automaticas</li>
+        <li>Ver existencias actuales en tiempo real</li>
+        <li>Registrar entradas de mercancia (con o sin OCR de facturas)</li>
+        <li>Ver historial de movimientos por insumo</li>
+        <li>Auditorias de inventario con ajuste de discrepancias</li>
+        <li>Ciclos de inventario periodicos</li>
+        <li>Inventario diario por area</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Tipos de Insumos</h3>
+      <ul class="feature-list">
+        <li>Ingredientes de cocina (carnes, vegetales, especias)</li>
+        <li>Bebidas embaladas (cervezas, refrescos, jugos)</li>
+        <li>Licores y vinos</li>
+        <li>Insumos de cocteleria (mixers, garnish, bases)</li>
+        <li>Materiales de empaque (delivery)</li>
+        <li>Insumos de limpieza y operacion</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Como Registrar una Entrada de Mercancia</h2>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Ir a Inventario > Entrada</div>
+        <div class="step-desc">En el menu lateral, selecciona "Inventario" y luego "Entrada de Mercancia".</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Seleccionar el insumo</div>
+        <div class="step-desc">Busca el insumo por nombre. Si no existe, el administrador debe crearlo primero.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Ingresar cantidad y costo</div>
+        <div class="step-desc">Escribe la cantidad recibida y el precio de la factura. Esto actualiza el costo promedio del insumo.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Seleccionar proveedor y almacen destino</div>
+        <div class="step-desc">Indica de que proveedor viene la mercancia y a cual almacen o area va dirigida.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <div class="step-title">Confirmar la entrada</div>
+        <div class="step-desc">El stock del insumo se actualiza automaticamente. Queda registrado con tu usuario y la fecha.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Auditorias de Inventario</h2>
+  <p>Las auditorias permiten comparar el inventario fisico real contra lo que dice el sistema. Es fundamental hacerlas periodicamente para detectar mermas, hurtos o errores de registro.</p>
+
+  <div class="alert alert-success">
+    <span class="alert-icon">✅</span>
+    <div class="alert-text">
+      <strong>Recomendacion: Auditoria Semanal</strong>
+      Se recomienda realizar una auditoria de los insumos criticos (licores, carnes) al menos una vez por semana. Esto permite detectar discrepancias a tiempo y mantener la trazabilidad del inventario.
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 9: RECETAS                                            -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="🍳">
+  <div class="section-hero-num">Seccion 9</div>
+  <div class="section-hero-title">Recetas</div>
+  <div class="section-hero-desc">Estandariza la produccion y calcula el costo real de cada plato o bebida.</div>
+</div>
+
+<div class="content-block">
+  <h2>Que es una Receta en el Sistema</h2>
+  <p>Una receta define los ingredientes exactos y sus cantidades para producir un plato, bebida o preparacion. El sistema la usa para dos cosas clave: calcular el costo de produccion y descontar el inventario automaticamente cuando se registra una produccion o venta.</p>
+
+  <div class="two-col">
+    <div>
+      <h3>Tipos de Recetas</h3>
+      <ul class="feature-list">
+        <li>Estandar (platos de cocina)</li>
+        <li>Coctel (bebidas preparadas en barra)</li>
+        <li>Bucket / Combo (multiples porciones)</li>
+        <li>Pre-batch (preparaciones en lote)</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lo que Calcula Automaticamente</h3>
+      <ul class="feature-list">
+        <li>Costo total de produccion de la receta</li>
+        <li>Costo por porcion o unidad de salida</li>
+        <li>Margen de ganancia vs. precio de venta</li>
+        <li>Impacto en inventario por cada produccion</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Como Crear una Receta</h2>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Ir a Recetas > Nueva Receta</div>
+        <div class="step-desc">Desde el dashboard o el menu lateral. Solo Chef, Gerente Operativo y Dueno pueden crear recetas.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Dar nombre y categoria</div>
+        <div class="step-desc">Escribe el nombre del plato/bebida y selecciona la categoria (comida, coctel, bucket, etc.).</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Agregar ingredientes</div>
+        <div class="step-desc">Busca cada insumo del inventario y especifica la cantidad necesaria por porcion.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Ver costo calculado</div>
+        <div class="step-desc">El sistema calcula el costo total automaticamente. Puedes compararlo con el precio de venta para ver el margen.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <div class="step-title">Guardar la receta</div>
+        <div class="step-desc">La receta queda disponible para usar en producciones y en el modulo de menu del POS.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 10: PRODUCCION                                        -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="🏭">
+  <div class="section-hero-num">Seccion 10</div>
+  <div class="section-hero-title">Produccion</div>
+  <div class="section-hero-desc">Registra lo que se produce cada dia y el sistema descuenta el inventario automaticamente.</div>
+</div>
+
+<div class="content-block">
+  <h2>Como Funciona el Modulo de Produccion</h2>
+  <p>Cuando el equipo de cocina prepara un lote de alimentos (ejemplo: 20 porciones de arepa rellena), se registra en el sistema. Automaticamente se descuentan los ingredientes del inventario segun la receta correspondiente.</p>
+
+  <div class="highlight-box">
+    <div class="highlight-box-title">Ejemplo Practico</div>
+    <p>
+      Si la receta de "Sandwich de Pollo" requiere 150g de pollo, 1 pan y 10g de salsa, y se registra una produccion de 30 unidades, el sistema descuenta automaticamente: 4.5 kg de pollo, 30 panes y 300g de salsa del inventario. Sin calculos manuales.
+    </p>
+  </div>
+
+  <h2>Como Registrar una Produccion</h2>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Ir a Produccion</div>
+        <div class="step-desc">En el menu lateral, selecciona "Produccion". Puedes ver el historial de producciones anteriores.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Crear nueva produccion</div>
+        <div class="step-desc">Haz clic en "Nueva Produccion". Selecciona la receta que se va a producir.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Indicar cantidad producida</div>
+        <div class="step-desc">Escribe cuantas porciones o unidades se produjeron. El sistema calcula el impacto en inventario.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Confirmar la produccion</div>
+        <div class="step-desc">Al confirmar, el inventario se actualiza automaticamente. Queda el registro con fecha, hora y responsable.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 11: VENTAS                                            -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="📈">
+  <div class="section-hero-num">Seccion 11</div>
+  <div class="section-hero-title">Ventas e Historial</div>
+  <div class="section-hero-desc">Visualiza, filtra y exporta toda la informacion de ventas del negocio.</div>
+</div>
+
+<div class="content-block">
+  <h2>Que Muestra el Historial de Ventas</h2>
+
+  <ul class="feature-list">
+    <li>Lista completa de todas las ventas registradas con fecha y hora</li>
+    <li>Total por venta con desglose por metodo de pago</li>
+    <li>Nombre del cajero que registró la venta</li>
+    <li>Items vendidos por cada transaccion</li>
+    <li>Filtros por rango de fecha, cajero, metodo de pago o area</li>
+    <li>Totales acumulados por dia, semana o mes</li>
+    <li>Exportacion de datos para analisis externo</li>
+  </ul>
+
+  <div class="alert alert-info">
+    <span class="alert-icon">🔒</span>
+    <div class="alert-text">
+      <strong>Acceso restringido por rol</strong>
+      Las cajeras solo pueden ver el historial de sus propias ventas del dia. El Jefe de Area no tiene acceso al historial de ventas. Solo gerentes, dueno y auditor tienen acceso completo.
+    </div>
+  </div>
+
+  <h2>Modulo de Ventas (Cargar)</h2>
+  <p>Permite importar ventas desde sistemas externos o archivos. Util para consolidar informacion de diferentes fuentes o importar datos historicos al sistema.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 12: COMPRAS                                           -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="🛒">
+  <div class="section-hero-num">Seccion 12</div>
+  <div class="section-hero-title">Compras y Proveedores</div>
+  <div class="section-hero-desc">Gestion de ordenes de compra y control del historial de proveedores.</div>
+</div>
+
+<div class="content-block">
+  <h2>Funciones del Modulo de Compras</h2>
+
+  <div class="two-col">
+    <div>
+      <h3>Ordenes de Compra</h3>
+      <ul class="feature-list">
+        <li>Crear ordenes de compra a proveedores</li>
+        <li>Seguimiento del estado de cada orden</li>
+        <li>Historial de compras por proveedor</li>
+        <li>Comparacion de precios historicos</li>
+        <li>Aprobacion de ordenes por niveles jerarquicos</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Gestion de Proveedores</h3>
+      <ul class="feature-list">
+        <li>Registro de datos de contacto del proveedor</li>
+        <li>Clasificacion por tipo (regular, intercompany)</li>
+        <li>Vinculacion de insumos a proveedores especificos</li>
+        <li>Historial de todas las compras realizadas</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Como Crear una Orden de Compra</h2>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Ir a Compras</div>
+        <div class="step-desc">Selecciona el modulo desde el menu lateral.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Seleccionar proveedor</div>
+        <div class="step-desc">Elige el proveedor al que se le hara la compra. Deben estar previamente registrados.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Agregar los items</div>
+        <div class="step-desc">Selecciona los insumos a pedir con sus cantidades y precios acordados.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Enviar para aprobacion</div>
+        <div class="step-desc">La orden pasa al gerente correspondiente para su aprobacion antes de proceder.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <div class="step-title">Recibir mercancia</div>
+        <div class="step-desc">Al llegar la mercancia, se confirma la recepcion y el inventario se actualiza automaticamente.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 13: ALMACENES Y TRANSFERENCIAS                        -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="🏪">
+  <div class="section-hero-num">Seccion 13</div>
+  <div class="section-hero-title">Almacenes y Transferencias</div>
+  <div class="section-hero-desc">Control del movimiento de insumos entre areas, bodegas y barras.</div>
+</div>
+
+<div class="content-block">
+  <h2>Almacenes</h2>
+  <p>El sistema permite gestionar multiples almacenes o areas: bodega principal, barra principal, barra auxiliar, area de cocina, area de juegos, etc. Cada area tiene su propio stock.</p>
+
+  <ul class="feature-list">
+    <li>Ver el stock disponible en cada almacen o area</li>
+    <li>Crear nuevos almacenes o areas segun la estructura del local</li>
+    <li>Asignar insumos a almacenes especificos</li>
+    <li>Comparar stock entre areas</li>
+  </ul>
+
+  <h2>Transferencias</h2>
+  <p>Las transferencias permiten mover insumos de un area a otra dentro del local. Por ejemplo, de la bodega principal a la barra principal para el reabastecimiento diario.</p>
+
+  <div class="highlight-box">
+    <div class="highlight-box-title">Flujo de Reabastecimiento Recomendado</div>
+    <p>
+      1. Cada dia al abrir, el encargado de barra solicita los insumos que necesita.<br/>
+      2. Se crea una transferencia desde Bodega Principal hacia Barra Principal.<br/>
+      3. El sistema descuenta del stock de bodega y suma al stock de barra.<br/>
+      4. Al cierre del dia, se compara lo transferido vs. lo vendido para detectar diferencias.
+    </p>
+  </div>
+
+  <h2>Tipos de Transferencias</h2>
+  <ul class="feature-list">
+    <li>Interna: movimiento entre dos areas del mismo local</li>
+    <li>Reabastecimiento de Barra: de bodega hacia barra (la mas frecuente)</li>
+    <li>Devolucion: regreso de insumos de barra a bodega</li>
+    <li>Masiva (Bulk): transferencia de multiples insumos en un solo movimiento</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 14: MENU                                              -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="📋">
+  <div class="section-hero-num">Seccion 14</div>
+  <div class="section-hero-title">Menu del Restaurante</div>
+  <div class="section-hero-desc">Gestiona los productos disponibles en el punto de venta.</div>
+</div>
+
+<div class="content-block">
+  <h2>Que es el Modulo de Menu</h2>
+  <p>El menu es el catalogo de productos disponibles para la venta. Cada item del menu esta vinculado a una receta (opcional) y tiene un precio de venta definido. Es lo que ven las cajeras cuando registran una venta en el POS.</p>
+
+  <ul class="feature-list">
+    <li>Crear y editar items del menu con nombre, precio y descripcion</li>
+    <li>Vincular cada item a una receta para calculo de costos y descargo de inventario</li>
+    <li>Clasificar por categoria: comida, bebida embalada, coctel, bucket, combo</li>
+    <li>Definir si el item va a cocina, a barra o no requiere preparacion</li>
+    <li>Activar o desactivar items del menu sin eliminarlos</li>
+    <li>Gestionar precios en bolivares y dolares</li>
+  </ul>
+
+  <div class="alert alert-warning">
+    <span class="alert-icon">⚠️</span>
+    <div class="alert-text">
+      <strong>Importante sobre los precios</strong>
+      Los precios del menu deben mantenerse actualizados. Un item sin precio o con precio incorrecto afectara directamente los cobros en el POS y los reportes de ventas.
+    </div>
+  </div>
+
+  <h2>Costos - Analisis de Rentabilidad</h2>
+  <p>El modulo de Costos permite importar y visualizar el costo de produccion de cada item del menu y compararlo con el precio de venta para calcular el margen de ganancia real del negocio.</p>
+
+  <ul class="feature-list">
+    <li>Ver costo real de cada plato o bebida segun precios actuales del inventario</li>
+    <li>Calcular margen bruto por item (precio venta - costo produccion)</li>
+    <li>Identificar los items mas y menos rentables</li>
+    <li>Simular el impacto de cambios de precio de insumos en la rentabilidad</li>
+    <li>Importar estructura de costos desde archivos externos</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 16: INTERCOMPANY                                      -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="🤝">
+  <div class="section-hero-num">Seccion 16</div>
+  <div class="section-hero-title">Intercompany - Relacion con Shanklish</div>
+  <div class="section-hero-desc">Control automatico de la deuda semanal de Table Pong con Shanklish.</div>
+</div>
+
+<div class="content-block">
+  <h2>Como Funciona el Acuerdo Comercial</h2>
+  <p>
+    Shanklish actua como proveedor interno de cocina para Table Pong. Table Pong vende los productos de cocina al cliente final y periodicamente debe liquidar con Shanklish la porcion correspondiente.
+  </p>
+
+  <div class="highlight-box">
+    <div class="highlight-box-title">Principio Contable Clave</div>
+    <p>
+      La venta al cliente NO liquida automaticamente la deuda con Shanklish. El sistema consolida todas las ventas de productos de cocina en un periodo determinado y calcula el monto adeudado a Shanklish segun el acuerdo pactado. Esto garantiza transparencia y elimina discrepancias en la liquidacion.
+    </p>
+  </div>
+
+  <h2>Flujo del Modulo Intercompany</h2>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Ventas diarias se registran normalmente</div>
+        <div class="step-desc">Las cajeras registran ventas en el POS. El sistema identifica automaticamente cuales items son de cocina Shanklish.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Al cierre del periodo (semanal), generar liquidacion</div>
+        <div class="step-desc">El gerente genera el reporte de liquidacion para el periodo correspondiente.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">El sistema calcula el monto adeudado</div>
+        <div class="step-desc">Basado en las ventas del periodo, calcula: venta bruta, base imponible, IVA, descuentos y monto neto a pagar a Shanklish.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Revision y aprobacion</div>
+        <div class="step-desc">El reporte pasa de "Borrador" a "Revisado" y luego a "Aprobado" antes del pago.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Que Incluye el Reporte Semanal</h2>
+  <ul class="feature-list">
+    <li>Periodo desde y hasta</li>
+    <li>Total bruto vendido de productos Shanklish</li>
+    <li>Base imponible y calculo de IVA</li>
+    <li>Descuentos y cortesias aplicados en el periodo</li>
+    <li>Venta neta base para la liquidacion</li>
+    <li>Monto total adeudado a Shanklish</li>
+    <li>Cantidad de tickets o transacciones incluidas</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 17: COCINA                                            -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="👨‍🍳">
+  <div class="section-hero-num">Seccion 17</div>
+  <div class="section-hero-title">Cocina - Comandera Digital</div>
+  <div class="section-hero-desc">Pantalla exclusiva para el equipo de cocina. Sin papel, sin confusion.</div>
+</div>
+
+<div class="content-block">
+  <h2>Como Funciona la Comandera Digital</h2>
+  <p>Cuando una cajera registra una venta en el POS con items de cocina, la orden llega automaticamente a la pantalla de cocina. El equipo de cocina ve los pedidos en tiempo real y los marca como listos.</p>
+
+  <ul class="feature-list">
+    <li>Ver pedidos pendientes en orden de llegada</li>
+    <li>Marcar pedidos como "En Preparacion" y "Listo"</li>
+    <li>Identificar el numero de mesa o cliente del pedido</li>
+    <li>Ver observaciones especiales del cliente (sin cebolla, extra salsa, etc.)</li>
+    <li>Separacion visual entre pedidos de salon, barra y delivery</li>
+  </ul>
+
+  <div class="alert alert-success">
+    <span class="alert-icon">🚀</span>
+    <div class="alert-text">
+      <strong>Ventaja clave</strong>
+      Con la comandera digital se eliminan los errores de lectura de comandas en papel. El pedido llega exactamente como fue registrado en el POS, en segundos, sin que nadie tenga que caminar de la caja a la cocina.
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 18: USUARIOS Y CONFIG                                 -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="⚙️">
+  <div class="section-hero-num">Seccion 18</div>
+  <div class="section-hero-title">Usuarios y Configuracion</div>
+  <div class="section-hero-desc">Administra el equipo y configura los parametros del sistema.</div>
+</div>
+
+<div class="content-block">
+  <h2>Gestion de Usuarios</h2>
+  <p>Solo el Dueno y el Gerente Administrativo pueden crear y modificar usuarios. Un usuario solo puede gestionar a personas de menor jerarquia que el.</p>
+
+  <h3>Como Crear un Usuario Nuevo</h3>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Ir a Usuarios</div>
+        <div class="step-desc">En el menu lateral, selecciona "Usuarios".</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Crear nuevo usuario</div>
+        <div class="step-desc">Ingresa nombre, apellido, email y asigna el rol correspondiente a su funcion.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Asignar contrasena inicial</div>
+        <div class="step-desc">El sistema genera o permite definir una contrasena inicial. El usuario puede cambiarla desde su perfil.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Configuracion del Sistema</h2>
+  <ul class="feature-list">
+    <li>Tasa de cambio bolivar/dolar (actualizar diariamente)</li>
+    <li>Configuracion de areas y almacenes</li>
+    <li>Parametros de stock minimo por insumo</li>
+    <li>Datos del negocio (nombre, logo, datos fiscales)</li>
+  </ul>
+
+  <h2>Cambio de Contrasena</h2>
+  <p>Cualquier usuario puede cambiar su propia contrasena desde el menu de perfil en la esquina superior del sistema. Se requiere ingresar la contrasena actual por seguridad.</p>
+
+  <h2>Prestamos</h2>
+  <p>El modulo de Prestamos permite gestionar adelantos o prestamos internos al personal, con seguimiento del monto prestado, las cuotas y el saldo pendiente.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 19: FLUJO OPERATIVO                                   -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="🔄">
+  <div class="section-hero-num">Seccion 19</div>
+  <div class="section-hero-title">Flujo de una Jornada Operativa Completa</div>
+  <div class="section-hero-desc">Como deberia fluir un dia tipico de operacion usando el sistema.</div>
+</div>
+
+<div class="content-block">
+  <h2>Apertura del Dia</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Gerente actualiza la tasa de cambio</div>
+        <div class="step-desc">Lo primero del dia. Una tasa desactualizada afecta todos los precios del POS.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Revisar alertas de stock bajo en el dashboard</div>
+        <div class="step-desc">Si hay insumos en alerta roja, gestionar reposicion antes de abrir.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Registrar transferencias de reabastecimiento a barras</div>
+        <div class="step-desc">Mover los insumos de bodega a las barras para el dia de operacion.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Cajeras y cocina inician sesion</div>
+        <div class="step-desc">Cada quien accede con sus propias credenciales y queda listo para operar.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Durante el Servicio</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Cajeras registran ventas en el POS</div>
+        <div class="step-desc">Cada pedido queda registrado con items, precios, metodo de pago y cajera responsable.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Cocina ve pedidos en la comandera digital</div>
+        <div class="step-desc">Sin necesidad de comandas en papel. Los pedidos llegan en segundos.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">El inventario se descuenta en tiempo real</div>
+        <div class="step-desc">Cada venta registrada descuenta automaticamente los insumos de la receta correspondiente.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Gerente monitorea desde el dashboard</div>
+        <div class="step-desc">Puede ver ventas acumuladas, alertas y estado del negocio en cualquier momento.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Cierre del Dia</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Revisar el historial de ventas del dia</div>
+        <div class="step-desc">Verificar totales por cajera, metodo de pago y productos vendidos.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Registrar producciones del dia (si aplica)</div>
+        <div class="step-desc">El equipo de cocina registra lo producido para que el inventario quede cuadrado.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Inventario diario de areas criticas</div>
+        <div class="step-desc">Contar fisicamente los insumos criticos (licores, carnes) y registrar en el sistema.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Cierre de caja (Reporte Z)</div>
+        <div class="step-desc">El gerente revisa el cierre del dia: ventas totales, efectivo en caja, diferencias.</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Cierre Semanal</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Generar liquidacion Intercompany Shanklish</div>
+        <div class="step-desc">Calcular y revisar el monto adeudado a Shanklish por las ventas de cocina de la semana.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Auditoria de inventario semanal</div>
+        <div class="step-desc">Conteo fisico de todos los almacenes y ajuste de diferencias en el sistema.</div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Revisar costos vs. precios de venta</div>
+        <div class="step-desc">Verificar que los margenes de ganancia siguen siendo correctos ante cambios de precios de insumos.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SECCION 20: FAQ                                               -->
+<!-- ============================================================ -->
+<div class="section-hero" data-icon="❓">
+  <div class="section-hero-num">Seccion 20</div>
+  <div class="section-hero-title">Preguntas Frecuentes</div>
+  <div class="section-hero-desc">Respuestas a las dudas mas comunes del equipo.</div>
+</div>
+
+<div class="content-block">
+
+  <h3>¿Que hago si olvide mi contrasena?</h3>
+  <p>Contacta al administrador del sistema. El puede restablecer tu contrasena desde el modulo de Usuarios. No compartas tu contrasena ni pidas la de otro.</p>
+
+  <h3>¿Puedo usar el sistema desde mi telefono?</h3>
+  <p>Si. El sistema funciona en cualquier navegador web, incluyendo los de smartphones. Sin embargo, para el POS y el inventario se recomienda usar una computadora o tablet por comodidad.</p>
+
+  <h3>¿Que pasa si registro una venta con error?</h3>
+  <p>Notifica inmediatamente al gerente. Dependiendo del tipo de error, el gerente o dueno puede anular o corregir la venta. No intentes corregirlo por tu cuenta si no tienes los permisos correspondientes.</p>
+
+  <h3>¿Por que veo precios incorrectos en el POS?</h3>
+  <p>Verifica que la tasa de cambio del dia este actualizada. Si el precio del item en el menu esta incorrecto, el gerente debe actualizar el precio del item en el modulo de Menu.</p>
+
+  <h3>¿Que significa cuando un insumo aparece en rojo?</h3>
+  <p>Significa que el stock actual esta por debajo del minimo definido. Se debe gestionar la reposicion del insumo para evitar quedarse sin ese producto durante el servicio.</p>
+
+  <h3>¿Cada cuanto se actualiza el inventario?</h3>
+  <p>El inventario se actualiza en tiempo real con cada venta registrada en el POS, cada produccion registrada, cada entrada de mercancia y cada transferencia aprobada.</p>
+
+  <h3>¿Puedo exportar los datos a Excel?</h3>
+  <p>Si. Los modulos de ventas, inventario, costos y reportes ofrecen opciones de exportacion. Solo los roles con permiso de exportacion pueden usar esta funcion.</p>
+
+  <h3>¿El sistema funciona sin internet?</h3>
+  <p>No. El sistema requiere conexion a internet para funcionar ya que los datos estan en la nube. Se recomienda tener un plan de respaldo de conectividad (datos moviles) para emergencias.</p>
+
+  <h3>¿Cuanto tiempo guardan los datos?</h3>
+  <p>El sistema mantiene un historial completo de todas las operaciones desde el inicio. No se borran registros historicos. Adicionalmente se realizan backups periodicos de la base de datos.</p>
+
+  <div class="alert alert-info" style="margin-top: 30px;">
+    <span class="alert-icon">📞</span>
+    <div class="alert-text">
+      <strong>Soporte Tecnico</strong>
+      Para problemas tecnicos o dudas sobre el uso del sistema, contacta al administrador del proyecto. Para errores criticos que afecten la operacion (sistema caido, error de datos), escala inmediatamente al Dueno o Gerente Administrativo.
+    </div>
+  </div>
+
+  <div style="margin-top: 50px; padding: 30px; background: linear-gradient(135deg, #0f0f23, #1a1a3e); border-radius: 16px; text-align: center; color: white;">
+    <div style="font-size: 40px; margin-bottom: 12px;">🏓</div>
+    <div style="font-size: 20px; font-weight: 800; color: #f59e0b;">TABLE PONG ERP</div>
+    <div style="font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 8px;">Manual de Usuario v1.0 &bull; Marzo 2026 &bull; Documento Interno Confidencial</div>
+    <div style="margin-top: 16px; font-size: 12px; color: rgba(255,255,255,0.5);">Este documento es de uso exclusivo del equipo de Table Pong.<br/>No compartir fuera de la organizacion.</div>
+  </div>
+</div>
+
+<!-- PRINT BUTTON -->
+<button class="print-btn no-print" onclick="window.print()">
+  Imprimir / Guardar PDF
+</button>
+
+</body>
+</html>

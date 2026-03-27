@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Auditoria de Variaciones - Table Pong ERP</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#1a1a2e;background:#f0f2f5;line-height:1.6}
+  .cover{min-height:100vh;background:linear-gradient(135deg,#0a0a1a,#1a1a3e,#0a1628);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:60px 40px;page-break-after:always;position:relative;overflow:hidden}
+  .cover::before{content:'';position:absolute;top:-100px;left:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(239,68,68,.12),transparent 70%);border-radius:50%}
+  .cover::after{content:'';position:absolute;bottom:-100px;right:-100px;width:400px;height:400px;background:radial-gradient(circle,rgba(245,158,11,.12),transparent 70%);border-radius:50%}
+  .cover-label{font-size:11px;font-weight:700;letter-spacing:4px;text-transform:uppercase;color:#ef4444;margin-bottom:16px;position:relative;z-index:1}
+  .cover-logo{font-size:64px;margin-bottom:14px;position:relative;z-index:1}
+  .cover-title{font-size:44px;font-weight:900;color:#fff;letter-spacing:-1px;position:relative;z-index:1}
+  .cover-title span{color:#ef4444}
+  .cover-sub{font-size:16px;color:rgba(255,255,255,.6);margin-top:8px;position:relative;z-index:1}
+  .cover-line{width:60px;height:3px;background:linear-gradient(90deg,#ef4444,#f59e0b);border-radius:2px;margin:24px auto;position:relative;z-index:1}
+  .cover-meta{display:flex;gap:36px;margin-top:28px;position:relative;z-index:1}
+  .cover-meta-item{text-align:center}
+  .cover-meta-label{display:block;font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1px}
+  .cover-meta-value{display:block;font-size:14px;color:#ef4444;font-weight:700;margin-top:4px}
+
+  .sec-hdr{background:linear-gradient(135deg,#0f0f2e,#1a1a4e);color:#fff;padding:36px 50px;position:relative;overflow:hidden;page-break-before:always}
+  .sec-hdr::after{content:attr(data-icon);position:absolute;right:40px;top:50%;transform:translateY(-50%);font-size:60px;opacity:.12}
+  .sec-num{font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:3px;margin-bottom:6px}
+  .sec-title{font-size:26px;font-weight:900}
+  .sec-sub{font-size:12px;color:rgba(255,255,255,.6);margin-top:4px}
+
+  .content{background:#fff;padding:36px 50px;margin-bottom:2px}
+  h2{font-size:17px;font-weight:800;color:#0f0f2e;margin:28px 0 12px;padding-bottom:7px;border-bottom:2px solid #f3f4f6}
+  h2:first-child{margin-top:0}
+  h3{font-size:13px;font-weight:700;color:#374151;margin:20px 0 8px}
+  p{color:#4b5563;margin-bottom:9px;line-height:1.75}
+
+  /* TABLES */
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:11px}
+  th{background:#0f0f2e;color:#fff;padding:9px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px}
+  th:first-child{border-radius:6px 0 0 0}
+  th:last-child{border-radius:0 6px 0 0}
+  td{padding:8px 12px;border-bottom:1px solid #f3f4f6;color:#374151;vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tr:nth-child(even) td{background:#fafafa}
+  .num{text-align:right;font-weight:700;font-family:monospace;font-size:12px}
+  .neg{color:#ef4444!important}
+  .pos{color:#22c55e!important}
+  .warn{color:#f59e0b!important}
+  .neutral{color:#6b7280!important}
+
+  /* ALERTS */
+  .alert{border-radius:8px;padding:11px 14px;margin:10px 0;display:flex;gap:10px;align-items:flex-start;font-size:11px}
+  .alert-icon{font-size:15px;flex-shrink:0;margin-top:1px}
+  .alert-body{flex:1;color:#374151;line-height:1.5}
+  .alert-body strong{display:block;margin-bottom:2px;font-size:12px}
+  .alert-info{background:#eff6ff;border-left:4px solid #3b82f6}
+  .alert-warn{background:#fffbeb;border-left:4px solid #f59e0b}
+  .alert-danger{background:#fef2f2;border-left:4px solid #ef4444}
+  .alert-success{background:#f0fdf4;border-left:4px solid #22c55e}
+  .alert-purple{background:#faf5ff;border-left:4px solid #a855f7}
+
+  /* LIVE BOX */
+  .live{background:linear-gradient(135deg,#f0fdf4,#ecfdf5);border:1px solid #86efac;border-radius:8px;padding:12px 16px;margin:12px 0;display:flex;gap:10px}
+  .live-dot{width:10px;height:10px;background:#22c55e;border-radius:50%;flex-shrink:0;margin-top:3px;animation:pulse 1.5s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .live-body{flex:1}
+  .live-title{font-size:12px;font-weight:700;color:#15803d;margin-bottom:3px}
+  .live-desc{font-size:11px;color:#166534;line-height:1.5}
+
+  /* FORMULA BOX */
+  .formula{background:linear-gradient(135deg,#1e1b4b,#312e81);border-radius:10px;padding:18px 22px;margin:14px 0;color:#fff}
+  .formula-title{font-size:11px;font-weight:700;color:#a5b4fc;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+  .formula-eq{font-size:16px;font-weight:900;color:#fff;font-family:monospace;margin:6px 0}
+  .formula-eq span{color:#fbbf24}
+  .formula-desc{font-size:11px;color:rgba(255,255,255,.65);margin-top:6px}
+
+  /* VARIATION BADGE */
+  .vbadge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:50px;font-size:10px;font-weight:700}
+  .vbadge-red{background:#fee2e2;color:#b91c1c}
+  .vbadge-green{background:#dcfce7;color:#15803d}
+  .vbadge-yellow{background:#fef3c7;color:#92400e}
+  .vbadge-gray{background:#f3f4f6;color:#374151}
+
+  /* KPI */
+  .kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+  .kpi{border:1px solid #e5e7eb;border-radius:10px;padding:16px;text-align:center;position:relative;overflow:hidden}
+  .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--c,#f59e0b)}
+  .kpi-icon{font-size:24px;display:block;margin-bottom:6px}
+  .kpi-val{font-size:26px;font-weight:900;color:#0f0f2e;display:block}
+  .kpi-lbl{font-size:10px;color:#9ca3af;text-transform:uppercase;letter-spacing:.8px;margin-top:3px;display:block}
+
+  /* CAUSE CARDS */
+  .cause-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:14px 0}
+  .cause-card{border:1px solid #e5e7eb;border-radius:10px;padding:14px;position:relative}
+  .cause-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--c)}
+  .cause-icon{font-size:22px;margin-bottom:6px;display:block}
+  .cause-title{font-size:13px;font-weight:700;color:#0f0f2e;margin-bottom:4px}
+  .cause-text{font-size:11px;color:#6b7280;line-height:1.5}
+
+  /* MISSING TABLE */
+  .missing-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:9px;font-weight:700;text-transform:uppercase}
+  .mb-red{background:#fee2e2;color:#b91c1c}
+  .mb-yellow{background:#fef3c7;color:#92400e}
+  .mb-green{background:#dcfce7;color:#15803d}
+  .mb-blue{background:#dbeafe;color:#1d4ed8}
+
+  /* TWO COL */
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}
+  .info-box{border:1px solid #e5e7eb;border-radius:8px;padding:14px}
+  .info-box-title{font-size:12px;font-weight:700;color:#374151;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #f3f4f6}
+  .list-plain{list-style:none}
+  .list-plain li{font-size:11px;color:#6b7280;padding:3px 0;border-bottom:1px solid #f9fafb}
+  .list-plain li:last-child{border-bottom:none}
+  .list-plain li::before{content:'→';color:#f59e0b;margin-right:6px;font-weight:700}
+
+  /* RECOM */
+  .recom{border-left:3px solid var(--c,#f59e0b);background:var(--bg,#fffbeb);border-radius:0 8px 8px 0;padding:12px 16px;margin:10px 0}
+  .recom-title{font-size:12px;font-weight:800;color:#92400e;margin-bottom:4px}
+  .recom-text{font-size:11px;color:#78350f;line-height:1.6}
+
+  @media print{
+    body{background:#fff}
+    .sec-hdr,.cover{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .formula{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .no-print{display:none!important}
+  }
+  .print-btn{position:fixed;bottom:22px;right:22px;background:linear-gradient(135deg,#ef4444,#f59e0b);color:#fff;border:none;padding:11px 20px;border-radius:50px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 8px 20px rgba(239,68,68,.35);z-index:9999;transition:transform .2s}
+  .print-btn:hover{transform:scale(1.05)}
+</style>
+</head>
+<body>
+
+<!-- PORTADA -->
+<div class="cover">
+  <div class="cover-label">Documento Confidencial - Duenos del Local</div>
+  <div class="cover-logo">📊</div>
+  <div class="cover-title">AUDITORIA DE <span>VARIACIONES</span></div>
+  <div class="cover-sub">Inventario · Ventas · Variaciones · Recomendaciones</div>
+  <div class="cover-line"></div>
+  <div class="cover-meta">
+    <div class="cover-meta-item"><span class="cover-meta-label">Fecha</span><span class="cover-meta-value">27 Mar 2026</span></div>
+    <div class="cover-meta-item"><span class="cover-meta-label">Sistema</span><span class="cover-meta-value">ERP v1.0</span></div>
+    <div class="cover-meta-item"><span class="cover-meta-label">Areas</span><span class="cover-meta-value">3 Almacenes</span></div>
+    <div class="cover-meta-item"><span class="cover-meta-label">Insumos</span><span class="cover-meta-value">65+</span></div>
+  </div>
+</div>
+
+<!-- ===================== SEC 1: INVENTARIO CARGADO ===================== -->
+<div class="sec-hdr" data-icon="📦">
+  <div class="sec-num">Seccion 1</div>
+  <div class="sec-title">Inventario Inicial Cargado al Sistema</div>
+  <div class="sec-sub">Estado del inventario registrado al momento de inicializar el ERP — base para calcular variaciones.</div>
+</div>
+
+<div class="content">
+  <h2>Las 3 Areas de Almacenamiento</h2>
+  <div class="kpi-row">
+    <div class="kpi" style="--c:#f59e0b">
+      <span class="kpi-icon">🍹</span>
+      <span class="kpi-val">22</span>
+      <span class="kpi-lbl">Licores registrados</span>
+    </div>
+    <div class="kpi" style="--c:#22c55e">
+      <span class="kpi-icon">🥤</span>
+      <span class="kpi-val">15</span>
+      <span class="kpi-lbl">Bebidas registradas</span>
+    </div>
+    <div class="kpi" style="--c:#6366f1">
+      <span class="kpi-icon">🍳</span>
+      <span class="kpi-val">28+</span>
+      <span class="kpi-lbl">Insumos comida/plasticos</span>
+    </div>
+    <div class="kpi" style="--c:#ef4444">
+      <span class="kpi-icon">🚫</span>
+      <span class="kpi-val">12</span>
+      <span class="kpi-lbl">Insumos barra faltantes</span>
+    </div>
+  </div>
+
+  <h2>BARRA PRINCIPAL — Licores (Inventario Inicial)</h2>
+  <table>
+    <thead><tr><th>Producto</th><th>SKU</th><th>Unidad</th><th class="num">Stock Cargado</th><th>Equivale a</th></tr></thead>
+    <tbody>
+      <tr><td>Finca Las Moras (Tinto)</td><td>LIC-FINCA-MORAS</td><td>UNIT</td><td class="num">5</td><td>~3,750 ml / ~62 copas</td></tr>
+      <tr><td>Jagermeister</td><td>LIC-JAGERMEISTER</td><td>UNIT</td><td class="num">3</td><td>~2,250 ml / ~37 tragos (60ml)</td></tr>
+      <tr><td>Finca Las Moras Blanco</td><td>LIC-FINCA-MORAS-B</td><td>UNIT</td><td class="num">1</td><td>750 ml</td></tr>
+      <tr><td>Santa Teresa Gran Reserva</td><td>LIC-SANTA-TERESA-GR</td><td>UNIT</td><td class="num">5</td><td>~3,750 ml / ~62 tragos</td></tr>
+      <tr><td>Gordons Vodka</td><td>LIC-GORDONS-VODKA</td><td>UNIT</td><td class="num">6</td><td>~4,500 ml / ~75 tragos</td></tr>
+      <tr><td>Cacique</td><td>LIC-CACIQUE</td><td>UNIT</td><td class="num">1</td><td>750 ml</td></tr>
+      <tr><td>Buchanas 12 años</td><td>LIC-BUCHANAS-12</td><td>UNIT</td><td class="num">3</td><td>~2,250 ml / ~37 tragos</td></tr>
+      <tr><td>Carupano 18</td><td>LIC-CARUPANO-18</td><td>UNIT</td><td class="num">1</td><td>750 ml</td></tr>
+      <tr><td>Diplomatico</td><td>LIC-DIPLOMATICO</td><td>UNIT</td><td class="num">1</td><td>750 ml</td></tr>
+      <tr><td>Ginebra Tanqueray</td><td>LIC-TANQUEREI</td><td>UNIT</td><td class="num">1</td><td>750 ml</td></tr>
+      <tr><td>Bombay Gin</td><td>LIC-BOMBAY-GIN</td><td>UNIT</td><td class="num">2</td><td>1,500 ml</td></tr>
+      <tr><td>Jose Cuervo Silveria (1L)</td><td>LIC-JOSE-CUERVO-SIL</td><td>UNIT</td><td class="num">2</td><td>2,000 ml / ~33 tragos</td></tr>
+      <tr><td>Vermouth Rosso</td><td>LIC-VERMOUTH-ROSSO</td><td>UNIT</td><td class="num">1</td><td>750 ml</td></tr>
+      <tr><td>Vermouth Extra Dry</td><td>LIC-VERMOUTH-EXTRA</td><td>UNIT</td><td class="num">3</td><td>2,250 ml</td></tr>
+      <tr><td>Aperol</td><td>LIC-APEROL</td><td>UNIT</td><td class="num">1</td><td>750 ml</td></tr>
+      <tr><td>Jarabes de Goma</td><td>LIC-JARABE-GOMA</td><td>UNIT</td><td class="num">2</td><td>—</td></tr>
+      <tr><td>Blue Curacao</td><td>LIC-BLUE-CURACAO</td><td>UNIT</td><td class="num">1</td><td>750 ml</td></tr>
+      <tr><td>Granadina</td><td>LIC-GRANADINA</td><td>UNIT</td><td class="num">1</td><td>—</td></tr>
+      <tr><td>Stolichnaya (Vodka)</td><td>LIC-STOLICHNAYA</td><td>UNIT</td><td class="num">1</td><td>750 ml</td></tr>
+      <tr><td>Amaretto</td><td>LIC-AMARETTO</td><td>UNIT</td><td class="num">2</td><td>1,500 ml</td></tr>
+      <tr><td style="font-weight:700">TOTAL BOTELLAS BARRA</td><td></td><td></td><td class="num" style="font-weight:900">45 btls</td><td>~33,750 ml total</td></tr>
+    </tbody>
+  </table>
+
+  <h2>BARRA PRINCIPAL + DEPOSITO — Bebidas</h2>
+  <table>
+    <thead><tr><th>Producto</th><th>Barra</th><th>Deposito</th><th class="num">Total Units</th></tr></thead>
+    <tbody>
+      <tr><td>Pepsi</td><td class="num">76</td><td class="num">168</td><td class="num">244</td></tr>
+      <tr><td>Sparkling Original</td><td class="num">10</td><td class="num">12</td><td class="num">22</td></tr>
+      <tr><td>Sparkling Limon</td><td class="num">3</td><td class="num">—</td><td class="num">3</td></tr>
+      <tr><td>Sparkling Toronja</td><td class="num">5</td><td class="num">—</td><td class="num">5</td></tr>
+      <tr><td>Pepsi Light</td><td class="num">26</td><td class="num">—</td><td class="num">26</td></tr>
+      <tr><td>Seven Up</td><td class="num">7</td><td class="num">—</td><td class="num">7</td></tr>
+      <tr><td>Malta</td><td class="num">10</td><td class="num">24</td><td class="num">34</td></tr>
+      <tr><td>Gatorade (3 sabores)</td><td class="num">24</td><td class="num">108</td><td class="num">132</td></tr>
+      <tr><td>Carorenitas</td><td class="num">30</td><td class="num">—</td><td class="num">30</td></tr>
+      <tr><td>Polarcitas</td><td class="num">35</td><td class="num">216</td><td class="num">251</td></tr>
+      <tr><td>Solera Verde</td><td class="num">56</td><td class="num">—</td><td class="num">56</td></tr>
+      <tr><td>Soda</td><td class="num">—</td><td class="num">96</td><td class="num">96</td></tr>
+      <tr><td>Aguakina</td><td class="num">—</td><td class="num">48</td><td class="num">48</td></tr>
+    </tbody>
+  </table>
+
+  <div class="alert alert-warn">
+    <span class="alert-icon">⚠️</span>
+    <div class="alert-body">
+      <strong>Insumos de Barra NO Cargados al Sistema (12 faltantes)</strong>
+      Los siguientes insumos son necesarios para las recetas de cocteles pero NO estan en el inventario del sistema: Kahlua, Campari, Sambuca, Ron Blanco (especifico), Ron Dorado (especifico), Disaronno, Tequila Silver, Prosecco/Espumante, Jarabe Simple (ml), Jarabe de Jengibre (ml), Jarabe de Mora (ml), Jugo de Limon fresco (ml), Clara de Huevo, Hierbabuena (hojas), Helado Mantecado (ya existe como COM-MANTECADO en Almacen). Esto significa que las ventas de cocteles NO estan descontando estos insumos del inventario.
+    </div>
+  </div>
+</div>
+
+<!-- ===================== SEC 2: RECETAS Y POS ===================== -->
+<div class="sec-hdr" data-icon="🍳">
+  <div class="sec-num">Seccion 2</div>
+  <div class="sec-title">Estado de Recetas Vinculadas al POS</div>
+  <div class="sec-sub">Que recetas existen, cuales estan vinculadas al menu y cuales faltan.</div>
+</div>
+
+<div class="content">
+  <h2>Diagnostico de Vinculacion Receta → Menu POS</h2>
+
+  <div class="alert alert-danger">
+    <span class="alert-icon">🚨</span>
+    <div class="alert-body">
+      <strong>PROBLEMA CRITICO: Ningun coctel/trago esta vinculado al menu del POS</strong>
+      Actualmente las ventas de cocteles en el POS NO descuentan insumos del inventario porque los items del menu no tienen receta vinculada. Esto genera una brecha entre lo vendido y el inventario que el sistema no puede explicar.
+    </div>
+  </div>
+
+  <h2>Recetas por Estado de Vinculacion</h2>
+  <table>
+    <thead>
+      <tr><th>Receta</th><th>Tipo</th><th>En Inventario</th><th>Receta Creada</th><th>Item en POS</th><th>Descargo Auto</th></tr>
+    </thead>
+    <tbody>
+      <!-- TRAGOS -->
+      <tr><td>Trago Vodka (60ml)</td><td>Trago</td><td><span class="missing-badge mb-green">SI</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Trago Whiskey (60ml)</td><td>Trago</td><td><span class="missing-badge mb-green">SI</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Trago Ron (60ml)</td><td>Trago</td><td><span class="missing-badge mb-yellow">PARCIAL</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Trago Ginebra (60ml)</td><td>Trago</td><td><span class="missing-badge mb-green">SI</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Trago Sambuca (60ml)</td><td>Trago</td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Trago Amaretto (60ml)</td><td>Trago</td><td><span class="missing-badge mb-green">SI</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <!-- ESPECIALES -->
+      <tr><td>Disaronno Sour</td><td>Especial</td><td><span class="missing-badge mb-yellow">PARCIAL</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Espresso Martini</td><td>Especial</td><td><span class="missing-badge mb-yellow">PARCIAL</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <!-- COCTELES -->
+      <tr><td>Tinto de Verano</td><td>Coctel</td><td><span class="missing-badge mb-green">SI</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Mojito</td><td>Coctel</td><td><span class="missing-badge mb-yellow">PARCIAL</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Jagger Mojito</td><td>Coctel</td><td><span class="missing-badge mb-yellow">PARCIAL</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Daiquiri</td><td>Coctel</td><td><span class="missing-badge mb-yellow">PARCIAL</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Gin Tonic</td><td>Coctel</td><td><span class="missing-badge mb-green">SI</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Negroni</td><td>Coctel</td><td><span class="missing-badge mb-yellow">PARCIAL</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Clover Club</td><td>Coctel</td><td><span class="missing-badge mb-yellow">PARCIAL</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Moscow Mule</td><td>Coctel</td><td><span class="missing-badge mb-yellow">PARCIAL</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Piña Colada</td><td>Coctel</td><td><span class="missing-badge mb-green">SI</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Berlin Mule</td><td>Coctel</td><td><span class="missing-badge mb-yellow">PARCIAL</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Orgasmo</td><td>Coctel</td><td><span class="missing-badge mb-yellow">PARCIAL</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Kaipiroska</td><td>Coctel</td><td><span class="missing-badge mb-green">SI</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Cosmopolitan</td><td>Coctel</td><td><span class="missing-badge mb-yellow">PARCIAL</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Paloma</td><td>Coctel</td><td><span class="missing-badge mb-yellow">PARCIAL</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+      <tr><td>Aperol Spritz</td><td>Coctel</td><td><span class="missing-badge mb-green">SI</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td><td><span class="missing-badge mb-red">NO</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="alert alert-success">
+    <span class="alert-icon">✅</span>
+    <div class="alert-body">
+      <strong>Solucion lista para ejecutar</strong>
+      Se creo el script <code>scripts/setup-cocteles-tablepong.ts</code> que crea todos los insumos faltantes, las 24 recetas y los 23 items en el menu POS de una sola vez. Ejecutar con: <code>npx tsx scripts/setup-cocteles-tablepong.ts</code> cuando Node.js este disponible.
+    </div>
+  </div>
+</div>
+
+<!-- ===================== SEC 3: VENTAS CATEGORIAS ===================== -->
+<div class="sec-hdr" data-icon="💰">
+  <div class="sec-num">Seccion 3</div>
+  <div class="sec-title">Clasificacion de Ventas y Transacciones</div>
+  <div class="sec-sub">Categorias de ventas, cortesias y anulaciones con su impacto en el inventario.</div>
+</div>
+
+<div class="content">
+  <h2>Tipos de Transacciones en el Sistema</h2>
+  <table>
+    <thead><tr><th>Tipo</th><th>Estado en Sistema</th><th>Descarga Inventario</th><th>Aparece en Reportes</th><th>Requiere Justificacion</th></tr></thead>
+    <tbody>
+      <tr><td><span class="missing-badge mb-green">Venta Normal</span></td><td>CONFIRMED / PAID</td><td>SI</td><td>SI — totales de venta</td><td>No</td></tr>
+      <tr><td><span class="missing-badge mb-blue">Cortesia</span></td><td>CONFIRMED (precio $0)</td><td>SI — consume insumos</td><td>SI — precio $0, qty registrada</td><td>Recomendado</td></tr>
+      <tr><td><span class="missing-badge mb-yellow">En Proceso</span></td><td>PENDING / PREPARING</td><td>Parcial o no</td><td>SI — estado visible</td><td>No</td></tr>
+      <tr><td><span class="missing-badge mb-red">Anulada</span></td><td>CANCELLED</td><td>Devolucion al inventario</td><td>SI — marcada como anulada</td><td>OBLIGATORIO</td></tr>
+      <tr><td><span class="missing-badge mb-red">Devolucion</span></td><td>CANCELLED + motivo</td><td>Devolucion parcial/total</td><td>SI — registro de devolucion</td><td>OBLIGATORIO</td></tr>
+    </tbody>
+  </table>
+
+  <div class="live">
+    <div class="live-dot"></div>
+    <div class="live-body">
+      <div class="live-title">Ver en el Sistema: Ventas > Historial — Filtrar por Estado</div>
+      <div class="live-desc">Aplicar filtro por estado (CANCELLED, CONFIRMED) para ver el detalle de cada categoria. Las cortesias aparecen como ventas confirmadas con monto $0. Las anuladas aparecen con estado CANCELLED y motivo registrado.</div>
+    </div>
+  </div>
+
+  <h2>Impacto Real de las Cortesias</h2>
+  <div class="alert alert-warn">
+    <span class="alert-icon">⚠️</span>
+    <div class="alert-body">
+      <strong>Las cortesias consumen inventario aunque no generen ingreso</strong>
+      Cuando se registra una cortesia en el POS (precio $0), los insumos de esa preparacion SI se descuentan del inventario. Esto es correcto contablemente. Sin embargo, si actualmente los cocteles NO tienen receta vinculada, las cortesias de cocteles NO generan ningun descargo — lo que creara variaciones positivas falsas en el inventario (mas stock del esperado por los conteos).
+    </div>
+  </div>
+
+  <h2>Procedimiento Correcto para Anulaciones</h2>
+  <p>Una anulacion bien registrada debe incluir:</p>
+  <table>
+    <thead><tr><th>#</th><th>Campo</th><th>Que Registrar</th><th>Ejemplo</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Motivo</td><td>Razon de la anulacion</td><td>"Error en pedido del cliente", "Producto no disponible", "Solicitud del cliente"</td></tr>
+      <tr><td>2</td><td>Usuario</td><td>Quien autorizo la anulacion</td><td>Solo gerente o dueno deben poder anular</td></tr>
+      <tr><td>3</td><td>Devolucion de Inventario</td><td>Si el producto fue preparado o no</td><td>Si ya fue servido: no devolver. Si no fue hecho: devolver al inventario</td></tr>
+      <tr><td>4</td><td>Referencia de Venta</td><td>Numero de orden anulada</td><td>REST-2026-03-27-042</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ===================== SEC 4: CALCULO VARIACIONES ===================== -->
+<div class="sec-hdr" data-icon="🔢">
+  <div class="sec-num">Seccion 4</div>
+  <div class="sec-title">Metodologia y Calculo de Variaciones</div>
+  <div class="sec-sub">Como calcular y donde encontrar las variaciones entre inventario teorico y fisico.</div>
+</div>
+
+<div class="content">
+  <h2>La Formula Maestra de Variaciones</h2>
+
+  <div class="formula">
+    <div class="formula-title">Formula de Inventario Teorico</div>
+    <div class="formula-eq">Stock <span>Teorico</span> = Stock <span>Inicial</span> + <span>Entradas</span> - <span>Ventas</span> - <span>Produccion</span> - <span>Transferencias</span> - <span>Merma</span></div>
+    <div class="formula-desc">El "Stock Teorico" es lo que el sistema dice que deberia haber. El "Stock Fisico" es lo que realmente hay al contar.</div>
+  </div>
+
+  <div class="formula">
+    <div class="formula-title">Formula de Variacion</div>
+    <div class="formula-eq"><span>Variacion</span> = Stock <span>Fisico</span> - Stock <span>Teorico</span></div>
+    <div class="formula-desc">NEGATIVA (-): Falta producto. Posibles causas: consumo no registrado, hurto, merma no declarada, error de receta.<br/>POSITIVA (+): Sobra producto. Posibles causas: entrada no registrada, error de conteo, receta con cantidades incorrectas.</div>
+  </div>
+
+  <h2>Ejemplo Practico — Gordon's Vodka</h2>
+  <table>
+    <thead><tr><th>Concepto</th><th>Calculo</th><th class="num">Botellas</th><th class="num">Equivale en ml</th></tr></thead>
+    <tbody>
+      <tr><td>Stock inicial cargado</td><td>Registro en sistema</td><td class="num pos">+6.00</td><td class="num pos">+4,500 ml</td></tr>
+      <tr><td>Entradas de mercancia posteriores</td><td>Ver en: Inventario > Entradas</td><td class="num pos">+? (en vivo)</td><td class="num pos">+? ml</td></tr>
+      <tr><td>Ventas de Vodka Trago (2oz c/u)</td><td>N° ventas × (60/750 btl)</td><td class="num neg">-? (en vivo)</td><td class="num neg">-60ml × ventas</td></tr>
+      <tr><td>Ventas de Moscow Mule</td><td>N° ventas × (60/750 btl)</td><td class="num neg">-? (en vivo)</td><td class="num neg">-60ml × ventas</td></tr>
+      <tr><td>Ventas de Kaipiroska</td><td>N° ventas × (60/750 btl)</td><td class="num neg">-? (en vivo)</td><td class="num neg">-60ml × ventas</td></tr>
+      <tr><td>Ventas de Cosmopolitan</td><td>N° ventas × (60/750 btl)</td><td class="num neg">-? (en vivo)</td><td class="num neg">-60ml × ventas</td></tr>
+      <tr><td>Ventas de Espresso Martini</td><td>N° ventas × (60/750 btl)</td><td class="num neg">-? (en vivo)</td><td class="num neg">-60ml × ventas</td></tr>
+      <tr style="background:#fffbeb"><td style="font-weight:700">Stock Teorico</td><td>Suma de todos los movimientos</td><td class="num warn" style="font-weight:900">= calculado</td><td class="num warn">—</td></tr>
+      <tr style="background:#f0fdf4"><td style="font-weight:700">Stock Fisico (conteo real)</td><td>Lo que hay en la barra HOY</td><td class="num pos" style="font-weight:900">?? (contar)</td><td class="num pos">—</td></tr>
+      <tr style="background:#fef2f2"><td style="font-weight:700">VARIACION</td><td>Fisico - Teorico</td><td class="num neg" style="font-weight:900">= diferencia</td><td class="num neg">—</td></tr>
+    </tbody>
+  </table>
+
+  <div class="live">
+    <div class="live-dot"></div>
+    <div class="live-body">
+      <div class="live-title">Ver en el Sistema: Inventario > Auditorias > Nueva Auditoria</div>
+      <div class="live-desc">El sistema calcula automaticamente la variacion al ingresar el conteo fisico. Solo hay que: (1) seleccionar el area, (2) ingresar los conteos reales de cada producto, (3) el sistema calcula la variacion y genera el reporte. Este proceso se debe hacer HOY para tener el primer comparativo real.</div>
+    </div>
+  </div>
+
+  <h2>Tabla de Variaciones — Licores Barra Principal</h2>
+  <p>Esta tabla debe completarse con los conteos fisicos de hoy. Los campos marcados <span style="color:#ef4444;font-weight:700">"CONTAR"</span> requieren conteo fisico:</p>
+  <table>
+    <thead><tr><th>Licor</th><th class="num">Stock Inicial</th><th class="num">+Entradas</th><th class="num">-Ventas (teorico)</th><th class="num">= Teorico</th><th class="num">Fisico Hoy</th><th class="num">Variacion</th><th>Estado</th></tr></thead>
+    <tbody>
+      <tr><td>Gordons Vodka</td><td class="num">6.00</td><td class="num pos">Ver sistema</td><td class="num neg">Ver sistema</td><td class="num warn">Calcular</td><td class="num" style="color:#ef4444;font-weight:700">CONTAR</td><td class="num">—</td><td><span class="vbadge vbadge-gray">Pendiente</span></td></tr>
+      <tr><td>Buchanas 12</td><td class="num">3.00</td><td class="num pos">Ver sistema</td><td class="num neg">Ver sistema</td><td class="num warn">Calcular</td><td class="num" style="color:#ef4444;font-weight:700">CONTAR</td><td class="num">—</td><td><span class="vbadge vbadge-gray">Pendiente</span></td></tr>
+      <tr><td>Jagermeister</td><td class="num">3.00</td><td class="num pos">Ver sistema</td><td class="num neg">Ver sistema</td><td class="num warn">Calcular</td><td class="num" style="color:#ef4444;font-weight:700">CONTAR</td><td class="num">—</td><td><span class="vbadge vbadge-gray">Pendiente</span></td></tr>
+      <tr><td>Santa Teresa GR</td><td class="num">5.00</td><td class="num pos">Ver sistema</td><td class="num neg">Ver sistema</td><td class="num warn">Calcular</td><td class="num" style="color:#ef4444;font-weight:700">CONTAR</td><td class="num">—</td><td><span class="vbadge vbadge-gray">Pendiente</span></td></tr>
+      <tr><td>Bombay Gin</td><td class="num">2.00</td><td class="num pos">Ver sistema</td><td class="num neg">Ver sistema</td><td class="num warn">Calcular</td><td class="num" style="color:#ef4444;font-weight:700">CONTAR</td><td class="num">—</td><td><span class="vbadge vbadge-gray">Pendiente</span></td></tr>
+      <tr><td>Tanqueray</td><td class="num">1.00</td><td class="num pos">Ver sistema</td><td class="num neg">Ver sistema</td><td class="num warn">Calcular</td><td class="num" style="color:#ef4444;font-weight:700">CONTAR</td><td class="num">—</td><td><span class="vbadge vbadge-gray">Pendiente</span></td></tr>
+      <tr><td>Aperol</td><td class="num">1.00</td><td class="num pos">Ver sistema</td><td class="num neg">Ver sistema</td><td class="num warn">Calcular</td><td class="num" style="color:#ef4444;font-weight:700">CONTAR</td><td class="num">—</td><td><span class="vbadge vbadge-gray">Pendiente</span></td></tr>
+      <tr><td>Jose Cuervo</td><td class="num">2.00</td><td class="num pos">Ver sistema</td><td class="num neg">Ver sistema</td><td class="num warn">Calcular</td><td class="num" style="color:#ef4444;font-weight:700">CONTAR</td><td class="num">—</td><td><span class="vbadge vbadge-gray">Pendiente</span></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ===================== SEC 5: POR QUE OCURREN ===================== -->
+<div class="sec-hdr" data-icon="🔍">
+  <div class="sec-num">Seccion 5</div>
+  <div class="sec-title">Por Que Ocurren las Variaciones</div>
+  <div class="sec-sub">Analisis de las causas mas probables en el contexto actual de Table Pong.</div>
+</div>
+
+<div class="content">
+  <h2>Causas Identificadas — De Mayor a Menor Impacto</h2>
+
+  <div class="cause-grid">
+    <div class="cause-card" style="--c:#ef4444">
+      <span class="cause-icon">🚫</span>
+      <div class="cause-title">1. Cocteles sin receta vinculada (CRITICO)</div>
+      <div class="cause-text">Es la causa #1 de variaciones en este momento. Cada coctel vendido consume fisicamente entre 60-300ml de licores y mezclas, pero el sistema no lo descarga porque no existe la receta vinculada. Resultado: el inventario del sistema dice que hay MAS botellas de las que realmente hay.</div>
+    </div>
+    <div class="cause-card" style="--c:#f59e0b">
+      <span class="cause-icon">📋</span>
+      <div class="cause-title">2. Ventas no registradas en el POS</div>
+      <div class="cause-text">Cuando una venta se hace sin pasar por el POS (cobro directo, olvido de la cajera), el sistema no se entera. El inventario fisico baja pero el teorico no. Genera variaciones NEGATIVAS que el sistema no puede explicar.</div>
+    </div>
+    <div class="cause-card" style="--c:#6366f1">
+      <span class="cause-icon">⚖️</span>
+      <div class="cause-title">3. Diferencia en medidas de barra</div>
+      <div class="cause-text">Si el bartender sirve 65ml en lugar de los 60ml estipulados en la receta, hay un "overpour" de 5ml por trago. Con 100 tragos vendidos, eso es media botella (500ml) extra que desaparece sin explicacion en el sistema.</div>
+    </div>
+    <div class="cause-card" style="--c:#22c55e">
+      <span class="cause-icon">🔄</span>
+      <div class="cause-title">4. Cortesias no documentadas</div>
+      <div class="cause-text">Las cortesias al equipo, invitados o errores de preparacion que no se registran en el sistema generan consumo fisico sin respaldo. El sistema no puede diferenciar entre un coctel vendido y uno dado de cortesia si ambos se hacen sin registrar.</div>
+    </div>
+    <div class="cause-card" style="--c:#8b5cf6">
+      <span class="cause-icon">🗑️</span>
+      <div class="cause-title">5. Mermas no declaradas</div>
+      <div class="cause-text">Derrames, vasos rotos, productos vencidos o dañados que no se registran como merma en el sistema. Cada litro de licor que se derrama y no se reporta genera una variacion negativa que parece un hurto.</div>
+    </div>
+    <div class="cause-card" style="--c:#ef4444">
+      <span class="cause-icon">🚨</span>
+      <div class="cause-title">6. Hurto o Consumo No Autorizado</div>
+      <div class="cause-text">Cuando las variaciones persisten despues de corregir todas las causas anteriores, puede indicar consumo no autorizado. La forma de detectarlo es: sistematizar primero todo lo anterior y entonces las variaciones inexplicables apuntan a este problema.</div>
+    </div>
+  </div>
+
+  <h2>Por Que las Variaciones de Licores Son Tan Grandes Ahora</h2>
+
+  <div class="alert alert-danger">
+    <span class="alert-icon">🔴</span>
+    <div class="alert-body">
+      <strong>Situacion actual: El sistema esta "ciego" al consumo de licores en cocteles</strong>
+      Dado que ningun coctel/trago tiene receta vinculada al POS, TODOS los cocteles vendidos desde que se inicio el sistema han consumido licor fisicamente sin que el sistema lo registre. La variacion acumulada entre el inventario inicial cargado y el inventario fisico de hoy ES IGUAL a todo el licor usado en cocteles desde que se inicio el sistema. Esto NO es un problema de hurto — es un problema de configuracion del sistema que se soluciona con el script de recetas.
+    </div>
+  </div>
+
+  <h2>Estimacion de Consumo No Registrado (Cocteles)</h2>
+  <p>Si se vendieron cocteles desde que inicio el sistema y ningun trago/coctel tenia receta, la variacion esperada es:</p>
+  <table>
+    <thead><tr><th>Licor Base</th><th>Cocteles que lo usan</th><th>ml por coctel</th><th>Si se vendieron 50 cocteles</th><th>Si se vendieron 100 cocteles</th></tr></thead>
+    <tbody>
+      <tr><td>Vodka (Gordon's)</td><td>Vodka, Moscow Mule, Kaipiroska, Cosmopolitan, Espresso Martini</td><td>60 ml c/u</td><td class="num neg">-4.0 btl</td><td class="num neg">-8.0 btl</td></tr>
+      <tr><td>Jagermeister</td><td>Jagger Mojito, Berlin Mule</td><td>60 ml c/u</td><td class="num neg">-4.0 btl</td><td class="num neg">-8.0 btl</td></tr>
+      <tr><td>Ron (blanco/dorado)</td><td>Ron, Mojito, Daiquiri, Piña Colada, Orgasmo</td><td>30-60 ml c/u</td><td class="num neg">-2.0-4.0 btl</td><td class="num neg">-4.0-8.0 btl</td></tr>
+      <tr><td>Ginebra (Tanqueray/Bombay)</td><td>Ginebra, Gin Tonic, Negroni, Clover Club</td><td>30-60 ml c/u</td><td class="num neg">-2.0-4.0 btl</td><td class="num neg">-4.0-8.0 btl</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:11px;color:#6b7280;margin-top:6px;">* 1 botella = 750ml. Calculado al consumo estandar de 60ml/trago.</p>
+</div>
+
+<!-- ===================== SEC 6: RECOMENDACIONES ===================== -->
+<div class="sec-hdr" data-icon="💡">
+  <div class="sec-num">Seccion 6</div>
+  <div class="sec-title">Recomendaciones para Usar el Sistema Correctamente</div>
+  <div class="sec-sub">Plan de accion prioritario para restaurar la trazabilidad del inventario.</div>
+</div>
+
+<div class="content">
+  <h2>Plan de Accion — Orden de Prioridad</h2>
+
+  <div class="recom" style="--c:#ef4444;--bg:#fef2f2">
+    <div class="recom-title">PRIORIDAD 1 — INMEDIATO (esta semana): Ejecutar el script de recetas</div>
+    <div class="recom-text">
+      Instalar Node.js en la computadora de trabajo y ejecutar: <code>npx tsx scripts/setup-cocteles-tablepong.ts</code><br/>
+      Esto creara los 12 insumos faltantes, las 24 recetas y los 23 items en el POS en menos de 2 minutos.<br/>
+      <strong>Impacto:</strong> A partir de ese momento, cada venta de coctel descontara correctamente el licor del inventario.
+    </div>
+  </div>
+
+  <div class="recom" style="--c:#ef4444;--bg:#fef2f2">
+    <div class="recom-title">PRIORIDAD 2 — INMEDIATO: Auditoria de licores HOY</div>
+    <div class="recom-text">
+      Contar fisicamente todas las botellas de la barra y registrar en: <strong>Inventario > Auditorias > Nueva Auditoria</strong>.<br/>
+      Esto establece el "inventario real de hoy" como nueva linea base. A partir de este conteo, el sistema calculara variaciones correctamente una vez que las recetas esten vinculadas.<br/>
+      <strong>Sin este conteo, no hay base para medir variaciones futuras.</strong>
+    </div>
+  </div>
+
+  <div class="recom" style="--c:#f59e0b;--bg:#fffbeb">
+    <div class="recom-title">PRIORIDAD 3 — ESTA SEMANA: Actualizar precios de cocteles en el script</div>
+    <div class="recom-text">
+      Los precios incluidos en el script de cocteles son ESTIMADOS. Antes de ejecutarlo, revisar y ajustar cada precio en el archivo <code>scripts/setup-cocteles-tablepong.ts</code> segun los precios reales del menu de Table Pong.
+    </div>
+  </div>
+
+  <div class="recom" style="--c:#6366f1;--bg:#eef2ff">
+    <div class="recom-title">PRIORIDAD 4 — OPERACION DIARIA: Protocolo de registro obligatorio</div>
+    <div class="recom-text">
+      Establecer regla de oro: <strong>TODA venta pasa por el POS, sin excepcion</strong>.<br/>
+      • Cortesias: registrar en POS con precio $0 y motivo (ej. "cortesia invitado especial").<br/>
+      • Mermas: registrar en Inventario > Movimiento de Merma con descripcion del motivo.<br/>
+      • Anulaciones: solo el gerente puede anular, con motivo obligatorio.<br/>
+      • Tasa de cambio: actualizar cada dia al abrir, antes de la primera venta.
+    </div>
+  </div>
+
+  <div class="recom" style="--c:#22c55e;--bg:#f0fdf4">
+    <div class="recom-title">PRIORIDAD 5 — SEMANAL: Auditoria de licores cada lunes</div>
+    <div class="recom-text">
+      Cada lunes al abrir, contar fisicamente los licores de la barra y comparar con el teorico del sistema.<br/>
+      Una variacion de hasta ±2% puede ser normal (overpour, merma minima).<br/>
+      Una variacion mayor al 3% debe investigarse ese mismo dia antes de abrir.<br/>
+      <strong>Herramienta:</strong> Inventario > Ciclos de Inventario para hacer conteos periodicos rapidos.
+    </div>
+  </div>
+
+  <div class="recom" style="--c:#8b5cf6;--bg:#faf5ff">
+    <div class="recom-title">PRIORIDAD 6 — MEDIANO PLAZO: Jiggers estandar en barra</div>
+    <div class="recom-text">
+      Proveer a todos los bartenders con jiggers de 30ml y 60ml marcados claramente.<br/>
+      Capacitar en las recetas con las cantidades exactas en ml (usar el Recetario generado hoy).<br/>
+      El overpour es la causa #2 de variaciones en bares despues de las ventas no registradas.<br/>
+      Con jiggers estandar, las variaciones deben reducirse significativamente.
+    </div>
+  </div>
+
+  <h2>Indicadores de Salud del Sistema (KPIs a monitorear)</h2>
+  <table>
+    <thead><tr><th>Indicador</th><th>Formula</th><th>Meta</th><th>Alerta</th></tr></thead>
+    <tbody>
+      <tr><td>Variacion de Licores</td><td>(Fisico - Teorico) / Teorico × 100</td><td>±2%</td><td>&gt;3% investigar</td></tr>
+      <tr><td>Ventas sin receta vinculada</td><td>Items POS sin recipeId / Total items POS</td><td>0%</td><td>&gt;0 es problema</td></tr>
+      <tr><td>Cortesias sobre ventas totales</td><td>Monto cortesias / Ventas totales × 100</td><td>&lt;2%</td><td>&gt;5% revisar</td></tr>
+      <tr><td>Anulaciones sobre ventas</td><td>N° anulaciones / N° ventas × 100</td><td>&lt;1%</td><td>&gt;3% revisar</td></tr>
+      <tr><td>Dias sin auditoria de licores</td><td>Dias desde ultima auditoria</td><td>7 dias</td><td>&gt;14 dias riesgo</td></tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:36px;padding:28px;background:linear-gradient(135deg,#0f0f2e,#1a1a4e);border-radius:14px;color:#fff;text-align:center">
+    <div style="font-size:36px;margin-bottom:10px">🏓</div>
+    <div style="font-size:18px;font-weight:900;color:#f59e0b">TABLE PONG — PLAN DE ACCION</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.7);margin-top:10px;max-width:600px;margin-left:auto;margin-right:auto">
+      El sistema ERP tiene toda la infraestructura necesaria para dar trazabilidad total al inventario de licores y bebidas. El unico paso pendiente es ejecutar el script de recetas y establecer la disciplina operativa de registrar todo en el sistema.
+    </div>
+    <div style="margin-top:16px;display:flex;justify-content:center;gap:20px;flex-wrap:wrap">
+      <span style="background:rgba(239,68,68,.2);color:#ef4444;padding:6px 14px;border-radius:50px;font-size:11px;font-weight:700">INMEDIATO: Ejecutar script recetas</span>
+      <span style="background:rgba(245,158,11,.2);color:#f59e0b;padding:6px 14px;border-radius:50px;font-size:11px;font-weight:700">HOY: Auditoria fisica de licores</span>
+      <span style="background:rgba(34,197,94,.2);color:#22c55e;padding:6px 14px;border-radius:50px;font-size:11px;font-weight:700">SEMANAL: Ciclos de inventario</span>
+    </div>
+    <div style="margin-top:16px;font-size:11px;color:rgba(255,255,255,.4)">Auditoria Interna • 27 de Marzo 2026 • Documento Confidencial</div>
+  </div>
+</div>
+
+<button class="print-btn no-print" onclick="window.print()">Imprimir / PDF</button>
+</body>
+</html>
