@@ -116,10 +116,16 @@ const posNavigation: NavItem[] = [
         roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'AREA_LEAD', 'CHEF'],
     },
     {
+        label: 'Mi Área',
+        href: '/dashboard/mesoneros',
+        icon: '🍽️',
+        roles: ['MESONERO'],
+    },
+    {
         label: 'POS Mesero',
         href: '/dashboard/pos/mesero',
         icon: '🧑‍🍳',
-        roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'AREA_LEAD'],
+        roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'AREA_LEAD', 'MESONERO'],
     },
     {
         label: 'POS Delivery',

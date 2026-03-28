@@ -23,7 +23,8 @@ export type UserRole =
     | 'AREA_LEAD'
     | 'CASHIER_RESTAURANT'
     | 'CASHIER_DELIVERY'
-    | 'KITCHEN_CHEF';
+    | 'KITCHEN_CHEF'
+    | 'MESONERO';
 
 export type InventoryItemType = 'RAW_MATERIAL' | 'SUB_RECIPE' | 'FINISHED_GOOD';
 

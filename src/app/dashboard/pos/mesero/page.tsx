@@ -12,6 +12,7 @@ import {
 } from "@/app/actions/pos.actions";
 import { printKitchenCommand } from "@/lib/print-command";
 import { getPOSConfig } from "@/lib/pos-settings";
+import { useAuthStore } from "@/stores/auth.store";
 
 // ============================================================================
 // TIPOS
@@ -116,6 +117,9 @@ function formatTime(d: string | Date) {
 // ============================================================================
 
 export default function POSMeseroPage() {
+  const { user } = useAuthStore();
+  const isMesoneroRole = user?.role === 'MESONERO';
+
   // ── Data ──────────────────────────────────────────────────────────────────
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -237,6 +241,10 @@ export default function POSMeseroPage() {
     if (!selectedTable) return;
     if (!openTabName.trim()) { alert("El nombre del cliente es obligatorio"); return; }
     if (!openTabPhone.trim()) { alert("El teléfono del cliente es obligatorio"); return; }
+    // Si es MESONERO, asignar su nombre automáticamente
+    const waiterName = isMesoneroRole && user
+      ? `${user.firstName} ${user.lastName}`
+      : openTabWaiter || undefined;
     setIsProcessing(true);
     try {
       const result = await openTabAction({
@@ -244,7 +252,7 @@ export default function POSMeseroPage() {
         customerLabel: openTabName.trim(),
         customerPhone: openTabPhone.trim(),
         guestCount: openTabGuests,
-        waiterLabel: openTabWaiter ? `Mesonero ${openTabWaiter}` : undefined,
+        waiterLabel: waiterName,
       });
       if (!result.success) { alert(result.message); return; }
       setShowOpenTabModal(false);
@@ -796,16 +804,23 @@ export default function POSMeseroPage() {
                   <button onClick={() => setOpenTabGuests(openTabGuests + 1)} className="h-9 w-9 rounded-lg bg-emerald-600 text-white font-black transition hover:opacity-90">+</button>
                 </div>
               </div>
-              <select
-                value={openTabWaiter}
-                onChange={(e) => setOpenTabWaiter(e.target.value)}
-                className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-emerald-500 focus:outline-none"
-              >
-                <option value="">Mesonero responsable (opcional)</option>
-                {users.filter(u => ["WAITER", "CASHIER_RESTAURANT", "AREA_LEAD"].includes(u.role)).map(u => (
-                  <option key={u.id} value={u.id}>{u.firstName} {u.lastName}</option>
-                ))}
-              </select>
+              {isMesoneroRole && user ? (
+                <div className="w-full bg-secondary border border-orange-500/50 rounded-xl px-4 py-3 text-sm font-bold text-orange-400 flex items-center gap-2">
+                  <span>🧑‍🍳</span>
+                  <span>Mesonero: {user.firstName} {user.lastName}</span>
+                </div>
+              ) : (
+                <select
+                  value={openTabWaiter}
+                  onChange={(e) => setOpenTabWaiter(e.target.value)}
+                  className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-emerald-500 focus:outline-none"
+                >
+                  <option value="">Mesonero responsable (opcional)</option>
+                  {users.filter(u => ["MESONERO", "CASHIER_RESTAURANT", "AREA_LEAD"].includes(u.role)).map(u => (
+                    <option key={u.id} value={`${u.firstName} ${u.lastName}`}>{u.firstName} {u.lastName}</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div className="flex gap-3">
               <button onClick={() => setShowOpenTabModal(false)} className="capsula-btn capsula-btn-secondary flex-1 py-3">

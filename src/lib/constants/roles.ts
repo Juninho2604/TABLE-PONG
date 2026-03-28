@@ -15,6 +15,7 @@ export const UserRole = {
   CASHIER_RESTAURANT: 'CASHIER_RESTAURANT',
   CASHIER_DELIVERY: 'CASHIER_DELIVERY',
   KITCHEN_CHEF: 'KITCHEN_CHEF',
+  MESONERO: 'MESONERO',
 } as const;
 
 export type UserRoleType = typeof UserRole[keyof typeof UserRole];
@@ -33,6 +34,7 @@ export const ROLE_HIERARCHY: Record<UserRoleType, number> = {
   [UserRole.KITCHEN_CHEF]: 7,
   [UserRole.CASHIER_RESTAURANT]: 8,
   [UserRole.CASHIER_DELIVERY]: 8,
+  [UserRole.MESONERO]: 9,
 };
 
 /**
@@ -103,6 +105,12 @@ export const ROLE_INFO: Record<UserRoleType, {
     labelEs: 'Jefe de Cocina',
     description: 'Comandera de cocina',
     color: '#DC2626', // Red
+  },
+  [UserRole.MESONERO]: {
+    label: 'Mesonero',
+    labelEs: 'Mesonero',
+    description: 'Acceso al POS Mesero y dashboard de servicio',
+    color: '#F97316', // Orange
   },
 };
 
@@ -258,6 +266,10 @@ export const ROLE_PERMISSIONS: Record<UserRoleType, Partial<Record<SystemModuleT
   [UserRole.KITCHEN_CHEF]: {
     // Solo acceso a la comandera de cocina
     [SystemModule.KITCHEN_DISPLAY]: ['view'],
+  },
+  [UserRole.MESONERO]: {
+    // Solo acceso al POS Mesero y su dashboard de servicio
+    [SystemModule.POS_RESTAURANT]: ['view', 'create'],
   },
 };
 

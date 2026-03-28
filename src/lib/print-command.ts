@@ -85,6 +85,7 @@ export function printReceipt(data: ReceiptData) {
   body {
     font-family: 'Courier New', Courier, 'Lucida Console', monospace;
     font-size: 11px;
+    font-weight: 700;
     line-height: 1.4;
     color: #000000;
     background: #ffffff;
@@ -220,8 +221,9 @@ export function printReceipt(data: ReceiptData) {
 
   @media print {
     @page { margin: 0; size: 80mm auto; }
-    body  { padding: 2mm; color: #000000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    * { color: #000000 !important; }
+    body  { padding: 2mm; color: #000000 !important; font-weight: 700 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    * { color: #000000 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    .info-row, .cliente-block, table, .totals, .footer { color: #000000 !important; font-weight: 700 !important; }
   }
 </style>
 </head>
@@ -230,8 +232,8 @@ export function printReceipt(data: ReceiptData) {
 <!-- CABECERA -->
 <div class="header">
   <div class="logo">TABLE PONG</div>
-  <div class="subtitle">- SANTA PAULA -</div>
-  <div class="company">TABLE PONG SANTA PAULA, C.A.</div>
+  <div class="subtitle">- SPORT BAR -</div>
+  <div class="company">TABLE PONG, C.A.</div>
   <div class="rif">RIF: J-XXXXXXXXX-X</div>
   <div class="doc-type">RECIBO DE PAGO</div>
 </div>
@@ -290,7 +292,7 @@ export function printReceipt(data: ReceiptData) {
 <!-- PIE -->
 <div class="footer">
   <div class="gracias">¡GRACIAS POR SU VISITA!</div>
-  <div>Vuelva pronto · table-pong.vercel.app</div>
+  <div>Vuelva pronto · Table Pong</div>
   <div style="margin-top:6px; font-size:8px;">Este recibo no es una factura fiscal</div>
 </div>
 

@@ -421,12 +421,13 @@ export async function voidSalesOrderAction(
         }
 
         // 2. Marcar orden como anulada
+        // voidedById = el usuario de la sesión que realizó la anulación en el sistema
         await prisma.salesOrder.update({
             where: { id: orderId },
             data: {
                 status: 'CANCELLED',
                 notes: order.notes ? `${order.notes}\nANULADA: ${reason}` : `ANULADA: ${reason}`,
-                voidedById: authorizerId,
+                voidedById: session.id,
                 voidedAt: new Date(),
                 voidReason: reason.trim()
             }

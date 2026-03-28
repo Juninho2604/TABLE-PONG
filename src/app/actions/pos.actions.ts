@@ -1495,14 +1495,14 @@ export async function getUsersForTabAction(): Promise<ActionResult> {
     try {
         const session = await getSession();
         if (!session) return { success: false, message: 'No autorizado' };
-        
-        // Return fixed Mesonero options instead of all system users
-        const mesoneros = [
-            { id: 'mesonero-1', firstName: 'Mesonero', lastName: '1', role: 'WAITER' },
-            { id: 'mesonero-2', firstName: 'Mesonero', lastName: '2', role: 'WAITER' },
-            { id: 'mesonero-3', firstName: 'Mesonero', lastName: '3', role: 'WAITER' },
-        ];
-        
+
+        // Obtener mesoneros activos registrados en el sistema
+        const mesoneros = await prisma.user.findMany({
+            where: { role: 'MESONERO', isActive: true },
+            select: { id: true, firstName: true, lastName: true, role: true },
+            orderBy: { firstName: 'asc' },
+        });
+
         return { success: true, message: 'Mesoneros cargados', data: mesoneros };
     } catch (error) {
         return { success: false, message: 'Error cargando mesoneros' };
