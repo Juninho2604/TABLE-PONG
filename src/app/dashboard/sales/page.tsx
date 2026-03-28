@@ -380,11 +380,14 @@ export default function SalesHistoryPage() {
                                     return (
                                     <>
                                     <tr
-                                        className="hover:bg-gray-700/30 transition-colors cursor-pointer"
+                                        className={`transition-colors cursor-pointer ${sale.status === 'CANCELLED' ? 'bg-red-950/30 hover:bg-red-950/50 opacity-70' : 'hover:bg-gray-700/30'}`}
                                         onClick={() => setExpandedOrder(expandedOrder === sale.id ? null : sale.id)}
                                     >
                                         <td className="p-4">
-                                            <div className="font-bold text-blue-300">{sale.orderNumber}</div>
+                                            <div className={`font-bold ${sale.status === 'CANCELLED' ? 'text-red-400 line-through' : 'text-blue-300'}`}>{sale.orderNumber}</div>
+                                            {sale.status === 'CANCELLED' && (
+                                                <div className="text-[10px] font-black text-red-500 mt-0.5">🚫 ANULADA</div>
+                                            )}
                                             {isSportBar && sale.openTab?.tabCode && (
                                                 <div className="text-[10px] text-slate-500">{sale.openTab.tabCode}</div>
                                             )}
@@ -478,8 +481,8 @@ export default function SalesHistoryPage() {
                                                             {voidingId === sale.id ? '...' : '🚫 Anular'}
                                                         </button>
                                                     )}
-                                                    {canVoid && sale.status === 'CANCELLED' && (
-                                                        <span className="text-red-500 text-xs font-bold px-2">ANULADA</span>
+                                                    {sale.status === 'CANCELLED' && (
+                                                        <span className="text-red-500 text-xs font-bold px-2">🚫 ANULADA</span>
                                                     )}
                                                 </div>
                                             </td>
