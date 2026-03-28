@@ -49,6 +49,9 @@ export interface CreateOrderData {
     paymentSplits?: { method: POSPaymentMethod; amount: number }[];
     /** Cargo por servicio opcional (Pick Up / Delivery): se suma al total antes de calcular propina */
     serviceChargeAmount?: number;
+    /** Descuento en monto fijo (override de discountType). Usado en pago mixto con divisas parciales. */
+    discountAmountOverride?: number;
+    discountReasonOverride?: string;
 }
 
 export interface OpenTabInput {
@@ -264,13 +267,16 @@ async function resolveSalesAreaForBranch(branchId?: string) {
     return ensureBaseSalesArea();
 }
 
-function calculateCartTotals(data: Pick<CreateOrderData, 'items' | 'discountType' | 'discountPercent' | 'amountPaid' | 'serviceChargeAmount'>) {
+function calculateCartTotals(data: Pick<CreateOrderData, 'items' | 'discountType' | 'discountPercent' | 'amountPaid' | 'serviceChargeAmount' | 'discountAmountOverride' | 'discountReasonOverride'>) {
     const subtotal = data.items.reduce((sum, item) => sum + item.lineTotal, 0);
 
     let discount = 0;
     let discountReason = '';
 
-    if (data.discountType === 'DIVISAS_33') {
+    if (data.discountAmountOverride != null && data.discountAmountOverride > 0) {
+        discount = data.discountAmountOverride;
+        discountReason = data.discountReasonOverride || 'Descuento aplicado';
+    } else if (data.discountType === 'DIVISAS_33') {
         discount = subtotal / 3;
         discountReason = 'Pago en Divisas (33.33%)';
     } else if (data.discountType === 'CORTESIA_100') {

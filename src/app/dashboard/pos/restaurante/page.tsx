@@ -189,6 +189,8 @@ export default function POSSportBarPage() {
   const [showPaymentPinModal, setShowPaymentPinModal] = useState(false);
   const [paymentPin, setPaymentPin] = useState("");
   const [paymentPinError, setPaymentPinError] = useState("");
+  const [paymentLines, setPaymentLines] = useState<{ method: "CASH" | "CARD" | "TRANSFER" | "MOBILE_PAY" | "ZELLE"; amount: string }[]>([]);
+  const [useMultiPayment, setUseMultiPayment] = useState(false);
 
   // ── Descuento ─────────────────────────────────────────────────────────────
   const [discountType, setDiscountType] = useState<"NONE" | "DIVISAS_33" | "CORTESIA_100" | "CORTESIA_PERCENT">("NONE");
@@ -336,6 +338,39 @@ export default function POSSportBarPage() {
       : activeTab.balanceDue
     : 0;
   const paymentAmountToCharge = serviceFeeIncluded ? paymentBaseAmount * 1.1 : paymentBaseAmount;
+
+  // Pickup totals (extracted for reuse)
+  const pickupDiscount = discountType === "DIVISAS_33" ? cartTotal / 3
+    : discountType === "CORTESIA_100" ? cartTotal
+    : discountType === "CORTESIA_PERCENT" ? cartTotal * (cortesiaPercentNum / 100)
+    : 0;
+  const pickupTotal = Math.max(0, cartTotal - pickupDiscount);
+
+  // Pago mixto
+  const DIVISAS_METHODS_SET = new Set(["CASH", "ZELLE"]);
+  const multiTotal = paymentLines.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+
+  // Descuento divisas parcial: solo las líneas CASH/ZELLE generan el 33% de descuento
+  // La lógica: $X pagado en divisas cubre $X / (2/3) = $X * 1.5 del saldo, ahorrando $X * 0.5
+  const mixedDivisasPayments = paymentLines
+    .filter(l => DIVISAS_METHODS_SET.has(l.method))
+    .reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
+  const mixedDivisasDiscount = mixedDivisasPayments * 0.5; // = descuento = divisas_pagado / 2
+
+  // Tab: base es paymentBaseAmount (ya descuenta cortesía si la hay)
+  const mixedTabBase = Math.max(0, paymentBaseAmount - mixedDivisasDiscount);
+  const mixedTabTotal = mixedTabBase * (serviceFeeIncluded ? 1.1 : 1);
+  const multiTabRemaining = mixedTabTotal - multiTotal;
+  const multiTabValid = useMultiPayment
+    ? paymentLines.filter(l => parseFloat(l.amount) > 0).length > 1 && multiTotal >= mixedTabTotal - 0.001
+    : true;
+
+  // Pickup: base es pickupTotal (ya descuenta cortesía si la hay)
+  const mixedPickupBase = Math.max(0, pickupTotal - mixedDivisasDiscount);
+  const multiPickupRemaining = mixedPickupBase - multiTotal;
+  const multiPickupValid = useMultiPayment
+    ? paymentLines.filter(l => parseFloat(l.amount) > 0).length > 1 && multiTotal >= mixedPickupBase - 0.001
+    : true;
 
   // ============================================================================
   // OPEN TAB
@@ -542,7 +577,15 @@ export default function POSSportBarPage() {
   // ============================================================================
 
   const handlePaymentPinConfirm = async () => {
-    if (!activeTab || paidAmount <= 0) return;
+    if (!activeTab) return;
+    if (useMultiPayment) {
+      if (!multiTabValid || paymentLines.filter(l => parseFloat(l.amount) > 0).length < 2) {
+        setPaymentPinError("Pago mixto: asigne al menos 2 métodos y cubra el total");
+        return;
+      }
+    } else if (paidAmount <= 0) {
+      return;
+    }
     setPaymentPinError("");
     setIsProcessing(true);
     try {
@@ -563,14 +606,31 @@ export default function POSSportBarPage() {
         discountAmount = activeTab.balanceDue * (cortesiaPercentNum / 100);
         discountLabel = ` · Cortesía ${cortesiaPercentNum}%`;
       }
-      const result = await registerOpenTabPaymentAction({
-        openTabId: activeTab.id,
-        amount: paidAmount,
-        paymentMethod,
-        splitLabel: `${PAYMENT_LABELS[paymentMethod] || paymentMethod}${discountLabel} – ${pinResult.data?.managerName || ""}`,
-        discountAmount: discountAmount > 0 ? discountAmount : undefined,
-        includeServiceCharge: serviceFeeIncluded,
-      });
+      let result;
+      if (useMultiPayment && paymentLines.filter(l => parseFloat(l.amount) > 0).length > 1) {
+        const splits = paymentLines.filter(l => parseFloat(l.amount) > 0).map(l => ({ method: l.method as any, amount: parseFloat(l.amount) }));
+        // Descuento total = cortesía (si aplica) + divisas parciales de las líneas CASH/ZELLE
+        const partialDivisasDiscount = splits
+          .filter(s => DIVISAS_METHODS_SET.has(s.method))
+          .reduce((sum, s) => sum + s.amount * 0.5, 0);
+        const totalDiscount = discountAmount + partialDivisasDiscount;
+        result = await registerOpenTabPaymentAction({
+          openTabId: activeTab.id,
+          amount: 0,
+          paymentMethod: "CASH",
+          paymentSplits: splits,
+          discountAmount: totalDiscount > 0 ? totalDiscount : undefined,
+        });
+      } else {
+        result = await registerOpenTabPaymentAction({
+          openTabId: activeTab.id,
+          amount: paidAmount,
+          paymentMethod,
+          splitLabel: `${PAYMENT_LABELS[paymentMethod] || paymentMethod}${discountLabel} – ${pinResult.data?.managerName || ""}`,
+          discountAmount: discountAmount > 0 ? discountAmount : undefined,
+          includeServiceCharge: serviceFeeIncluded,
+        });
+      }
       if (!result.success) {
         alert(result.message);
         return;
@@ -608,6 +668,8 @@ export default function POSSportBarPage() {
       setPaymentPin("");
       clearDiscount();
       setServiceFeeIncluded(true);
+      setUseMultiPayment(false);
+      setPaymentLines([]);
       setShowPaymentPinModal(false);
       await loadData();
     } finally {
@@ -643,24 +705,38 @@ export default function POSSportBarPage() {
 
   const handleCheckoutPickup = async () => {
     if (cart.length === 0) return;
+    if (useMultiPayment) {
+      const validLines = paymentLines.filter(l => parseFloat(l.amount) > 0);
+      if (validLines.length < 2 || multiTotal < pickupTotal - 0.001) {
+        alert("Pago mixto: asigne al menos 2 métodos y cubra el total");
+        return;
+      }
+    }
     setIsProcessing(true);
     try {
-      const pickupDiscount = discountType === "DIVISAS_33" ? cartTotal / 3
-        : discountType === "CORTESIA_100" ? cartTotal
-        : discountType === "CORTESIA_PERCENT" ? cartTotal * (cortesiaPercentNum / 100)
-        : 0;
-      const finalTotal = Math.max(0, cartTotal - pickupDiscount);
+      const finalTotal = pickupTotal;
 
+      const pickupSplits = useMultiPayment ? paymentLines.filter(l => parseFloat(l.amount) > 0).map(l => ({ method: l.method as any, amount: parseFloat(l.amount) })) : undefined;
+      // Descuento divisas parciales: solo aplica si hay líneas CASH/ZELLE en pago mixto
+      const pickupPartialDivisasDiscount = pickupSplits
+        ? pickupSplits.filter(s => DIVISAS_METHODS_SET.has(s.method)).reduce((sum, s) => sum + s.amount * 0.5, 0)
+        : 0;
+      // Cortesía ya está capturada en discountType; se suma el descuento divisas si aplica
+      const pickupHasDivisasLines = pickupPartialDivisasDiscount > 0;
       const result = await createSalesOrderAction({
         orderType: "RESTAURANT",
         customerName: pickupCustomerName || "Cliente en Caja",
         items: cart,
-        paymentMethod,
-        amountPaid: paidAmount || finalTotal,
+        paymentMethod: useMultiPayment ? "MULTIPLE" : paymentMethod,
+        amountPaid: useMultiPayment ? multiTotal : (paidAmount || finalTotal),
         notes: "Venta Directa Pickup",
-        discountType,
-        discountPercent: discountType === "CORTESIA_PERCENT" ? cortesiaPercentNum : undefined,
+        discountType: pickupHasDivisasLines ? undefined : discountType,
+        discountPercent: (!pickupHasDivisasLines && discountType === "CORTESIA_PERCENT") ? cortesiaPercentNum : undefined,
         authorizedById: authorizedManager?.id,
+        paymentSplits: pickupSplits,
+        // Descuento total: cortesía + divisas parciales
+        discountAmountOverride: pickupHasDivisasLines ? pickupDiscount + pickupPartialDivisasDiscount : undefined,
+        discountReasonOverride: pickupHasDivisasLines ? `Divisas parcial${pickupDiscount > 0 ? " + Cortesía" : ""}` : undefined,
       });
 
       if (result.success && result.data) {
@@ -717,6 +793,8 @@ export default function POSSportBarPage() {
         setPaymentMethod("CASH");
         setAmountReceived("");
         clearDiscount();
+        setUseMultiPayment(false);
+        setPaymentLines([]);
         setPickupCustomerName("");
       } else {
         alert(result.message);
@@ -846,6 +924,8 @@ export default function POSSportBarPage() {
                   setIsPickupMode(true);
                   setSelectedTableId("");
                   setSelectedZoneId("");
+                  setUseMultiPayment(false);
+                  setPaymentLines([]);
                 }}
                 className={`capsula-btn min-h-0 py-3 text-sm ${isPickupMode ? "capsula-btn-primary" : "capsula-btn-secondary"}`}
               >
@@ -859,6 +939,8 @@ export default function POSSportBarPage() {
                       setIsPickupMode(false);
                       setSelectedZoneId(z.id);
                       setSelectedTableId("");
+                      setUseMultiPayment(false);
+                      setPaymentLines([]);
                     }}
                     className={`flex-1 py-3 rounded-xl text-xs font-black transition-all active:scale-95 ${selectedZoneId === z.id && !isPickupMode ? "bg-primary text-white shadow-lg shadow-primary/20" : "bg-card border border-border text-foreground/60 hover:border-primary/50"}`}
                   >
@@ -1120,57 +1202,114 @@ export default function POSSportBarPage() {
                   </button>
                 </div>
                 {/* Métodos de pago */}
-                <div className="grid grid-cols-2 gap-2">
-                  {(["CASH", "ZELLE", "CARD", "MOBILE_PAY", "TRANSFER"] as const).map((m) => (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-muted-foreground uppercase">Forma de pago</span>
                     <button
-                      key={m}
-                      onClick={() => setPaymentMethod(m)}
-                      className={`py-3 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all active:scale-95 ${paymentMethod === m ? "bg-primary text-white shadow-lg shadow-primary/20" : "bg-card border border-border text-foreground/50"}`}
+                      onClick={() => { setUseMultiPayment(p => !p); setPaymentLines([]); }}
+                      className={`text-[10px] px-2 py-0.5 rounded font-bold transition ${useMultiPayment ? "bg-blue-600 text-white" : "bg-card border border-border text-foreground/50 hover:bg-muted"}`}
                     >
-                      {PAYMENT_LABELS[m]}
+                      {useMultiPayment ? "✓ Pago Mixto" : "+ Pago Mixto"}
                     </button>
-                  ))}
+                  </div>
+                  {!useMultiPayment ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["CASH", "ZELLE", "CARD", "MOBILE_PAY", "TRANSFER"] as const).map((m) => (
+                        <button
+                          key={m}
+                          onClick={() => setPaymentMethod(m)}
+                          className={`py-3 rounded-xl text-[11px] font-black uppercase tracking-tighter transition-all active:scale-95 ${paymentMethod === m ? "bg-primary text-white shadow-lg shadow-primary/20" : "bg-card border border-border text-foreground/50"}`}
+                        >
+                          {PAYMENT_LABELS[m]}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {paymentLines.map((line, idx) => {
+                        const isDivisas = DIVISAS_METHODS_SET.has(line.method);
+                        const amt = parseFloat(line.amount) || 0;
+                        const covers = isDivisas ? amt * 1.5 : amt;
+                        return (
+                          <div key={idx} className="space-y-0.5">
+                            <div className="flex gap-1.5 items-center">
+                              <select
+                                value={line.method}
+                                onChange={e => setPaymentLines(prev => prev.map((l, i) => i === idx ? { ...l, method: e.target.value as any } : l))}
+                                className={`flex-1 bg-background/50 border rounded px-2 py-1.5 text-xs text-foreground focus:outline-none ${isDivisas ? "border-blue-500/60 focus:border-blue-400" : "border-indigo-500/30 focus:border-indigo-400"}`}
+                              >
+                                <option value="CASH">💵 Efectivo</option>
+                                <option value="ZELLE">⚡ Zelle</option>
+                                <option value="CARD">💳 Tarjeta</option>
+                                <option value="MOBILE_PAY">📱 Pago Móvil</option>
+                                <option value="TRANSFER">🏦 Transferencia</option>
+                              </select>
+                              <input
+                                type="number"
+                                value={line.amount}
+                                onChange={e => setPaymentLines(prev => prev.map((l, i) => i === idx ? { ...l, amount: e.target.value } : l))}
+                                placeholder="$0.00"
+                                className={`w-20 bg-background/50 border rounded px-2 py-1.5 text-xs text-foreground focus:outline-none ${isDivisas ? "border-blue-500/60 focus:border-blue-400" : "border-indigo-500/30 focus:border-indigo-400"}`}
+                              />
+                              <button
+                                onClick={() => setPaymentLines(prev => prev.filter((_, i) => i !== idx))}
+                                className="text-red-400 hover:text-red-300 text-base leading-none px-1"
+                              >×</button>
+                            </div>
+                            {isDivisas && amt > 0 && (
+                              <div className="text-[10px] text-blue-400 pl-1">
+                                💱 Cubre ${covers.toFixed(2)} del total (descuento -${(amt * 0.5).toFixed(2)})
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <button
+                        onClick={() => setPaymentLines(prev => [...prev, { method: "CASH", amount: "" }])}
+                        className="w-full py-1 bg-background/30 border border-dashed border-indigo-500/30 rounded text-xs text-muted-foreground hover:text-foreground hover:border-indigo-400 transition"
+                      >+ Agregar método</button>
+                      {mixedDivisasDiscount > 0 && (
+                        <div className="text-[10px] text-blue-400 bg-blue-950/30 rounded px-2 py-1">
+                          Descuento divisas parcial: <span className="font-bold">-${mixedDivisasDiscount.toFixed(2)}</span> · A cobrar: <span className="font-bold">${mixedPickupBase.toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className={`text-xs text-right font-bold ${multiPickupRemaining > 0.005 ? "text-amber-400" : "text-emerald-400"}`}>
+                        {multiPickupRemaining > 0.005 ? `Falta: $${multiPickupRemaining.toFixed(2)}` : `✓ Cubierto $${multiTotal.toFixed(2)}`}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Total calculado pickup */}
-                {(() => {
-                  const pickupDiscount = discountType === "DIVISAS_33" ? cartTotal / 3
-                    : discountType === "CORTESIA_100" ? cartTotal
-                    : discountType === "CORTESIA_PERCENT" ? cartTotal * (cortesiaPercentNum / 100)
-                    : 0;
-                  const pickupTotal = Math.max(0, cartTotal - pickupDiscount);
-                  return (
-                    <div className="space-y-4 pt-2">
-                       <div className="flex items-center gap-2 bg-background border border-border p-1 rounded-2xl">
-                        <input
-                          type="number"
-                          value={amountReceived}
-                          onChange={(e) => setAmountReceived(e.target.value)}
-                          placeholder={`Recibido...`}
-                          className="flex-1 bg-transparent border-none rounded-xl px-4 py-3 text-lg font-black focus:ring-0 placeholder:text-muted-foreground/30"
-                        />
-                        <div className="pr-4 text-xs font-black text-muted-foreground uppercase">USD</div>
-                      </div>
-                      
-                      <div className="glass-panel p-4 rounded-2xl border-primary/5">
-                        <CurrencyCalculator
-                          totalUsd={pickupTotal}
-                          hasServiceFee={false}
-                          onRateUpdated={setExchangeRate}
-                          className="w-full justify-center"
-                        />
-                      </div>
-
-                      <button
-                        onClick={handleCheckoutPickup}
-                        disabled={cart.length === 0 || isProcessing}
-                        className="capsula-btn capsula-btn-primary w-full py-6 text-xl shadow-xl shadow-primary/20"
-                      >
-                        {isProcessing ? "PROCESANDO..." : `COBRAR $${pickupTotal.toFixed(2)}`}
-                      </button>
+                <div className="space-y-4 pt-2">
+                  {!useMultiPayment && (
+                    <div className="flex items-center gap-2 bg-background border border-border p-1 rounded-2xl">
+                      <input
+                        type="number"
+                        value={amountReceived}
+                        onChange={(e) => setAmountReceived(e.target.value)}
+                        placeholder="Recibido..."
+                        className="flex-1 bg-transparent border-none rounded-xl px-4 py-3 text-lg font-black focus:ring-0 placeholder:text-muted-foreground/30"
+                      />
+                      <div className="pr-4 text-xs font-black text-muted-foreground uppercase">USD</div>
                     </div>
-                  );
-                })()}
+                  )}
+                  <div className="glass-panel p-4 rounded-2xl border-primary/5">
+                    <CurrencyCalculator
+                      totalUsd={pickupTotal}
+                      hasServiceFee={false}
+                      onRateUpdated={setExchangeRate}
+                      className="w-full justify-center"
+                    />
+                  </div>
+                  <button
+                    onClick={handleCheckoutPickup}
+                    disabled={cart.length === 0 || isProcessing || (useMultiPayment && !multiPickupValid)}
+                    className="capsula-btn capsula-btn-primary w-full py-6 text-xl shadow-xl shadow-primary/20"
+                  >
+                    {isProcessing ? "PROCESANDO..." : useMultiPayment ? `COBRAR MIXTO $${pickupTotal.toFixed(2)}` : `COBRAR $${pickupTotal.toFixed(2)}`}
+                  </button>
+                </div>
                 {lastPickupOrder && (
                   <button
                     onClick={() => {
@@ -1346,10 +1485,10 @@ export default function POSSportBarPage() {
                         Normal
                       </button>
                       <button
-                        onClick={() => isPagoDivisas && setDiscountType("DIVISAS_33")}
-                        disabled={!isPagoDivisas}
-                        title={!isPagoDivisas ? "Solo con Efectivo o Zelle" : "Descuento por pago en divisas"}
-                        className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "DIVISAS_33" ? "bg-blue-600 text-white ring-1 ring-white" : isPagoDivisas ? "bg-card text-foreground/70 hover:bg-muted" : "bg-card text-foreground/50 cursor-not-allowed opacity-50"}`}
+                        onClick={() => isPagoDivisas && !useMultiPayment && setDiscountType("DIVISAS_33")}
+                        disabled={!isPagoDivisas || useMultiPayment}
+                        title={useMultiPayment ? "No disponible en Pago Mixto" : !isPagoDivisas ? "Solo con Efectivo o Zelle" : "Descuento por pago en divisas"}
+                        className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "DIVISAS_33" ? "bg-blue-600 text-white ring-1 ring-white" : (isPagoDivisas && !useMultiPayment) ? "bg-card text-foreground/70 hover:bg-muted" : "bg-card text-foreground/50 cursor-not-allowed opacity-50"}`}
                       >
                         Divisas -33%
                       </button>
@@ -1377,71 +1516,144 @@ export default function POSSportBarPage() {
 
                   {/* 2. Método de pago */}
                   <div className="mb-3">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase mb-1">2. Forma de pago</p>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {(["CASH", "ZELLE", "CARD", "MOBILE_PAY", "TRANSFER"] as const).map((m) => (
-                        <button
-                          key={m}
-                          onClick={() => setPaymentMethod(m)}
-                          className={`py-2 rounded-lg text-xs font-bold transition ${paymentMethod === m ? "bg-amber-500 text-black" : "bg-card text-foreground/70 hover:bg-muted"}`}
-                        >
-                          {PAYMENT_LABELS[m]}
-                        </button>
-                      ))}
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase">2. Forma de pago</p>
+                      <button
+                        onClick={() => { setUseMultiPayment(p => !p); setPaymentLines([]); }}
+                        className={`text-[10px] px-2 py-0.5 rounded font-bold transition ${useMultiPayment ? "bg-blue-600 text-white" : "bg-card border border-border text-foreground/50 hover:bg-muted"}`}
+                      >
+                        {useMultiPayment ? "✓ Pago Mixto" : "+ Pago Mixto"}
+                      </button>
                     </div>
+                    {!useMultiPayment ? (
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {(["CASH", "ZELLE", "CARD", "MOBILE_PAY", "TRANSFER"] as const).map((m) => (
+                          <button
+                            key={m}
+                            onClick={() => setPaymentMethod(m)}
+                            className={`py-2 rounded-lg text-xs font-bold transition ${paymentMethod === m ? "bg-amber-500 text-black" : "bg-card text-foreground/70 hover:bg-muted"}`}
+                          >
+                            {PAYMENT_LABELS[m]}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {paymentLines.map((line, idx) => {
+                          const isDivisas = DIVISAS_METHODS_SET.has(line.method);
+                          const amt = parseFloat(line.amount) || 0;
+                          const covers = isDivisas ? amt * 1.5 : amt;
+                          return (
+                            <div key={idx} className="space-y-0.5">
+                              <div className="flex gap-1.5 items-center">
+                                <select
+                                  value={line.method}
+                                  onChange={e => setPaymentLines(prev => prev.map((l, i) => i === idx ? { ...l, method: e.target.value as any } : l))}
+                                  className={`flex-1 bg-card border rounded px-2 py-1.5 text-xs text-foreground ${isDivisas ? "border-blue-500/60" : "border-border"}`}
+                                >
+                                  <option value="CASH">💵 Efectivo</option>
+                                  <option value="ZELLE">⚡ Zelle</option>
+                                  <option value="CARD">💳 Tarjeta</option>
+                                  <option value="MOBILE_PAY">📱 Pago Móvil</option>
+                                  <option value="TRANSFER">🏦 Transferencia</option>
+                                </select>
+                                <input
+                                  type="number"
+                                  value={line.amount}
+                                  onChange={e => setPaymentLines(prev => prev.map((l, i) => i === idx ? { ...l, amount: e.target.value } : l))}
+                                  placeholder="$0.00"
+                                  className={`w-20 bg-card border rounded px-2 py-1.5 text-xs text-foreground focus:outline-none ${isDivisas ? "border-blue-500/60 focus:border-blue-400" : "border-border focus:border-amber-500"}`}
+                                />
+                                <button
+                                  onClick={() => setPaymentLines(prev => prev.filter((_, i) => i !== idx))}
+                                  className="text-red-400 hover:text-red-300 text-base leading-none px-1"
+                                >×</button>
+                              </div>
+                              {isDivisas && amt > 0 && (
+                                <div className="text-[10px] text-blue-400 pl-1">
+                                  💱 Cubre ${covers.toFixed(2)} del saldo (descuento -${(amt * 0.5).toFixed(2)})
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        <button
+                          onClick={() => setPaymentLines(prev => [...prev, { method: "CASH", amount: "" }])}
+                          className="w-full py-1 bg-card border border-dashed border-border rounded text-xs text-muted-foreground hover:text-foreground hover:border-amber-500 transition"
+                        >+ Agregar método</button>
+                        {mixedDivisasDiscount > 0 && (
+                          <div className="text-[10px] text-blue-400 bg-blue-950/30 rounded px-2 py-1">
+                            Descuento divisas parcial: <span className="font-bold">-${mixedDivisasDiscount.toFixed(2)}</span> · A cobrar total: <span className="font-bold">${mixedTabTotal.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className={`text-xs text-right font-bold ${multiTabRemaining > 0.005 ? "text-amber-400" : "text-emerald-400"}`}>
+                          {multiTabRemaining > 0.005 ? `Falta: $${multiTabRemaining.toFixed(2)}` : `✓ Cubierto $${multiTotal.toFixed(2)}`}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Resumen */}
-                  {(() => {
-                    return (
-                      <div className="bg-card rounded-lg px-3 py-2 mb-2 text-xs space-y-1">
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Saldo</span>
-                          <span>${activeTab.balanceDue.toFixed(2)}</span>
-                        </div>
-                        {discountType === "DIVISAS_33" && (
-                          <div className="flex justify-between text-blue-400">
-                            <span>Descuento divisas</span>
-                            <span>-${(activeTab.balanceDue / 3).toFixed(2)}</span>
-                          </div>
-                        )}
-                        <label className="flex items-center gap-2 mt-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={serviceFeeIncluded}
-                            onChange={(e) => setServiceFeeIncluded(e.target.checked)}
-                            className="rounded border-border bg-secondary text-amber-500 focus:ring-amber-500"
-                          />
-                          <span className="text-foreground/70">Incluir 10% servicio</span>
-                        </label>
-                        <div className="flex justify-between font-bold text-white border-t border-border pt-1">
-                          <span>A cobrar</span>
-                          <span>${paymentAmountToCharge.toFixed(2)}</span>
-                        </div>
-                        {!serviceFeeIncluded && (
-                          <div className="flex justify-between text-amber-500/80 text-[10px]">
-                            <span>Sin 10% servicio</span>
-                          </div>
-                        )}
+                  <div className="bg-card rounded-lg px-3 py-2 mb-2 text-xs space-y-1">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Saldo</span>
+                      <span>${activeTab.balanceDue.toFixed(2)}</span>
+                    </div>
+                    {discountType === "DIVISAS_33" && !useMultiPayment && (
+                      <div className="flex justify-between text-blue-400">
+                        <span>Descuento divisas</span>
+                        <span>-${(activeTab.balanceDue / 3).toFixed(2)}</span>
                       </div>
-                    );
-                  })()}
+                    )}
+                    {(discountType === "CORTESIA_100" || discountType === "CORTESIA_PERCENT") && (
+                      <div className="flex justify-between text-purple-400">
+                        <span>Cortesía {discountType === "CORTESIA_PERCENT" ? cortesiaPercentNum + "%" : "100%"}</span>
+                        <span>-${(activeTab.balanceDue * (cortesiaPercentNum / 100)).toFixed(2)}</span>
+                      </div>
+                    )}
+                    {useMultiPayment && mixedDivisasDiscount > 0 && (
+                      <div className="flex justify-between text-blue-400">
+                        <span>💱 Divisas parcial</span>
+                        <span>-${mixedDivisasDiscount.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <label className="flex items-center gap-2 mt-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={serviceFeeIncluded}
+                        onChange={(e) => setServiceFeeIncluded(e.target.checked)}
+                        className="rounded border-border bg-secondary text-amber-500 focus:ring-amber-500"
+                      />
+                      <span className="text-foreground/70">Incluir 10% servicio</span>
+                    </label>
+                    <div className="flex justify-between font-bold text-white border-t border-border pt-1">
+                      <span>A cobrar</span>
+                      <span>${useMultiPayment ? mixedTabTotal.toFixed(2) : paymentAmountToCharge.toFixed(2)}</span>
+                    </div>
+                    {!serviceFeeIncluded && (
+                      <div className="flex justify-between text-amber-500/80 text-[10px]">
+                        <span>Sin 10% servicio</span>
+                      </div>
+                    )}
+                  </div>
 
-                  <input
-                    type="number"
-                    value={amountReceived}
-                    onChange={(e) => setAmountReceived(e.target.value)}
-                    placeholder={`Monto a recibir ($${paymentAmountToCharge.toFixed(2)})`}
-                    className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none mb-2"
-                  />
-
-                  {/* CurrencyCalculator */}
-                  <CurrencyCalculator
-                    totalUsd={paidAmount > 0 ? paidAmount : paymentAmountToCharge}
-                    hasServiceFee={false}
-                    onRateUpdated={setExchangeRate}
-                    className="w-full justify-center mb-2"
-                  />
+                  {!useMultiPayment && (
+                    <>
+                      <input
+                        type="number"
+                        value={amountReceived}
+                        onChange={(e) => setAmountReceived(e.target.value)}
+                        placeholder={`Monto a recibir ($${paymentAmountToCharge.toFixed(2)})`}
+                        className="w-full bg-card border border-border rounded-lg px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none mb-2"
+                      />
+                      <CurrencyCalculator
+                        totalUsd={paidAmount > 0 ? paidAmount : paymentAmountToCharge}
+                        hasServiceFee={false}
+                        onRateUpdated={setExchangeRate}
+                        className="w-full justify-center mb-2"
+                      />
+                    </>
+                  )}
 
                   {/* Register payment (requiere PIN) */}
                   <button
@@ -1450,10 +1662,10 @@ export default function POSSportBarPage() {
                       setPaymentPinError("");
                       setShowPaymentPinModal(true);
                     }}
-                    disabled={paidAmount <= 0 || isProcessing}
+                    disabled={(useMultiPayment ? !multiTabValid : paidAmount <= 0) || isProcessing}
                     className="capsula-btn capsula-btn-primary w-full py-5 text-sm shadow-xl shadow-primary/10"
                   >
-                    🔐 REGISTRAR PAGO ${paidAmount > 0 ? paidAmount.toFixed(2) : "0.00"}
+                    🔐 {useMultiPayment ? `PAGO MIXTO $${multiTotal.toFixed(2)}` : `REGISTRAR PAGO $${paidAmount > 0 ? paidAmount.toFixed(2) : "0.00"}`}
                   </button>
 
                   {/* Paid splits */}
