@@ -52,10 +52,15 @@
 @layer base {
   * {
     @apply border-border;
+    /* Elimina el delay de 300ms en taps en Android (sin afectar zoom accesible) */
+    touch-action: manipulation;
   }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* Scroll suave en Android */
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 }
 
@@ -90,7 +95,13 @@
   }
 
   .glass-panel {
-    @apply backdrop-blur-md bg-white/80 dark:bg-gray-900/80 border border-white/20 dark:border-gray-700/50;
+    /* En móvil Android usamos fondo opaco para evitar el costo de backdrop-blur */
+    @apply bg-white dark:bg-gray-900 border border-white/20 dark:border-gray-700/50;
+  }
+  @media (min-width: 1024px) {
+    .glass-panel {
+      @apply backdrop-blur-md bg-white/80 dark:bg-gray-900/80;
+    }
   }
 
   .shimmer {
@@ -134,6 +145,27 @@
 
 .animate-scale-in {
   animation: scale-in 0.2s ease-out;
+}
+
+/* ── Android optimizations ─────────────────────────────────────────────── */
+
+/* Contenedores con scroll en el POS móvil */
+.overflow-y-auto,
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Reducir animaciones en dispositivos con preferencia de movimiento reducido
+   (también mejora rendimiento en gama baja) */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-spin,
+  .transition-all,
+  .transition {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 /* Scrollbar personalizado */
