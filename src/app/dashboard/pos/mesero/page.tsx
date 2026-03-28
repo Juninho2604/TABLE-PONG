@@ -405,7 +405,7 @@ export default function POSMeseroPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col pb-16 lg:pb-0">
+    <div className="min-h-screen bg-background text-foreground flex flex-col pb-20 lg:pb-0">
 
       {/* ── HEADER ──────────────────────────────────────────────────────── */}
       <div className="glass-panel px-3 md:px-6 py-3 md:py-4 flex items-center justify-between shrink-0 shadow-lg border-b border-border">
@@ -470,8 +470,9 @@ export default function POSMeseroPage() {
           </div>
 
           {/* Table grid */}
-          <div className="flex-1 overflow-y-auto p-4">
-            <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-3 gap-3">
+          <div className="flex-1 overflow-y-auto p-3">
+            {/* 3 cols en móvil Android (targets ~72px mínimo), 4 en sm, 3 en lg sidebar */}
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-3 gap-3">
               {selectedZone?.tablesOrStations.map((table) => {
                 const tab = table.openTabs[0];
                 const isSelected = table.id === selectedTableId;
@@ -480,9 +481,11 @@ export default function POSMeseroPage() {
                     key={table.id}
                     onClick={() => {
                       setSelectedTableId(table.id);
-                      if (window.innerWidth < 1024) setMobileTab("menu");
+                      // Solo ir al menú si la mesa ya tiene una cuenta abierta.
+                      // Si no tiene cuenta, quedarse en "tables" para mostrar el botón "Abrir cuenta".
+                      if (window.innerWidth < 1024 && table.openTabs.length > 0) setMobileTab("menu");
                     }}
-                    className={`relative aspect-square rounded-2xl flex flex-col items-center justify-center transition-all duration-200 active:scale-90 border-2 ${
+                    className={`relative aspect-square min-h-[72px] rounded-2xl flex flex-col items-center justify-center transition-all duration-200 active:scale-90 touch-manipulation border-2 ${
                       isSelected
                         ? "border-emerald-400 bg-emerald-400/10 shadow-lg shadow-emerald-400/10 ring-2 ring-emerald-400 ring-offset-2 ring-offset-background"
                         : tab
@@ -490,14 +493,14 @@ export default function POSMeseroPage() {
                           : "border-border bg-card/50 hover:border-emerald-400/30"
                     }`}
                   >
-                    <div className={`text-sm md:text-base font-black ${isSelected ? "text-emerald-400" : tab ? "text-emerald-500" : "text-foreground/40"}`}>
+                    <div className={`text-xs sm:text-sm font-black leading-tight text-center px-1 ${isSelected ? "text-emerald-400" : tab ? "text-emerald-500" : "text-foreground/40"}`}>
                       {table.code}
                     </div>
                     {tab && (
                       <div className="absolute top-1 right-1 h-2.5 w-2.5 bg-emerald-500 rounded-full border-2 border-background animate-pulse" />
                     )}
                     {tab && (
-                      <div className="mt-0.5 text-[8px] font-black text-foreground/60 truncate w-full px-1 text-center">
+                      <div className="mt-1 text-[9px] font-black text-foreground/60 truncate w-full px-1 text-center">
                         ${tab.balanceDue.toFixed(0)}
                       </div>
                     )}
@@ -513,20 +516,28 @@ export default function POSMeseroPage() {
               {!activeTab ? (
                 <button
                   onClick={() => setShowOpenTabModal(true)}
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-black text-sm transition active:scale-95"
+                  className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 rounded-xl font-black text-sm transition touch-manipulation"
                 >
                   + Abrir cuenta en {selectedTable.name}
                 </button>
               ) : (
-                <div className="space-y-1 text-xs">
-                  <div className="font-bold text-emerald-300 truncate">{activeTab.customerLabel}</div>
-                  {activeTab.customerPhone && (
-                    <div className="text-muted-foreground">📞 {activeTab.customerPhone}</div>
-                  )}
-                  <div className="text-muted-foreground">
-                    Abrió: <span className="text-white">{activeTab.openedBy.firstName}</span>
-                    <span className="text-muted-foreground"> · {formatTime(activeTab.openedAt)}</span>
+                <div className="space-y-2">
+                  <div className="space-y-1 text-xs">
+                    <div className="font-bold text-emerald-300 truncate">{activeTab.customerLabel}</div>
+                    {activeTab.customerPhone && (
+                      <div className="text-muted-foreground">📞 {activeTab.customerPhone}</div>
+                    )}
+                    <div className="text-muted-foreground">
+                      Abrió: <span className="text-white">{activeTab.openedBy.firstName}</span>
+                      <span className="text-muted-foreground"> · {formatTime(activeTab.openedAt)}</span>
+                    </div>
                   </div>
+                  <button
+                    onClick={() => setMobileTab("menu")}
+                    className="lg:hidden w-full py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 rounded-xl font-black text-sm transition touch-manipulation"
+                  >
+                    Ir al Menú →
+                  </button>
                 </div>
               )}
             </div>
@@ -752,7 +763,9 @@ export default function POSMeseroPage() {
       </div>
 
       {/* ── NAVEGACIÓN MÓVIL ─────────────────────────────────────────────── */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border flex z-50 shadow-2xl">
+      {/* pb seguro para barra de navegación de Android (gesture nav / botones) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border flex z-50 shadow-2xl"
+           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         {(["tables", "menu", "account"] as const).map((tab) => {
           const icons = { tables: "🪑", menu: "🍽️", account: "📋" };
           const labels = { tables: "MESAS", menu: "MENÚ", account: "PEDIDO" };
@@ -760,14 +773,14 @@ export default function POSMeseroPage() {
             <button
               key={tab}
               onClick={() => setMobileTab(tab)}
-              className={`flex-1 py-3 flex flex-col items-center gap-1 text-[9px] font-black uppercase tracking-widest relative transition-colors
+              className={`flex-1 py-4 flex flex-col items-center gap-1.5 text-[10px] font-black uppercase tracking-widest relative transition-colors touch-manipulation min-h-[64px]
                 ${mobileTab === tab ? "text-emerald-400 bg-emerald-400/5" : "text-muted-foreground"}`}
             >
-              {mobileTab === tab && <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-400 rounded-b" />}
-              <span className="text-xl">{icons[tab]}</span>
-              {labels[tab]}
+              {mobileTab === tab && <div className="absolute top-0 left-0 right-0 h-[3px] bg-emerald-400 rounded-b" />}
+              <span className="text-2xl leading-none">{icons[tab]}</span>
+              <span>{labels[tab]}</span>
               {tab === "account" && cartBadgeCount > 0 && (
-                <span className="absolute top-1 right-6 bg-emerald-500 text-black text-[9px] rounded-full min-w-[16px] h-4 flex items-center justify-center font-black px-1">
+                <span className="absolute top-2 right-4 bg-emerald-500 text-black text-[9px] rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-black px-1">
                   {cartBadgeCount}
                 </span>
               )}
