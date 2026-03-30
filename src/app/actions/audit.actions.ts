@@ -457,7 +457,7 @@ export async function getCategoriesAndFamiliesAction() {
             distinct: ['category']
         });
 
-        const categories = [...new Set(items.map(i => i.category).filter(Boolean))].sort() as string[];
+        const categories = Array.from(new Set(items.map(i => i.category).filter(Boolean))).sort() as string[];
         const families = items
             .filter(i => i.family)
             .map(i => ({ id: i.family!.id, name: i.family!.name }))
