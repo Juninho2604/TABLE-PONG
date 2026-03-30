@@ -1172,6 +1172,27 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
             }
         }
 
+        // ── Anti-fraude: amountReceived debe cubrir lo cobrado en efectivo ──
+        // Para pagos en efectivo (CASH), el monto físico recibido no puede ser
+        // menor al total del split. Un amountReceived < split.amount indica
+        // que el cajero declaró recibir menos de lo que realmente cobró.
+        if (!isFullDiscountClose && splitsToCreate.length > 0) {
+            const cashSplits = splitsToCreate.filter(s => s.method === 'CASH');
+            if (cashSplits.length > 0) {
+                const cashSplitTotal = cashSplits.reduce((s, p) => s + p.amount, 0);
+                const prevCashPaid = openTab.paymentSplits
+                    .filter(p => p.paymentMethod === 'CASH')
+                    .reduce((s, p) => s + Number(p.amountReceived ?? p.paidAmount), 0);
+                const totalCashReceived = prevCashPaid + (amountReceivedInput ?? 0);
+                if (amountReceivedInput !== undefined && amountReceivedInput < cashSplitTotal - 0.02) {
+                    return {
+                        success: false,
+                        message: `El efectivo recibido ($${amountReceivedInput.toFixed(2)}) es menor al total a cobrar en efectivo ($${cashSplitTotal.toFixed(2)}). Verifique el monto ingresado.`
+                    };
+                }
+            }
+        }
+
         const nextTabStatus = newBalance === 0 ? 'CLOSED' : 'PARTIALLY_PAID';
         const nextOrderPaymentStatus = newBalance === 0 ? 'PAID' : 'PARTIAL';
         const nextPaymentMethod = openTab.paymentSplits.length > 0 || splitsToCreate.length > 1 ? 'MULTIPLE' : (splitsToCreate[0]?.method || data.paymentMethod);
