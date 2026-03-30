@@ -62,7 +62,11 @@ export async function getCategoriesAction() {
 export async function createMenuItemAction(data: MenuItemData): Promise<ActionResult> {
     try {
         const session = await getSession();
-        // if (!session || session.role !== 'OWNER' ...) // Validación de permisos idealmente
+        if (!session?.id) return { success: false, message: 'No autorizado' };
+        const allowedRoles = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'];
+        if (!allowedRoles.includes(session.role)) {
+            return { success: false, message: 'No tienes permisos para crear productos. Se requiere rol Gerencial.' };
+        }
 
         // Generar SKU automático si no viene
         let sku = data.sku;
@@ -96,6 +100,14 @@ export async function createMenuItemAction(data: MenuItemData): Promise<ActionRe
 
 export async function updateMenuItemPriceAction(id: string, newPrice: number): Promise<ActionResult> {
     try {
+        const session = await getSession();
+        if (!session?.id) return { success: false, message: 'No autorizado' };
+        const allowedRoles = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'];
+        if (!allowedRoles.includes(session.role)) {
+            return { success: false, message: 'No tienes permisos para modificar precios. Se requiere rol Gerencial.' };
+        }
+        if (newPrice < 0) return { success: false, message: 'El precio no puede ser negativo.' };
+
         await prisma.menuItem.update({
             where: { id },
             data: { price: parseFloat(newPrice.toString()) }
@@ -113,6 +125,13 @@ export async function updateMenuItemPriceAction(id: string, newPrice: number): P
 
 export async function toggleMenuItemStatusAction(id: string, isActive: boolean): Promise<ActionResult> {
     try {
+        const session = await getSession();
+        if (!session?.id) return { success: false, message: 'No autorizado' };
+        const allowedRoles = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'];
+        if (!allowedRoles.includes(session.role)) {
+            return { success: false, message: 'No tienes permisos para cambiar el estado de productos. Se requiere rol Gerencial.' };
+        }
+
         await prisma.menuItem.update({
             where: { id },
             data: { isActive }
@@ -129,6 +148,12 @@ export async function toggleMenuItemStatusAction(id: string, isActive: boolean):
 
 export async function updateMenuItemNameAction(id: string, newName: string): Promise<ActionResult> {
     try {
+        const session = await getSession();
+        if (!session?.id) return { success: false, message: 'No autorizado' };
+        const allowedRoles = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'];
+        if (!allowedRoles.includes(session.role)) {
+            return { success: false, message: 'No tienes permisos para renombrar productos. Se requiere rol Gerencial.' };
+        }
         if (!newName.trim()) return { success: false, message: 'El nombre no puede estar vacío' };
 
         await prisma.menuItem.update({

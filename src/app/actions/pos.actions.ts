@@ -563,14 +563,6 @@ export async function validateManagerPinAction(pin: string): Promise<ActionResul
             };
         }
 
-        if (pin === '1234') {
-            return {
-                success: true,
-                message: 'Autorización Demo (Master)',
-                data: { managerId: 'demo-master-id', managerName: 'MASTER USER', role: 'OWNER' }
-            };
-        }
-
         return { success: false, message: 'PIN inválido o permisos insuficientes' };
 
     } catch (error) {
@@ -1078,7 +1070,15 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
         }
 
         // ── Descuento (divisas / cortesía) ──────────────────────────────────
-        const discountAmount = data.discountAmount || 0;
+        const discountAmount = Math.max(0, data.discountAmount || 0);
+
+        // Verificar autorización gerencial si se aplica descuento
+        if (discountAmount > 0.005) {
+            const allowedDiscountRoles = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'AREA_LEAD'];
+            if (!allowedDiscountRoles.includes(session.role)) {
+                return { success: false, message: 'No tienes permisos para aplicar descuentos.' };
+            }
+        }
         const newRunningDiscount = openTab.runningDiscount + discountAmount;
         const newRunningTotal = Math.max(0, openTab.runningTotal - discountAmount);
         const effectiveBalance = Math.max(0, openTab.balanceDue - discountAmount);

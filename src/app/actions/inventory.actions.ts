@@ -96,6 +96,13 @@ export async function getAreasAction() {
 
 export async function updateInventoryItemAction(id: string, data: any) {
     try {
+        const session = await getSession();
+        if (!session?.id) return { success: false, message: 'No autorizado' };
+        const allowedRoles = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'];
+        if (!allowedRoles.includes(session.role)) {
+            return { success: false, message: 'No tienes permisos para modificar inventario. Se requiere rol Gerencial.' };
+        }
+
         await prisma.inventoryItem.update({
             where: { id },
             data: {
