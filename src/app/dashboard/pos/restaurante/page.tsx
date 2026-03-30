@@ -16,6 +16,7 @@ import {
 } from "@/app/actions/pos.actions";
 import { incrementPreBillPrintAction } from "@/app/actions/prebill.actions";
 import { closeZeroBalanceTabAction } from "@/app/actions/subtab.actions";
+import { getActiveCashSessionAction, openCashSessionAction } from "@/app/actions/cash-session.actions";
 import { SplitTabModal } from "./SplitTabModal";
 import { getExchangeRateValue } from "@/app/actions/exchange.actions";
 import { printKitchenCommand, printReceipt } from "@/lib/print-command";
@@ -131,6 +132,7 @@ interface SportBarLayout {
 
 const PAYMENT_LABELS: Record<string, string> = {
   CASH: "💵 Efectivo $",
+  CASH_BS: "🇻🇪 Efectivo Bs",
   CARD: "💳 Tarjeta",
   MOBILE_PAY: "📱 Pago Móvil",
   TRANSFER: "🏦 Transferencia",
@@ -191,12 +193,12 @@ export default function POSSportBarPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
 
   // ── Payment ───────────────────────────────────────────────────────────────
-  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "TRANSFER" | "MOBILE_PAY" | "ZELLE">("CASH");
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CASH_BS" | "CARD" | "TRANSFER" | "MOBILE_PAY" | "ZELLE">("CASH");
   const [amountReceived, setAmountReceived] = useState("");
   const [showPaymentPinModal, setShowPaymentPinModal] = useState(false);
   const [paymentPin, setPaymentPin] = useState("");
   const [paymentPinError, setPaymentPinError] = useState("");
-  const [paymentLines, setPaymentLines] = useState<{ method: "CASH" | "CARD" | "TRANSFER" | "MOBILE_PAY" | "ZELLE"; amount: string }[]>([]);
+  const [paymentLines, setPaymentLines] = useState<{ method: "CASH" | "CASH_BS" | "CARD" | "TRANSFER" | "MOBILE_PAY" | "ZELLE"; amount: string }[]>([]);
   const [useMultiPayment, setUseMultiPayment] = useState(false);
 
   // ── Descuento ─────────────────────────────────────────────────────────────
@@ -280,6 +282,11 @@ export default function POSSportBarPage() {
   const [selectedSubTabId, setSelectedSubTabId] = useState<string | null>(null);
   const [showSplitModal, setShowSplitModal] = useState(false);
 
+  // ── Sesión de caja ────────────────────────────────────────────────────────
+  const [cashSession, setCashSession] = useState<any>(null);
+  const [cashSessionLoaded, setCashSessionLoaded] = useState(false);
+  const [isOpeningCash, setIsOpeningCash] = useState(false);
+
   // ── Pre-bill print count (local, synced con servidor) ─────────────────────
   const [localPreBillCount, setLocalPreBillCount] = useState(0);
   const [preBillWAAlert, setPreBillWAAlert] = useState<{
@@ -294,12 +301,15 @@ export default function POSSportBarPage() {
     setIsLoading(true);
     setLayoutError("");
     try {
-      const [menuResult, layoutResult, usersResult, rate] = await Promise.all([
+      const [menuResult, layoutResult, usersResult, rate, session] = await Promise.all([
         getMenuForPOSAction(),
         getRestaurantLayoutAction(),
         getUsersForTabAction(),
         getExchangeRateValue(),
+        getActiveCashSessionAction(),
       ]);
+      setCashSession(session);
+      setCashSessionLoaded(true);
       if (menuResult.success && menuResult.data) {
         setCategories(menuResult.data);
         setSelectedCategory((prev) => prev || menuResult.data[0]?.id || "");
@@ -1061,6 +1071,47 @@ export default function POSSportBarPage() {
     );
   }
 
+  const canOpenCash = user && ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'AREA_LEAD'].includes(user.role);
+
+  if (cashSessionLoaded && !cashSession) {
+    if (canOpenCash) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <div className="bg-card glass-panel w-full max-w-sm rounded-3xl p-8 space-y-6 text-center border border-border shadow-2xl">
+            <div className="text-5xl">🔐</div>
+            <div>
+              <h2 className="text-xl font-black">La caja no está abierta</h2>
+              <p className="text-sm text-muted-foreground mt-1">Abre la caja para iniciar el día de facturación.</p>
+            </div>
+            <button
+              onClick={async () => {
+                setIsOpeningCash(true);
+                const r = await openCashSessionAction();
+                if (r.success) { setCashSession(r.data); }
+                else { alert(r.message); }
+                setIsOpeningCash(false);
+              }}
+              disabled={isOpeningCash}
+              className="w-full py-4 bg-primary hover:bg-primary/80 rounded-2xl font-black text-white transition disabled:opacity-50"
+            >
+              {isOpeningCash ? "Abriendo..." : "🟢 Abrir Caja"}
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="bg-card glass-panel w-full max-w-sm rounded-3xl p-8 space-y-4 text-center border border-border shadow-2xl">
+          <div className="text-5xl">🔒</div>
+          <h2 className="text-xl font-black">Caja no disponible</h2>
+          <p className="text-sm text-muted-foreground">La caja no ha sido abierta. Contacta al cajero o gerente.</p>
+          <button onClick={loadData} className="text-xs text-primary hover:text-primary/80 font-bold">Reintentar</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col pb-16 lg:pb-0">
       <CashierShiftModal
@@ -1408,7 +1459,7 @@ export default function POSSportBarPage() {
                   </div>
                   {!useMultiPayment ? (
                     <div className="grid grid-cols-2 gap-2">
-                      {(["CASH", "ZELLE", "CARD", "MOBILE_PAY", "TRANSFER"] as const).map((m) => (
+                      {(["CASH", "CASH_BS", "ZELLE", "CARD", "MOBILE_PAY", "TRANSFER"] as const).map((m) => (
                         <button
                           key={m}
                           onClick={() => setPaymentMethod(m)}
@@ -1432,7 +1483,8 @@ export default function POSSportBarPage() {
                                 onChange={e => setPaymentLines(prev => prev.map((l, i) => i === idx ? { ...l, method: e.target.value as any } : l))}
                                 className={`flex-1 bg-background/50 border rounded px-2 py-1.5 text-xs text-foreground focus:outline-none ${isDivisas ? "border-blue-500/60 focus:border-blue-400" : "border-indigo-500/30 focus:border-indigo-400"}`}
                               >
-                                <option value="CASH">💵 Efectivo</option>
+                                <option value="CASH">💵 Efectivo $</option>
+                                <option value="CASH_BS">🇻🇪 Efectivo Bs</option>
                                 <option value="ZELLE">⚡ Zelle</option>
                                 <option value="CARD">💳 Tarjeta</option>
                                 <option value="MOBILE_PAY">📱 Pago Móvil</option>
@@ -1807,7 +1859,7 @@ export default function POSSportBarPage() {
                     </div>
                     {!useMultiPayment ? (
                       <div className="grid grid-cols-2 gap-1.5">
-                        {(["CASH", "ZELLE", "CARD", "MOBILE_PAY", "TRANSFER"] as const).map((m) => (
+                        {(["CASH", "CASH_BS", "ZELLE", "CARD", "MOBILE_PAY", "TRANSFER"] as const).map((m) => (
                           <button
                             key={m}
                             onClick={() => handleChangePaymentMethod(m)}

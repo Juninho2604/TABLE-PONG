@@ -576,7 +576,13 @@ export async function validateManagerPinAction(pin: string): Promise<ActionResul
 // ============================================================================
 
 async function generateOrderNumber(orderType: POSOrderType): Promise<string> {
-    const dateStr = getCaracasDateStamp();
+    // Usar la fecha de la sesión de caja activa para que 2AM siga siendo el mismo día de facturación
+    const activeSession = await prisma.cashSession.findFirst({
+        where: { status: 'OPEN' },
+        select: { businessDate: true },
+        orderBy: { openedAt: 'desc' }
+    });
+    const dateStr = activeSession?.businessDate ?? getCaracasDateStamp();
     const prefix = orderType === 'RESTAURANT' ? 'REST' : 'DELV';
     const orderPrefix = `${prefix}-${dateStr}-`;
 

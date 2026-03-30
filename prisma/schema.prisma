@@ -81,6 +81,10 @@ model User {
   createdProteinProcessings   ProteinProcessing[] @relation("ProteinProcessingCreator")
   completedProteinProcessings ProteinProcessing[] @relation("ProteinProcessingCompleter")
 
+  // Sesiones de caja
+  openedCashSessions CashSession[] @relation("CashSessionOpener")
+  closedCashSessions CashSession[] @relation("CashSessionCloser")
+
   @@index([email])
   @@index([role])
 }
@@ -1859,4 +1863,29 @@ model IntercompanySettlementLine {
   @@index([salesOrderItemId])
   @@index([menuItemSku])
   @@index([soldAt])
+}
+
+// ============================================================================
+// SESIÓN DE CAJA (Apertura/Cierre de Día de Facturación)
+// ============================================================================
+
+model CashSession {
+  id           String    @id @default(cuid())
+  businessDate String    // "2026-03-30" — fecha de facturación del día
+  status       String    @default("OPEN") // OPEN | CLOSED
+  notes        String?
+
+  openedAt   DateTime  @default(now())
+  openedById String
+  openedBy   User      @relation("CashSessionOpener", fields: [openedById], references: [id])
+
+  closedAt   DateTime?
+  closedById String?
+  closedBy   User?     @relation("CashSessionCloser", fields: [closedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([businessDate])
 }

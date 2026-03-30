@@ -13,8 +13,9 @@ import { CurrencyCalculator } from '@/components/pos/CurrencyCalculator';
 const DELIVERY_FEE_NORMAL = 4.5;
 const DELIVERY_FEE_DIVISAS = 3;
 
-const PAYMENT_LABELS = {
+const PAYMENT_LABELS: Record<string, string> = {
     CASH: 'Efectivo $',
+    CASH_BS: 'Efec. Bs',
     ZELLE: 'Zelle',
     CARD: 'Punto',
     MOBILE_PAY: 'P.Móvil',
@@ -76,7 +77,7 @@ export default function POSDeliveryPage() {
     const [itemNotes, setItemNotes] = useState('');
 
     // PAYMENT STATE
-    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'ZELLE'>('TRANSFER');
+    const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CASH_BS' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'ZELLE'>('TRANSFER');
     const [amountReceived, setAmountReceived] = useState('');
     const [exchangeRate, setExchangeRate] = useState<number | null>(null);
 
@@ -486,7 +487,7 @@ export default function POSDeliveryPage() {
                             </div>
 
                             <div className="grid grid-cols-3 gap-2">
-                                {(['TRANSFER', 'MOBILE_PAY', 'CASH', 'ZELLE', 'CARD'] as const).map(m => (
+                                {(['TRANSFER', 'MOBILE_PAY', 'CASH', 'CASH_BS', 'ZELLE', 'CARD'] as const).map(m => (
                                     <button key={m} onClick={() => setPaymentMethod(m)} className={`py-3 rounded-xl text-[10px] font-black uppercase transition-all active:scale-95 ${paymentMethod === m ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-background border border-border text-muted-foreground'}`}>
                                         {PAYMENT_LABELS[m]}
                                     </button>
