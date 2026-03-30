@@ -375,17 +375,17 @@ export default function POSSportBarPage() {
     [selectedTable],
   );
 
-  // Subcuentas de la cuenta padre activa
-  const tabSubTabs = useMemo(
-    () => parentTab
-      ? (selectedTable?.openTabs || []).filter(t => t.parentTabId === parentTab.id)
-      : [],
-    [selectedTable, parentTab],
-  );
+  // Subcuentas de la cuenta padre activa (o subcuentas huérfanas si el padre fue cerrado)
+  const tabSubTabs = useMemo(() => {
+    const tabs = selectedTable?.openTabs || [];
+    if (parentTab) return tabs.filter(t => t.parentTabId === parentTab.id);
+    // Subcuentas huérfanas: padre cerrado pero subcuenta aún abierta
+    return tabs.filter(t => t.parentTabId != null);
+  }, [selectedTable, parentTab]);
 
-  // Tab activa para pagos: la subcuenta seleccionada o la cuenta padre
+  // Tab activa para pagos: la subcuenta seleccionada, la cuenta padre, o primera subcuenta huérfana
   const activeTab = useMemo(
-    () => (selectedSubTabId ? tabSubTabs.find(t => t.id === selectedSubTabId) : null) || parentTab,
+    () => (selectedSubTabId ? tabSubTabs.find(t => t.id === selectedSubTabId) : null) || parentTab || tabSubTabs[0] || null,
     [parentTab, tabSubTabs, selectedSubTabId],
   );
 

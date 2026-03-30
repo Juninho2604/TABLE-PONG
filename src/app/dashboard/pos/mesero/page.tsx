@@ -79,6 +79,8 @@ interface OpenTabSummary {
   runningTotal: number;
   balanceDue: number;
   openedAt: string;
+  parentTabId?: string | null;
+  splitIndex?: number | null;
   openedBy: UserSummary;
   assignedWaiter?: UserSummary | null;
   orders: SalesOrderSummary[];
@@ -166,6 +168,9 @@ export default function POSMeseroPage() {
   const [layoutError, setLayoutError] = useState("");
   const [sendSuccess, setSendSuccess] = useState(false);
 
+  // ── Subcuentas ────────────────────────────────────────────────────────────
+  const [selectedSubTabId, setSelectedSubTabId] = useState<string | null>(null);
+
   // ── Navegación móvil ──────────────────────────────────────────────────────
   const [mobileTab, setMobileTab] = useState<"tables" | "menu" | "account">("tables");
 
@@ -221,7 +226,20 @@ export default function POSMeseroPage() {
     () => selectedZone?.tablesOrStations.find((t) => t.id === selectedTableId) || null,
     [selectedZone, selectedTableId],
   );
-  const activeTab = useMemo(() => selectedTable?.openTabs[0] || null, [selectedTable]);
+  const parentTab = useMemo(
+    () => selectedTable?.openTabs.find((t) => !t.parentTabId) || null,
+    [selectedTable],
+  );
+  const tabSubTabs = useMemo(() => {
+    const tabs = selectedTable?.openTabs || [];
+    if (parentTab) return tabs.filter((t) => t.parentTabId === parentTab.id);
+    // Subcuentas huérfanas: padre cerrado pero subcuenta aún abierta
+    return tabs.filter((t) => t.parentTabId != null);
+  }, [selectedTable, parentTab]);
+  const activeTab = useMemo(
+    () => (selectedSubTabId ? tabSubTabs.find((t) => t.id === selectedSubTabId) : null) || parentTab || tabSubTabs[0] || null,
+    [parentTab, tabSubTabs, selectedSubTabId],
+  );
 
   const allMenuItems = useMemo(() => categories.flatMap((c) => c.items || []), [categories]);
   const filteredMenuItems = useMemo(() => {
@@ -481,6 +499,7 @@ export default function POSMeseroPage() {
                     key={table.id}
                     onClick={() => {
                       setSelectedTableId(table.id);
+                      setSelectedSubTabId(null);
                       // Solo ir al menú si la mesa ya tiene una cuenta abierta.
                       // Si no tiene cuenta, quedarse en "tables" para mostrar el botón "Abrir cuenta".
                       if (window.innerWidth < 1024 && table.openTabs.length > 0) setMobileTab("menu");
@@ -677,6 +696,38 @@ export default function POSMeseroPage() {
               >
                 {sendSuccess ? "✓ ¡Enviado a cocina!" : isProcessing ? "Enviando..." : `🍳 Enviar a cocina · $${cartTotal.toFixed(2)}`}
               </button>
+            </div>
+          )}
+
+          {/* Subcuentas: pills de selección */}
+          {(tabSubTabs.length > 0 || parentTab) && parentTab && (
+            <div className="px-4 py-2 border-b border-border bg-card/50 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setSelectedSubTabId(null)}
+                className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition border ${
+                  selectedSubTabId === null
+                    ? "bg-emerald-500 text-black border-emerald-500"
+                    : "bg-card text-foreground/60 border-border hover:border-emerald-500/50"
+                }`}
+              >
+                Principal ${parentTab.balanceDue.toFixed(2)}
+              </button>
+              {tabSubTabs.map((st) => (
+                <button
+                  key={st.id}
+                  onClick={() => setSelectedSubTabId(st.id)}
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition border ${
+                    selectedSubTabId === st.id
+                      ? "bg-emerald-500 text-black border-emerald-500"
+                      : st.status === "CLOSED"
+                      ? "bg-green-900/30 text-green-400 border-green-800/50"
+                      : "bg-card text-foreground/60 border-border hover:border-emerald-500/50"
+                  }`}
+                >
+                  {st.customerLabel || `Sub ${st.splitIndex}`} ${st.balanceDue.toFixed(2)}
+                  {st.status === "CLOSED" && " ✓"}
+                </button>
+              ))}
             </div>
           )}
 

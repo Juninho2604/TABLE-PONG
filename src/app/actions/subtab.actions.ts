@@ -251,6 +251,20 @@ export async function closeZeroBalanceTabAction(tabId: string): Promise<{ succes
         return { success: false, message: 'La cuenta ya está cerrada' };
     }
 
+    // No cerrar la cuenta principal si hay subcuentas con saldo pendiente
+    if (!tab.parentTabId) {
+        const openSubTabsWithBalance = await prisma.openTab.count({
+            where: {
+                parentTabId: tabId,
+                status: { in: ['OPEN', 'PARTIALLY_PAID'] },
+                balanceDue: { gt: 0.01 }
+            }
+        });
+        if (openSubTabsWithBalance > 0) {
+            return { success: false, message: 'Hay subcuentas con saldo pendiente. Cóbrelas primero antes de cerrar la cuenta principal.' };
+        }
+    }
+
     await prisma.$transaction(async (tx) => {
         await tx.openTab.update({
             where: { id: tabId },
