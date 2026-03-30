@@ -1172,24 +1172,22 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
             }
         }
 
-        // ── Anti-fraude: amountReceived debe cubrir lo cobrado en efectivo ──
-        // Para pagos en efectivo (CASH), el monto físico recibido no puede ser
-        // menor al total del split. Un amountReceived < split.amount indica
-        // que el cajero declaró recibir menos de lo que realmente cobró.
-        if (!isFullDiscountClose && splitsToCreate.length > 0) {
-            const cashSplits = splitsToCreate.filter(s => s.method === 'CASH');
-            if (cashSplits.length > 0) {
-                const cashSplitTotal = cashSplits.reduce((s, p) => s + p.amount, 0);
-                const prevCashPaid = openTab.paymentSplits
-                    .filter(p => p.paymentMethod === 'CASH')
-                    .reduce((s, p) => s + Number(p.amountReceived ?? p.paidAmount), 0);
-                const totalCashReceived = prevCashPaid + (amountReceivedInput ?? 0);
-                if (amountReceivedInput !== undefined && amountReceivedInput < cashSplitTotal - 0.02) {
-                    return {
-                        success: false,
-                        message: `El efectivo recibido ($${amountReceivedInput.toFixed(2)}) es menor al total a cobrar en efectivo ($${cashSplitTotal.toFixed(2)}). Verifique el monto ingresado.`
-                    };
-                }
+        // ── Anti-fraude: amountReceived debe cubrir lo cobrado (todos los métodos) ──
+        // El monto declarado recibido no puede ser menor al total del split.
+        // Aplica a efectivo, Bs, pago móvil, Zelle, tarjeta y transferencia.
+        if (!isFullDiscountClose && splitsToCreate.length > 0 && !useMultiSplits) {
+            const splitTotal = splitsToCreate.reduce((s, p) => s + p.amount, 0);
+            if (amountReceivedInput !== undefined && amountReceivedInput < splitTotal - 0.02) {
+                const methodLabels: Record<string, string> = {
+                    CASH: 'efectivo', CASH_BS: 'efectivo en Bs',
+                    MOBILE_PAY: 'pago móvil', ZELLE: 'Zelle',
+                    CARD: 'tarjeta', TRANSFER: 'transferencia'
+                };
+                const methodLabel = methodLabels[data.paymentMethod] || data.paymentMethod;
+                return {
+                    success: false,
+                    message: `El monto recibido por ${methodLabel} ($${amountReceivedInput.toFixed(2)}) es menor al total a cobrar ($${splitTotal.toFixed(2)}). Verifique el monto ingresado.`
+                };
             }
         }
 

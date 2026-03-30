@@ -57,7 +57,12 @@ export async function getOrderForReceiptAction(orderId: string) {
 export async function getSalesHistoryAction(limit = 200) {
     try {
         const sales = await prisma.salesOrder.findMany({
-            where: { orderNumber: { not: { startsWith: 'COM-' } } },
+            where: {
+                NOT: [
+                    { orderNumber: { startsWith: 'COM-' } },
+                    { orderNumber: { startsWith: 'SPLIT-' } },
+                ]
+            },
             take: limit,
             orderBy: { createdAt: 'desc' },
             include: {
@@ -114,7 +119,10 @@ export async function getMonthlySalesAction(month: number, year: number) {
 
         const sales = await prisma.salesOrder.findMany({
             where: {
-                orderNumber: { not: { startsWith: 'COM-' } },
+                NOT: [
+                    { orderNumber: { startsWith: 'COM-' } },
+                    { orderNumber: { startsWith: 'SPLIT-' } },
+                ],
                 createdAt: { gte: start, lte: end }
             },
             orderBy: { createdAt: 'desc' },
