@@ -1071,42 +1071,31 @@ export default function POSSportBarPage() {
     );
   }
 
-  const canOpenCash = user && ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'AREA_LEAD'].includes(user.role);
-
   if (cashSessionLoaded && !cashSession) {
-    if (canOpenCash) {
-      return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-          <div className="bg-card glass-panel w-full max-w-sm rounded-3xl p-8 space-y-6 text-center border border-border shadow-2xl">
-            <div className="text-5xl">🔐</div>
-            <div>
-              <h2 className="text-xl font-black">La caja no está abierta</h2>
-              <p className="text-sm text-muted-foreground mt-1">Abre la caja para iniciar el día de facturación.</p>
-            </div>
-            <button
-              onClick={async () => {
-                setIsOpeningCash(true);
-                const r = await openCashSessionAction();
-                if (r.success) { setCashSession(r.data); }
-                else { alert(r.message); }
-                setIsOpeningCash(false);
-              }}
-              disabled={isOpeningCash}
-              className="w-full py-4 bg-primary hover:bg-primary/80 rounded-2xl font-black text-white transition disabled:opacity-50"
-            >
-              {isOpeningCash ? "Abriendo..." : "🟢 Abrir Caja"}
-            </button>
-          </div>
-        </div>
-      );
-    }
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="bg-card glass-panel w-full max-w-sm rounded-3xl p-8 space-y-4 text-center border border-border shadow-2xl">
-          <div className="text-5xl">🔒</div>
-          <h2 className="text-xl font-black">Caja no disponible</h2>
-          <p className="text-sm text-muted-foreground">La caja no ha sido abierta. Contacta al cajero o gerente.</p>
-          <button onClick={loadData} className="text-xs text-primary hover:text-primary/80 font-bold">Reintentar</button>
+        <div className="bg-card glass-panel w-full max-w-sm rounded-3xl p-8 space-y-6 text-center border border-border shadow-2xl">
+          <div className="text-5xl">🔐</div>
+          <div>
+            <h2 className="text-xl font-black">La caja no está abierta</h2>
+            <p className="text-sm text-muted-foreground mt-1">Se requiere abrir la caja para iniciar el día de facturación.</p>
+          </div>
+          <button
+            onClick={async () => {
+              setIsOpeningCash(true);
+              const r = await openCashSessionAction();
+              if (r.success) { setCashSession(r.data); }
+              else { alert(r.message); }
+              setIsOpeningCash(false);
+            }}
+            disabled={isOpeningCash}
+            className="w-full py-4 bg-primary hover:bg-primary/80 rounded-2xl font-black text-white transition disabled:opacity-50"
+          >
+            {isOpeningCash ? "Abriendo..." : "🟢 Abrir Caja"}
+          </button>
+          <button onClick={loadData} className="text-xs text-muted-foreground hover:text-foreground font-bold">
+            Reintentar
+          </button>
         </div>
       </div>
     );
