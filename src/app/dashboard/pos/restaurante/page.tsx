@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import {
   addItemsToOpenTabAction,
   closeOpenTabAction,
@@ -14,6 +14,9 @@ import {
   validateManagerPinAction,
   type CartItem,
 } from "@/app/actions/pos.actions";
+import { incrementPreBillPrintAction } from "@/app/actions/prebill.actions";
+import { closeZeroBalanceTabAction } from "@/app/actions/subtab.actions";
+import { SplitTabModal } from "./SplitTabModal";
 import { getExchangeRateValue } from "@/app/actions/exchange.actions";
 import { printKitchenCommand, printReceipt } from "@/lib/print-command";
 import { getPOSConfig } from "@/lib/pos-settings";
@@ -67,6 +70,7 @@ interface OrderItemSummary {
   id: string;
   itemName: string;
   quantity: number;
+  unitPrice: number;
   lineTotal: number;
   modifiers?: { name: string }[];
 }
@@ -100,6 +104,9 @@ interface OpenTabSummary {
   closedBy?: UserSummary | null;
   orders: SalesOrderSummary[];
   paymentSplits: PaymentSplit[];
+  preBillPrintCount?: number;
+  parentTabId?: string | null;
+  splitIndex?: number | null;
 }
 interface TableSummary {
   id: string;
@@ -199,6 +206,20 @@ export default function POSSportBarPage() {
   const [cortesiaPin, setCortesiaPin] = useState("");
   const [cortesiaPercent, setCortesiaPercent] = useState("100");
   const [cortesiaPinError, setCortesiaPinError] = useState("");
+  const [cortesiaReason, setCortesiaReason] = useState("");
+  // WA report data after a cortesía payment
+  const [cortesiaReportData, setCortesiaReportData] = useState<{
+    tabCode: string;
+    customerLabel?: string;
+    items: { name: string; quantity: number; total: number }[];
+    totalOriginal: number;
+    discountPercent: number;
+    discountAmount: number;
+    totalCharged: number;
+    authorizedBy?: string;
+    reason: string;
+    date: Date;
+  } | null>(null);
 
   // ── 10% Servicio (solo sala principal, opcional) ───────────────────────────
   const [serviceFeeIncluded, setServiceFeeIncluded] = useState(true);
@@ -244,6 +265,26 @@ export default function POSSportBarPage() {
     items: { name: string; quantity: number; unitPrice: number; total: number; modifiers: string[] }[];
     customerName: string;
   } | null>(null);
+  // Auto-clear lastPickupOrder after 60s so it doesn't linger between customers
+  const lastPickupTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ── Anti-fraude: Divisas lock ─────────────────────────────────────────────
+  // Una vez seleccionado "Divisas -33%", cambiar el método de pago requiere PIN.
+  const [isDivisasLocked, setIsDivisasLocked] = useState(false);
+  const [showDivisasUnlockModal, setShowDivisasUnlockModal] = useState(false);
+  const [divisasUnlockPin, setDivisasUnlockPin] = useState("");
+  const [divisasUnlockError, setDivisasUnlockError] = useState("");
+  const [pendingPaymentMethod, setPendingPaymentMethod] = useState<string | null>(null);
+
+  // ── Subcuentas (Split Bills) ──────────────────────────────────────────────
+  const [selectedSubTabId, setSelectedSubTabId] = useState<string | null>(null);
+  const [showSplitModal, setShowSplitModal] = useState(false);
+
+  // ── Pre-bill print count (local, synced con servidor) ─────────────────────
+  const [localPreBillCount, setLocalPreBillCount] = useState(0);
+  const [preBillWAAlert, setPreBillWAAlert] = useState<{
+    tabCode: string; balance: number; count: number; tableName?: string;
+  } | null>(null);
 
   // ============================================================================
   // DATA LOADING
@@ -283,9 +324,28 @@ export default function POSSportBarPage() {
     loadData();
   }, []);
 
+  // Auto-clear lastPickupOrder después de 60s para no "pegar" entre clientes
+  useEffect(() => {
+    if (lastPickupOrder) {
+      if (lastPickupTimerRef.current) clearTimeout(lastPickupTimerRef.current);
+      lastPickupTimerRef.current = setTimeout(() => setLastPickupOrder(null), 60_000);
+    }
+    return () => { if (lastPickupTimerRef.current) clearTimeout(lastPickupTimerRef.current); };
+  }, [lastPickupOrder]);
+
+  // Reset divisas lock, pre-bill count y subcuenta al cambiar de mesa
+  useEffect(() => {
+    setIsDivisasLocked(false);
+    setLocalPreBillCount(0);
+    setPreBillWAAlert(null);
+    setSelectedSubTabId(null);
+    setShowSplitModal(false);
+  }, [selectedTableId]);
+
   useEffect(() => {
     if (paymentMethod !== "CASH" && paymentMethod !== "ZELLE" && discountType === "DIVISAS_33") {
       setDiscountType("NONE");
+      setIsDivisasLocked(false); // Si el método ya no es divisas, liberar el lock
     }
   }, [paymentMethod, discountType]);
 
@@ -309,7 +369,25 @@ export default function POSSportBarPage() {
     [selectedZone, selectedTableId],
   );
 
-  const activeTab = useMemo(() => selectedTable?.openTabs[0] || null, [selectedTable]);
+  // Cuenta padre: la que NO tiene parentTabId
+  const parentTab = useMemo(
+    () => (selectedTable?.openTabs || []).find(t => !t.parentTabId) || null,
+    [selectedTable],
+  );
+
+  // Subcuentas de la cuenta padre activa
+  const tabSubTabs = useMemo(
+    () => parentTab
+      ? (selectedTable?.openTabs || []).filter(t => t.parentTabId === parentTab.id)
+      : [],
+    [selectedTable, parentTab],
+  );
+
+  // Tab activa para pagos: la subcuenta seleccionada o la cuenta padre
+  const activeTab = useMemo(
+    () => (selectedSubTabId ? tabSubTabs.find(t => t.id === selectedSubTabId) : null) || parentTab,
+    [parentTab, tabSubTabs, selectedSubTabId],
+  );
 
   const allMenuItems = useMemo(
     () => categories.flatMap((c) => (c.items || [])),
@@ -566,10 +644,107 @@ export default function POSSportBarPage() {
     }
   };
 
+  // ── Estado de Cuenta (pre-bill) ───────────────────────────────────────────
+  const handlePrintEstadoDeCuenta = async () => {
+    if (!activeTab) return;
+
+    // 1. Registrar en servidor + obtener nuevo conteo
+    const res = await incrementPreBillPrintAction(activeTab.id);
+    const newCount = res.success ? res.count : localPreBillCount + 1;
+    setLocalPreBillCount(newCount);
+
+    // 2. Si > 2 impresiones, preparar alerta WA (se muestra en el banner)
+    if (newCount > 2) {
+      setPreBillWAAlert({
+        tabCode: activeTab.tabCode,
+        balance: activeTab.balanceDue,
+        count: newCount,
+        tableName: res.success ? res.tableName : undefined,
+      });
+    }
+
+    // 3. Calcular ambos totales
+    const totalNormal = activeTab.balanceDue;
+    const totalDivisas = totalNormal * (2 / 3);
+    const descuentoDivisas = totalNormal / 3;
+
+    // 4. Imprimir estado de cuenta en ventana emergente
+    const allItems = activeTab.orders.flatMap(o =>
+      (o.items || []).map((i: any) => `<tr><td>${i.quantity}× ${i.itemName}</td><td style="text-align:right">$${(i.lineTotal || 0).toFixed(2)}</td></tr>`)
+    ).join('');
+
+    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    if (!printWindow) return;
+    printWindow.document.write(`
+      <!DOCTYPE html><html><head><title>Estado de Cuenta</title>
+      <style>
+        body { font-family: monospace; font-size: 12px; margin: 0; padding: 16px; }
+        .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 8px; margin-bottom: 8px; }
+        .no-factura { background: #000; color: #fff; font-weight: bold; font-size: 11px; text-align: center; padding: 4px; margin: 8px 0; }
+        table { width: 100%; border-collapse: collapse; }
+        td { padding: 2px 4px; }
+        .total-row { border-top: 1px solid #000; font-weight: bold; }
+        .divisas-box { border: 2px solid #000; padding: 8px; margin-top: 12px; }
+        @media print { button { display: none; } }
+      </style></head><body>
+      <div class="header">
+        <div style="font-size:16px;font-weight:bold">TABLE PONG</div>
+        <div>Mesa: ${activeTab.tabCode}</div>
+        <div>${activeTab.customerLabel || ''}</div>
+        <div>${new Date().toLocaleString('es-VE')}</div>
+      </div>
+      <div class="no-factura">★ ESTADO DE CUENTA — NO VÁLIDO COMO FACTURA ★</div>
+      <table>${allItems}
+        <tr class="total-row"><td>TOTAL</td><td style="text-align:right">$${totalNormal.toFixed(2)}</td></tr>
+      </table>
+      <div class="divisas-box">
+        <div style="font-weight:bold;margin-bottom:4px">Pago en Divisas (USD/Zelle):</div>
+        <table>
+          <tr><td>Descuento -33.33%</td><td style="text-align:right">-$${descuentoDivisas.toFixed(2)}</td></tr>
+          <tr class="total-row"><td>TOTAL CON DIVISAS</td><td style="text-align:right;font-size:14px;font-weight:bold">$${totalDivisas.toFixed(2)}</td></tr>
+        </table>
+      </div>
+      <div style="text-align:center;margin-top:12px;font-size:10px">Impresión #${newCount}${newCount > 2 ? ' ⚠️ MÚLTIPLES COPIAS' : ''}</div>
+      <div style="text-align:center;margin-top:16px"><button onclick="window.print();window.close()">🖨️ Imprimir</button></div>
+      </body></html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+  };
+
+  // ── Cambio de método de pago con lock divisas ─────────────────────────────
+  const handleChangePaymentMethod = (method: string) => {
+    if (isDivisasLocked && discountType === "DIVISAS_33") {
+      // Divisas activo y bloqueado → requerir PIN antes de cambiar
+      setPendingPaymentMethod(method);
+      setDivisasUnlockPin("");
+      setDivisasUnlockError("");
+      setShowDivisasUnlockModal(true);
+    } else {
+      setPaymentMethod(method as any);
+    }
+  };
+
+  const handleDivisasUnlockConfirm = async () => {
+    const res = await validateManagerPinAction(divisasUnlockPin);
+    if (!res.success) {
+      setDivisasUnlockError("PIN incorrecto");
+      return;
+    }
+    // Autorizado: cambiar método y limpiar descuento divisas
+    if (pendingPaymentMethod) setPaymentMethod(pendingPaymentMethod as any);
+    setDiscountType("NONE");
+    setIsDivisasLocked(false);
+    setShowDivisasUnlockModal(false);
+    setPendingPaymentMethod(null);
+  };
+
   const clearDiscount = () => {
     setDiscountType("NONE");
+    setIsDivisasLocked(false);
     setAuthorizedManager(null);
     setCortesiaPercent("100");
+    setCortesiaReason("");
   };
 
   // ============================================================================
@@ -583,7 +758,8 @@ export default function POSSportBarPage() {
         setPaymentPinError("Pago mixto: asigne al menos 2 métodos y cubra el total");
         return;
       }
-    } else if (paidAmount <= 0) {
+    } else if (paidAmount <= 0 && discountType !== "CORTESIA_100" && !(discountType === "CORTESIA_PERCENT" && cortesiaPercentNum >= 100)) {
+      // Allow $0 when it's a full cortesía (100% discount closes tab without payment)
       return;
     }
     setPaymentPinError("");
@@ -663,6 +839,24 @@ export default function POSSportBarPage() {
         total: totalAntesServicio,
         serviceFee,
       });
+      }
+      // Capture WA report data before clearing state (cortesía only)
+      if (discountType === "CORTESIA_100" || discountType === "CORTESIA_PERCENT") {
+        const reportItems = allItems.map(i => ({ name: i.name, quantity: i.quantity, total: i.total }));
+        const pctNum = discountType === "CORTESIA_100" ? 100 : cortesiaPercentNum;
+        const origTotal = activeTab.balanceDue;
+        setCortesiaReportData({
+          tabCode: activeTab.tabCode,
+          customerLabel: activeTab.customerLabel,
+          items: reportItems,
+          totalOriginal: origTotal,
+          discountPercent: pctNum,
+          discountAmount,
+          totalCharged: Math.max(0, origTotal - discountAmount),
+          authorizedBy: pinResult.data?.managerName || authorizedManager?.name,
+          reason: cortesiaReason,
+          date: new Date(),
+        });
       }
       setAmountReceived("");
       setPaymentPin("");
@@ -1378,6 +1572,51 @@ export default function POSSportBarPage() {
                     </span>
                   </div>
                 </div>
+
+                {/* ── Subcuentas: pills de selección + botón dividir ── */}
+                {(tabSubTabs.length > 0 || parentTab) && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {/* Pill cuenta principal */}
+                    <button
+                      onClick={() => setSelectedSubTabId(null)}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition border ${
+                        selectedSubTabId === null
+                          ? "bg-amber-500 text-black border-amber-500"
+                          : "bg-card text-foreground/60 border-border hover:border-amber-500/50"
+                      }`}
+                    >
+                      Principal ${(parentTab?.balanceDue ?? 0).toFixed(2)}
+                    </button>
+
+                    {/* Pills por subcuenta */}
+                    {tabSubTabs.map(st => (
+                      <button
+                        key={st.id}
+                        onClick={() => setSelectedSubTabId(st.id)}
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition border ${
+                          selectedSubTabId === st.id
+                            ? "bg-amber-500 text-black border-amber-500"
+                            : st.status === "CLOSED"
+                            ? "bg-green-900/30 text-green-400 border-green-800/50"
+                            : "bg-card text-foreground/60 border-border hover:border-amber-500/50"
+                        }`}
+                      >
+                        {st.customerLabel || `Sub ${st.splitIndex}`} ${st.balanceDue.toFixed(2)}
+                        {st.status === "CLOSED" && " ✓"}
+                      </button>
+                    ))}
+
+                    {/* Botón dividir — solo visible desde la cuenta padre */}
+                    {!activeTab.parentTabId && activeTab.orders.some(o => o.items.length > 0) && (
+                      <button
+                        onClick={() => setShowSplitModal(true)}
+                        className="px-2.5 py-1 rounded-full text-[10px] font-bold border border-dashed border-amber-500/50 text-amber-400 hover:bg-amber-500/10 transition"
+                      >
+                        ＋ Dividir
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
@@ -1470,6 +1709,42 @@ export default function POSSportBarPage() {
                   </div>
                 )}
 
+                {/* Cerrar cuenta padre con $0 saldo (todos los ítems divididos) */}
+                {!activeTab.parentTabId && activeTab.balanceDue <= 0.01 && tabSubTabs.length > 0 && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm("¿Cerrar la cuenta principal? (saldo $0, todo dividido en subcuentas)")) return;
+                      setIsProcessing(true);
+                      const res = await closeZeroBalanceTabAction(activeTab.id);
+                      setIsProcessing(false);
+                      if (res.success) {
+                        setSelectedSubTabId(null);
+                        await loadData();
+                      } else {
+                        alert(res.message || "Error cerrando cuenta");
+                      }
+                    }}
+                    disabled={isProcessing}
+                    className="w-full py-2.5 rounded-xl border border-green-700/60 bg-green-900/20 text-green-400 text-xs font-bold hover:bg-green-900/40 transition disabled:opacity-40"
+                  >
+                    ✅ Cerrar cuenta principal ($0 — todo dividido)
+                  </button>
+                )}
+
+                {/* Estado de Cuenta (pre-bill) */}
+                <button
+                  onClick={handlePrintEstadoDeCuenta}
+                  className="w-full mb-2 py-2 rounded-lg border border-blue-400/40 bg-blue-900/20 text-blue-300 text-xs font-bold hover:bg-blue-900/40 transition flex items-center justify-center gap-1.5"
+                  title="Imprime totales con y sin descuento divisas. Registrado en auditoría."
+                >
+                  🧾 Estado de Cuenta
+                  {localPreBillCount > 0 && (
+                    <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${localPreBillCount > 2 ? 'bg-red-500 text-white' : 'bg-blue-600 text-white'}`}>
+                      {localPreBillCount}×
+                    </span>
+                  )}
+                </button>
+
                 {/* Payment section */}
                 <div className="rounded-xl border border-border bg-secondary p-3">
                   <div className="text-xs font-bold text-muted-foreground uppercase mb-2">Cobrar cuenta</div>
@@ -1485,12 +1760,17 @@ export default function POSSportBarPage() {
                         Normal
                       </button>
                       <button
-                        onClick={() => isPagoDivisas && !useMultiPayment && setDiscountType("DIVISAS_33")}
+                        onClick={() => {
+                          if (isPagoDivisas && !useMultiPayment) {
+                            setDiscountType("DIVISAS_33");
+                            setIsDivisasLocked(true); // 🔒 Bloquear cambio de método
+                          }
+                        }}
                         disabled={!isPagoDivisas || useMultiPayment}
                         title={useMultiPayment ? "No disponible en Pago Mixto" : !isPagoDivisas ? "Solo con Efectivo o Zelle" : "Descuento por pago en divisas"}
                         className={`py-1.5 text-xs font-bold rounded-lg transition ${discountType === "DIVISAS_33" ? "bg-blue-600 text-white ring-1 ring-white" : (isPagoDivisas && !useMultiPayment) ? "bg-card text-foreground/70 hover:bg-muted" : "bg-card text-foreground/50 cursor-not-allowed opacity-50"}`}
                       >
-                        Divisas -33%
+                        {discountType === "DIVISAS_33" && isDivisasLocked ? "🔒 Divisas -33%" : "Divisas -33%"}
                       </button>
                       <button
                         onClick={openCortesiaModal}
@@ -1530,7 +1810,7 @@ export default function POSSportBarPage() {
                         {(["CASH", "ZELLE", "CARD", "MOBILE_PAY", "TRANSFER"] as const).map((m) => (
                           <button
                             key={m}
-                            onClick={() => setPaymentMethod(m)}
+                            onClick={() => handleChangePaymentMethod(m)}
                             className={`py-2 rounded-lg text-xs font-bold transition ${paymentMethod === m ? "bg-amber-500 text-black" : "bg-card text-foreground/70 hover:bg-muted"}`}
                           >
                             {PAYMENT_LABELS[m]}
@@ -1662,10 +1942,19 @@ export default function POSSportBarPage() {
                       setPaymentPinError("");
                       setShowPaymentPinModal(true);
                     }}
-                    disabled={(useMultiPayment ? !multiTabValid : paidAmount <= 0) || isProcessing}
+                    disabled={(useMultiPayment ? !multiTabValid : (
+                      // Cortesía 100%: no requiere monto (se cierra sin cobro)
+                      (discountType === "CORTESIA_100" || (discountType === "CORTESIA_PERCENT" && cortesiaPercentNum >= 100))
+                        ? false
+                        : paidAmount <= 0
+                    )) || isProcessing}
                     className="capsula-btn capsula-btn-primary w-full py-5 text-sm shadow-xl shadow-primary/10"
                   >
-                    🔐 {useMultiPayment ? `PAGO MIXTO $${multiTotal.toFixed(2)}` : `REGISTRAR PAGO $${paidAmount > 0 ? paidAmount.toFixed(2) : "0.00"}`}
+                    🔐 {(discountType === "CORTESIA_100" || (discountType === "CORTESIA_PERCENT" && cortesiaPercentNum >= 100))
+                      ? "REGISTRAR CORTESÍA 100% (CERRAR)"
+                      : useMultiPayment
+                        ? `PAGO MIXTO $${multiTotal.toFixed(2)}`
+                        : `REGISTRAR PAGO $${paidAmount > 0 ? paidAmount.toFixed(2) : "0.00"}`}
                   </button>
 
                   {/* Paid splits */}
@@ -1905,6 +2194,18 @@ export default function POSSportBarPage() {
                 />
               </div>
               <div>
+                <label className="block text-xs font-bold text-muted-foreground mb-1">
+                  Razón / Justificación <span className="text-red-400">*</span>
+                </label>
+                <textarea
+                  value={cortesiaReason}
+                  onChange={e => { setCortesiaReason(e.target.value); setCortesiaPinError(""); }}
+                  placeholder="Ej: Mesa VIP, cliente frecuente, error de cocina..."
+                  rows={2}
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2 text-white text-sm resize-none focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+              <div>
                 <label className="block text-xs font-bold text-muted-foreground mb-1">PIN de Gerente / Dueño</label>
                 <div className="bg-secondary p-3 rounded-xl text-2xl tracking-widest text-center font-mono mb-3 min-h-[3rem]">
                   {cortesiaPin.replace(/./g, "•")}
@@ -1922,8 +2223,137 @@ export default function POSSportBarPage() {
             </div>
             <div className="border-t border-border p-4 flex gap-3">
               <button onClick={() => setShowCortesiaModal(false)} className="flex-1 py-3 bg-secondary rounded-xl font-bold text-sm">Cancelar</button>
-              <button onClick={handleCortesiaPinConfirm} disabled={!cortesiaPin} className="flex-[2] py-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded-xl font-black text-sm transition">
+              <button onClick={handleCortesiaPinConfirm} disabled={!cortesiaPin || !cortesiaReason.trim()} className="flex-[2] py-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 rounded-xl font-black text-sm transition">
                 Aplicar Cortesía
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* BANNER: REPORTE CORTESÍA → WHATSAPP                             */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {cortesiaReportData && (
+        <div className="fixed bottom-4 left-1/2 z-[70] w-full max-w-sm -translate-x-1/2 px-4">
+          <div className="rounded-2xl border border-purple-700/60 bg-purple-950 p-4 shadow-2xl text-white">
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-black text-purple-300 text-sm">🎁 Cortesía registrada</p>
+              <button onClick={() => setCortesiaReportData(null)} className="text-purple-400 hover:text-white text-xl leading-none">×</button>
+            </div>
+            <div className="text-xs text-purple-200 mb-1">
+              <span className="font-bold">{cortesiaReportData.tabCode}</span>
+              {cortesiaReportData.customerLabel && <span> · {cortesiaReportData.customerLabel}</span>}
+            </div>
+            <div className="text-xs text-purple-300 mb-3">
+              Total: <span className="line-through">${cortesiaReportData.totalOriginal.toFixed(2)}</span>{" "}
+              → Descuento {cortesiaReportData.discountPercent}%{" "}
+              → Cobrado: <span className="font-bold">${cortesiaReportData.totalCharged.toFixed(2)}</span>
+            </div>
+            <button
+              onClick={() => {
+                const d = cortesiaReportData;
+                const fecha = new Date(d.date).toLocaleString("es-VE", { dateStyle: "short", timeStyle: "short" });
+                const items = d.items.map(i => `• ${i.quantity}× ${i.name} — $${i.total.toFixed(2)}`).join("\n");
+                const msg = [
+                  `🎁 *CORTESÍA — Table Pong*`,
+                  `📅 ${fecha}`,
+                  `🪑 Cuenta: ${d.tabCode}${d.customerLabel ? ` · ${d.customerLabel}` : ""}`,
+                  ``,
+                  `*Consumo:*`,
+                  items,
+                  ``,
+                  `💰 Total original: *$${d.totalOriginal.toFixed(2)}*`,
+                  `🎁 Cortesía ${d.discountPercent}%: -$${d.discountAmount.toFixed(2)}`,
+                  `✅ Cobrado: *$${d.totalCharged.toFixed(2)}*`,
+                  d.authorizedBy ? `👔 Autorizado: *${d.authorizedBy}*` : null,
+                  d.reason ? `📝 Razón: ${d.reason}` : null,
+                ].filter(Boolean).join("\n");
+                window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, "_blank");
+              }}
+              className="w-full py-2.5 bg-[#25D366] hover:bg-[#22c55e] rounded-xl font-black text-sm text-white flex items-center justify-center gap-2"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.524 5.842L.057 23.999l6.304-1.654A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.81 9.81 0 01-5.001-1.37l-.36-.213-3.722.976.994-3.629-.233-.374A9.795 9.795 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+              Enviar reporte a WhatsApp
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* BANNER: ALERTA PRE-BILL > 2 IMPRESIONES → WA ADMIN              */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {preBillWAAlert && (
+        <div className="fixed bottom-4 left-1/2 z-[70] w-full max-w-sm -translate-x-1/2 px-4">
+          <div className="rounded-2xl border border-red-700/60 bg-red-950 p-4 shadow-2xl text-white">
+            <div className="flex items-center justify-between mb-2">
+              <p className="font-black text-red-300 text-sm">⚠️ {preBillWAAlert.count} impresiones de Estado de Cuenta</p>
+              <button onClick={() => setPreBillWAAlert(null)} className="text-red-400 hover:text-white text-xl">×</button>
+            </div>
+            <p className="text-xs text-red-200 mb-3">
+              Mesa <strong>{preBillWAAlert.tabCode}</strong>{preBillWAAlert.tableName ? ` · ${preBillWAAlert.tableName}` : ''} · ${preBillWAAlert.balance.toFixed(2)}
+            </p>
+            <button
+              onClick={() => {
+                const d = preBillWAAlert;
+                const msg = [
+                  `⚠️ *ALERTA ANTI-FRAUDE — Table Pong POS*`,
+                  `📅 ${new Date().toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' })}`,
+                  ``,
+                  `Se imprimió el *Estado de Cuenta ${d.count} veces* antes de cobrar.`,
+                  `🪑 Cuenta: ${d.tabCode}${d.tableName ? ` · ${d.tableName}` : ''}`,
+                  `💰 Saldo: $${d.balance.toFixed(2)}`,
+                  ``,
+                  `_Esto puede indicar un intento de cobrar con divisas y registrar sin descuento._`,
+                  `Verificar con cajera y auditar cierre de caja.`,
+                ].join('\n');
+                window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+              }}
+              className="w-full py-2.5 bg-[#25D366] hover:bg-[#22c55e] rounded-xl font-black text-sm flex items-center justify-center gap-2"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.524 5.842L.057 23.999l6.304-1.654A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.81 9.81 0 01-5.001-1.37l-.36-.213-3.722.976.994-3.629-.233-.374A9.795 9.795 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+              Alertar al Admin por WhatsApp
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* MODAL: DESBLOQUEAR CAMBIO DE MÉTODO (DIVISAS LOCK)               */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {showDivisasUnlockModal && (
+        <div className="fixed inset-0 z-[60] bg-black/90 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-card border border-blue-800/60 w-full max-w-sm mx-auto rounded-t-3xl sm:rounded-3xl shadow-2xl">
+            <div className="border-b border-border p-5 flex items-center justify-between">
+              <h3 className="text-base font-black text-blue-300">🔒 Cambiar método de pago</h3>
+              <button onClick={() => setShowDivisasUnlockModal(false)} className="text-muted-foreground hover:text-white text-2xl">×</button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-muted-foreground">
+                El descuento <strong className="text-blue-400">Divisas -33%</strong> ya fue seleccionado. Cambiar el método de pago cancelará ese descuento y requiere autorización de Gerente.
+              </p>
+              <div>
+                <label className="block text-xs font-bold text-muted-foreground mb-1">PIN de Gerente</label>
+                <input
+                  type="password"
+                  value={divisasUnlockPin}
+                  onChange={e => { setDivisasUnlockPin(e.target.value); setDivisasUnlockError(""); }}
+                  onKeyDown={e => e.key === "Enter" && handleDivisasUnlockConfirm()}
+                  placeholder="••••••"
+                  autoFocus
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-3 text-white text-center text-xl tracking-widest focus:border-blue-500 focus:outline-none"
+                />
+                {divisasUnlockError && <p className="text-red-400 text-xs mt-1 text-center">{divisasUnlockError}</p>}
+              </div>
+            </div>
+            <div className="border-t border-border p-4 flex gap-3">
+              <button onClick={() => setShowDivisasUnlockModal(false)} className="flex-1 py-3 bg-secondary rounded-xl font-bold text-sm">Cancelar</button>
+              <button
+                onClick={handleDivisasUnlockConfirm}
+                disabled={!divisasUnlockPin}
+                className="flex-[2] py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-xl font-black text-sm"
+              >
+                Autorizar cambio
               </button>
             </div>
           </div>
@@ -2134,6 +2564,21 @@ export default function POSSportBarPage() {
         </div>
       )}
       {/* Navegación móvil — solo visible en móvil/tablet */}
+      {/* ── Split Tab Modal ────────────────────────────────────────────────── */}
+      {showSplitModal && parentTab && (
+        <SplitTabModal
+          parentTabId={parentTab.id}
+          parentTabCode={parentTab.tabCode}
+          orders={parentTab.orders}
+          existingSubTabs={tabSubTabs}
+          onClose={() => setShowSplitModal(false)}
+          onDone={async () => {
+            setShowSplitModal(false);
+            await loadData();
+          }}
+        />
+      )}
+
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border flex z-50 shadow-2xl">
         {(["tables", "menu", "account"] as const).map((tab) => {
           const icons = { tables: "🪑", menu: "🍽️", account: "🧾" };

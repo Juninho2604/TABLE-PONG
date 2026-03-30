@@ -24,10 +24,10 @@ export default async function AuditsPage() {
                         ← Volver al Inventario
                     </Link>
                     <Link
-                        href="/dashboard/inventario/importar"
+                        href="/dashboard/inventario/auditorias/nueva"
                         className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 shadow-sm"
                     >
-                        + Nueva Revisión (Importar)
+                        + Nueva Auditoría
                     </Link>
                 </div>
             </div>

@@ -125,6 +125,18 @@ export default function POSSportBarPage() {
     const [paymentPin, setPaymentPin] = useState('');
     const [paymentPinError, setPaymentPinError] = useState('');
     const [closedTabForPrint, setClosedTabForPrint] = useState<OpenTabSummary | null>(null);
+    const [cortesiaReportData, setCortesiaReportData] = useState<{
+        tabCode: string;
+        customerLabel?: string;
+        items: { name: string; quantity: number; total: number }[];
+        totalOriginal: number;
+        discountPercent: number;
+        discountAmount: number;
+        totalCharged: number;
+        authorizedBy?: string;
+        reason: string;
+        date: Date;
+    } | null>(null);
 
     // ── Descuento ─────────────────────────────────────────────────────────────
     const [discountType, setDiscountType] = useState<'NONE' | 'DIVISAS_33' | 'CORTESIA_PERCENT'>('NONE');
@@ -510,6 +522,24 @@ export default function POSSportBarPage() {
                     });
                 }
                 if (!result.success) { alert(result.message); return; }
+            }
+            // Capture cortesía report before clearing state
+            if (discountType === 'CORTESIA_PERCENT' && discountAmount > 0) {
+                const reportItems = activeTab.orders.flatMap((o: any) =>
+                    (o.items || []).map((i: any) => ({ name: i.itemName, quantity: i.quantity, total: i.lineTotal || 0 }))
+                );
+                setCortesiaReportData({
+                    tabCode: activeTab.tabCode,
+                    customerLabel: activeTab.customerLabel,
+                    items: reportItems,
+                    totalOriginal: activeTab.balanceDue,
+                    discountPercent: cortesiaPctClamped,
+                    discountAmount,
+                    totalCharged: Math.max(0, activeTab.balanceDue - discountAmount),
+                    authorizedBy: pinResult.data?.managerName,
+                    reason: cortesiaJustification.trim(),
+                    date: new Date(),
+                });
             }
             setAmountReceived('');
             setPaymentLines([]);
@@ -1391,8 +1421,37 @@ export default function POSSportBarPage() {
                             >
                                 <span>🖨️</span> IMPRIMIR FACTURA
                             </button>
+                            {/* WA report button — only shown for cortesía payments */}
+                            {cortesiaReportData && (
+                                <button
+                                    onClick={() => {
+                                        const d = cortesiaReportData;
+                                        const fecha = new Date(d.date).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' });
+                                        const items = d.items.map(i => `• ${i.quantity}× ${i.name} — $${i.total.toFixed(2)}`).join('\n');
+                                        const msg = [
+                                            `🎁 *CORTESÍA — Table Pong*`,
+                                            `📅 ${fecha}`,
+                                            `🪑 Cuenta: ${d.tabCode}${d.customerLabel ? ` · ${d.customerLabel}` : ''}`,
+                                            ``,
+                                            `*Consumo:*`,
+                                            items,
+                                            ``,
+                                            `💰 Total original: *$${d.totalOriginal.toFixed(2)}*`,
+                                            `🎁 Cortesía ${d.discountPercent}%: -$${d.discountAmount.toFixed(2)}`,
+                                            `✅ Cobrado: *$${d.totalCharged.toFixed(2)}*`,
+                                            d.authorizedBy ? `👔 Autorizado: *${d.authorizedBy}*` : null,
+                                            d.reason ? `📝 Razón: ${d.reason}` : null,
+                                        ].filter(Boolean).join('\n');
+                                        window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+                                    }}
+                                    className="w-full py-4 bg-[#25D366] hover:bg-[#22c55e] text-white rounded-xl font-bold text-lg flex items-center justify-center gap-3"
+                                >
+                                    <svg viewBox="0 0 24 24" className="w-5 h-5 fill-white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.116 1.524 5.842L.057 23.999l6.304-1.654A11.954 11.954 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.81 9.81 0 01-5.001-1.37l-.36-.213-3.722.976.994-3.629-.233-.374A9.795 9.795 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/></svg>
+                                    Enviar reporte WA
+                                </button>
+                            )}
                             <button
-                                onClick={() => { setClosedTabForPrint(null); setSelectedTableId(''); }}
+                                onClick={() => { setClosedTabForPrint(null); setCortesiaReportData(null); setSelectedTableId(''); }}
                                 className="w-full py-4 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-xl font-bold text-lg border-2 border-gray-200"
                             >
                                 Nueva cuenta

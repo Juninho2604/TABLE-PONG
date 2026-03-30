@@ -4,6 +4,10 @@ import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
 
+// ============================================================================
+// INTERFACES
+// ============================================================================
+
 export interface CreateAuditInput {
     name: string;
     notes?: string;
@@ -429,5 +433,195 @@ export async function deleteAuditAction(auditId: string) {
         return { success: true };
     } catch (error) {
         return { success: false };
+    }
+}
+
+// ============================================================================
+// NUEVAS ACCIONES: FLUJO DE BORRADORES CON FILTROS
+// ============================================================================
+
+export interface AuditDraftFilters {
+    areaId?: string;
+    category?: string;
+    searchTerm?: string;
+}
+
+/**
+ * Obtiene las categorías únicas y familias de productos para los filtros
+ */
+export async function getCategoriesAndFamiliesAction() {
+    try {
+        const items = await prisma.inventoryItem.findMany({
+            where: { isActive: true, deletedAt: null },
+            select: { category: true, familyId: true, family: { select: { id: true, name: true } } },
+            distinct: ['category']
+        });
+
+        const categories = [...new Set(items.map(i => i.category).filter(Boolean))].sort() as string[];
+        const families = items
+            .filter(i => i.family)
+            .map(i => ({ id: i.family!.id, name: i.family!.name }))
+            .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i)
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        return { categories, families };
+    } catch (error) {
+        console.error('Error getting categories:', error);
+        return { categories: [], families: [] };
+    }
+}
+
+/**
+ * Obtiene los items de inventario filtrados para crear un borrador de auditoría.
+ * Retorna los items con su stock actual por área.
+ */
+export async function getInventoryForAuditAction(filters: AuditDraftFilters) {
+    try {
+        const whereClause: any = { isActive: true, deletedAt: null };
+
+        if (filters.category) {
+            whereClause.category = filters.category;
+        }
+
+        if (filters.searchTerm) {
+            whereClause.OR = [
+                { name: { contains: filters.searchTerm, mode: 'insensitive' } },
+                { sku: { contains: filters.searchTerm, mode: 'insensitive' } },
+            ];
+        }
+
+        const items = await prisma.inventoryItem.findMany({
+            where: whereClause,
+            include: {
+                stockLevels: filters.areaId
+                    ? { where: { areaId: filters.areaId } }
+                    : true,
+                costHistory: { orderBy: { effectiveFrom: 'desc' as const }, take: 1 },
+                family: { select: { name: true } }
+            },
+            orderBy: [{ category: 'asc' }, { name: 'asc' }]
+        });
+
+        return items.map(item => ({
+            id: item.id,
+            name: item.name,
+            sku: item.sku,
+            category: item.category,
+            baseUnit: item.baseUnit,
+            familyName: item.family?.name || null,
+            isBeverage: item.isBeverage,
+            systemStock: filters.areaId
+                ? (item.stockLevels[0]?.currentStock || 0)
+                : item.stockLevels.reduce((acc, sl) => acc + sl.currentStock, 0),
+            costPerUnit: item.costHistory[0]?.costPerUnit || 0
+        }));
+    } catch (error) {
+        console.error('Error getting inventory for audit:', error);
+        return [];
+    }
+}
+
+/**
+ * Crea un borrador de auditoría vacío con todos los items pre-cargados.
+ * Los countedStock se inicializan en 0 para que el usuario los llene.
+ */
+export async function createAuditDraftAction(input: {
+    name: string;
+    notes?: string;
+    areaId?: string;
+    effectiveDate?: string;
+    filters: AuditDraftFilters;
+}) {
+    const session = await getSession();
+    if (!session?.id) return { success: false, message: 'No autorizado' };
+
+    try {
+        // 1. Obtener items filtrados
+        const inventoryItems = await getInventoryForAuditAction(input.filters);
+
+        if (inventoryItems.length === 0) {
+            return { success: false, message: 'No se encontraron productos con los filtros seleccionados' };
+        }
+
+        // 2. Crear auditoría con items
+        const result = await prisma.$transaction(async (tx) => {
+            const audit = await tx.inventoryAudit.create({
+                data: {
+                    name: input.name,
+                    notes: input.notes || `Filtros: ${input.filters.category || 'Todas las categorías'} | ${input.filters.areaId ? 'Área específica' : 'Global'}`,
+                    areaId: input.areaId || input.filters.areaId,
+                    status: 'DRAFT',
+                    effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : null,
+                    createdById: session.id
+                }
+            });
+
+            // Crear items con countedStock = 0 (para que el usuario llene)
+            const auditItemsData = inventoryItems.map(item => ({
+                auditId: audit.id,
+                inventoryItemId: item.id,
+                systemStock: item.systemStock,
+                countedStock: 0,
+                difference: -item.systemStock,
+                costSnapshot: item.costPerUnit
+            }));
+
+            await tx.inventoryAuditItem.createMany({ data: auditItemsData });
+
+            return audit;
+        }, { timeout: 30000 });
+
+        revalidatePath('/dashboard/inventario/auditorias');
+        return { success: true, message: 'Borrador creado', auditId: result.id };
+    } catch (error) {
+        console.error('Error creating audit draft:', error);
+        return { success: false, message: `Error: ${error instanceof Error ? error.message : 'Desconocido'}` };
+    }
+}
+
+/**
+ * Guarda múltiples conteos en batch (para el formulario de hoja de conteo).
+ * Solo funciona en auditorías en estado DRAFT.
+ */
+export async function saveDraftCountsAction(input: {
+    auditId: string;
+    counts: { itemId: string; countedStock: number; notes?: string }[];
+}) {
+    const session = await getSession();
+    if (!session?.id) return { success: false, message: 'No autorizado' };
+
+    try {
+        const audit = await prisma.inventoryAudit.findUnique({ where: { id: input.auditId } });
+        if (!audit) return { success: false, message: 'Auditoría no encontrada' };
+        if (audit.status !== 'DRAFT') return { success: false, message: 'La auditoría ya no está en borrador' };
+
+        // Obtener todos los items para calcular diferencias
+        const auditItems = await prisma.inventoryAuditItem.findMany({
+            where: { auditId: input.auditId }
+        });
+        const itemMap = new Map(auditItems.map(i => [i.id, i]));
+
+        // Actualizar en batch
+        await prisma.$transaction(
+            input.counts.map(count => {
+                const existing = itemMap.get(count.itemId);
+                const systemStock = existing?.systemStock || 0;
+                return prisma.inventoryAuditItem.update({
+                    where: { id: count.itemId },
+                    data: {
+                        countedStock: count.countedStock,
+                        difference: count.countedStock - systemStock,
+                        notes: count.notes || undefined
+                    }
+                });
+            })
+        );
+
+        revalidatePath(`/dashboard/inventario/auditorias/${input.auditId}`);
+        revalidatePath('/dashboard/inventario/auditorias');
+        return { success: true, message: `${input.counts.length} conteos guardados` };
+    } catch (error) {
+        console.error('Error saving draft counts:', error);
+        return { success: false, message: `Error: ${error instanceof Error ? error.message : 'Desconocido'}` };
     }
 }

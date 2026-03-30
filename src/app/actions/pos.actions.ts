@@ -306,8 +306,7 @@ function calculateCartTotals(data: Pick<CreateOrderData, 'items' | 'discountType
 }
 
 async function generateTabCode(): Promise<string> {
-    const today = new Date();
-    const dateStr = today.toISOString().split('T')[0];
+    const dateStr = getCaracasDateStamp();
     const prefix = `TAB-${dateStr}-`;
 
     const last = await prisma.openTab.findFirst({
@@ -1157,6 +1156,22 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
         const finalChangeReturned = changeReturnedInput;
 
         const newBalance = Math.max(0, effectiveBalance - appliedAmount);
+
+        // ── strict_total: impide cierre si los pagos no cubren el total real ──
+        if (newBalance === 0 && !isFullDiscountClose) {
+            const previouslySplitsPaid = openTab.paymentSplits.reduce((s, p) => s + Number(p.paidAmount), 0);
+            const thisPaymentTotal = splitsToCreate.reduce((s, p) => s + p.amount, 0);
+            const totalCollected = previouslySplitsPaid + thisPaymentTotal;
+            const alreadyChargedService = Number(openTab.totalServiceCharge ?? 0);
+            const trueOwed = (openTab.runningSubtotal - newRunningDiscount) + alreadyChargedService + serviceChargeAmount;
+            if (totalCollected < trueOwed - 0.02) {
+                return {
+                    success: false,
+                    message: `Error de integridad: cobrado $${totalCollected.toFixed(2)} pero el total real es $${trueOwed.toFixed(2)}. Verifique el cargo de servicio.`
+                };
+            }
+        }
+
         const nextTabStatus = newBalance === 0 ? 'CLOSED' : 'PARTIALLY_PAID';
         const nextOrderPaymentStatus = newBalance === 0 ? 'PAID' : 'PARTIAL';
         const nextPaymentMethod = openTab.paymentSplits.length > 0 || splitsToCreate.length > 1 ? 'MULTIPLE' : (splitsToCreate[0]?.method || data.paymentMethod);

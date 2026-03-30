@@ -1448,13 +1448,27 @@ model OpenTab {
   runningTotal       Float           @default(0)
   balanceDue         Float           @default(0)
   version            Int             @default(0)
-  totalServiceCharge Float           @default(0) // Acumulado de cargo por servicio cobrado en esta cuenta
-  totalTip           Float           @default(0) // Acumulado de propinas recibidas en esta cuenta
+  totalServiceCharge Float           @default(0)
+  totalTip           Float           @default(0)
   openedAt           DateTime        @default(now())
   closedAt           DateTime?
   updatedAt          DateTime        @updatedAt
   notes              String?
-  waiterLabel        String? // Mesonero asignado (ej: "Mesonero 1")
+  waiterLabel        String?
+
+  // ── Anti-fraude: contador de impresiones pre-cobro ───────────────────────────
+  // Cada vez que se imprime "Estado de Cuenta" antes de cobrar, este contador sube.
+  // Si supera 2, se dispara un log de auditoría y alerta WA.
+  preBillPrintCount  Int             @default(0)
+
+  // ── Subcuentas (Split Bills) ─────────────────────────────────────────────────
+  // Una cuenta padre puede tener N subcuentas. Cada subcuenta genera su propia
+  // SalesOrder con correlativo independiente y puede cerrarse por separado.
+  parentTabId        String?
+  parentTab          OpenTab?        @relation("TabSplits", fields: [parentTabId], references: [id])
+  subTabs            OpenTab[]       @relation("TabSplits")
+  splitIndex         Int?            // 1, 2, 3... muestra "Subcuenta 1 de 3"
+
   openedById         String
   openedBy           User            @relation("OpenTabOpener", fields: [openedById], references: [id])
   assignedWaiterId   String?
@@ -1472,6 +1486,7 @@ model OpenTab {
 
   @@index([branchId, status])
   @@index([tableOrStationId])
+  @@index([parentTabId])
 }
 
 model OpenTabOrder {
