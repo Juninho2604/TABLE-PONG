@@ -168,15 +168,31 @@ export async function getMonthlySalesAction(month: number, year: number) {
 
 export async function getDailyZReportAction(): Promise<{ success: boolean; data?: ZReportData; message?: string }> {
     try {
-        const { start, end } = getCaracasDayRange();
+        // Usar la fecha de la sesión de caja activa para el rango del día de facturación
+        const activeSession = await prisma.cashSession.findFirst({
+            where: { status: 'OPEN' },
+            orderBy: { openedAt: 'desc' },
+            select: { businessDate: true, openedAt: true }
+        });
+
+        let start: Date, end: Date;
+        if (activeSession) {
+            // Rango basado en businessDate de la sesión: desde apertura de caja hasta ahora
+            start = activeSession.openedAt;
+            end = new Date();
+        } else {
+            const range = getCaracasDayRange();
+            start = range.start;
+            end = range.end;
+        }
 
         const todaysOrders = await prisma.salesOrder.findMany({
             where: {
-                orderNumber: { not: { startsWith: 'COM-' } },
-                createdAt: {
-                    gte: start,
-                    lte: end
-                },
+                NOT: [
+                    { orderNumber: { startsWith: 'COM-' } },
+                    { orderNumber: { startsWith: 'SPLIT-' } },
+                ],
+                createdAt: { gte: start, lte: end },
                 status: { not: 'CANCELLED' }
             }
         });
@@ -205,11 +221,11 @@ export async function getDailyZReportAction(): Promise<{ success: boolean; data?
             // Normalizar paymentMethod
             const pm = order.paymentMethod?.toUpperCase() || 'UNKNOWN';
 
-            if (pm === 'CASH') paymentCash += paid;
+            if (pm === 'CASH' || pm === 'CASH_BS') paymentCash += paid;
             else if (pm === 'CARD' || pm === 'DEBIT_CARD') paymentCard += paid;
             else if (pm === 'TRANSFER' || pm === 'BANK_TRANSFER') paymentTransfer += paid;
             else if (pm === 'MOBILE_PAY' || pm === 'PAGO_MOVIL') paymentMobile += paid;
-            else paymentMobile += paid; // Fallback temporal si hay "MULTIPLE" o raros, lo metemos en otros o mobile
+            else paymentMobile += paid;
         }
 
         const netTotal = grossTotal - totalDiscounts;

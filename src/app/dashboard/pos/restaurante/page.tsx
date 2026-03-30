@@ -16,7 +16,7 @@ import {
 } from "@/app/actions/pos.actions";
 import { incrementPreBillPrintAction } from "@/app/actions/prebill.actions";
 import { closeZeroBalanceTabAction } from "@/app/actions/subtab.actions";
-import { getActiveCashSessionAction, openCashSessionAction } from "@/app/actions/cash-session.actions";
+import { getActiveCashSessionAction, openCashSessionAction, closeCashSessionAction } from "@/app/actions/cash-session.actions";
 import { SplitTabModal } from "./SplitTabModal";
 import { getExchangeRateValue } from "@/app/actions/exchange.actions";
 import { printKitchenCommand, printReceipt } from "@/lib/print-command";
@@ -1139,9 +1139,32 @@ export default function POSSportBarPage() {
                <CurrencyCalculator totalUsd={Number(activeTab.balanceDue.toFixed(2))} onRateUpdated={setExchangeRate} />
             </div>
           )}
-          <div className="px-4 py-2 bg-secondary/30 rounded-xl border border-border font-black text-sm tabular-nums text-foreground/70">
-            {new Date().toLocaleDateString("es-VE", { timeZone: "America/Caracas" })}
-          </div>
+          {/* Info sesión de caja + botón cerrar */}
+          {cashSession && (
+            <div className="flex items-center gap-2">
+              <div className="px-3 py-2 bg-secondary/30 rounded-xl border border-border text-xs text-center">
+                <div className="font-black tabular-nums text-foreground/70">{cashSession.businessDate}</div>
+                <div className="text-[10px] text-emerald-400 font-bold">🟢 {cashSession.openedBy?.firstName}</div>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!confirm(`¿Cerrar la caja del día ${cashSession.businessDate}?`)) return;
+                  const r = await closeCashSessionAction();
+                  if (r.success) { setCashSession(null); setCashSessionLoaded(false); await loadData(); }
+                  else alert(r.message);
+                }}
+                className="h-9 px-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-xs font-black transition"
+                title="Cerrar Caja"
+              >
+                🔴 Cerrar Caja
+              </button>
+            </div>
+          )}
+          {!cashSession && (
+            <div className="px-4 py-2 bg-secondary/30 rounded-xl border border-border font-black text-sm tabular-nums text-foreground/70">
+              {new Date().toLocaleDateString("es-VE", { timeZone: "America/Caracas" })}
+            </div>
+          )}
         </div>
       </div>
 
