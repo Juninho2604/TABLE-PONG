@@ -31,7 +31,7 @@ export interface CartItem {
 }
 
 export type POSOrderType = 'RESTAURANT' | 'DELIVERY';
-export type POSPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'MULTIPLE' | 'ZELLE';
+export type POSPaymentMethod = 'CASH' | 'CASH_BS' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'MULTIPLE' | 'ZELLE';
 
 export interface CreateOrderData {
     orderType: POSOrderType;
