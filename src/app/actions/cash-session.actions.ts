@@ -4,6 +4,7 @@ import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
 import { getCaracasDateStamp } from '@/lib/datetime';
 import { revalidatePath } from 'next/cache';
+import { logAudit } from '@/lib/audit-log';
 
 const AUTHORIZED_OPEN_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'AREA_LEAD'];
 
@@ -45,6 +46,17 @@ export async function openCashSessionAction(notes?: string): Promise<{ success: 
         }
     });
 
+    await logAudit({
+        userId: session.id,
+        userName: `${session.firstName} ${session.lastName}`,
+        userRole: session.role,
+        action: 'CREATE',
+        entityType: 'CashSession',
+        entityId: newSession.id,
+        description: `Abrió caja — día de facturación: ${businessDate}`,
+        module: 'CONFIG',
+        metadata: { businessDate },
+    });
     revalidatePath('/dashboard/pos/restaurante');
     revalidatePath('/dashboard/pos/sportbar');
     revalidatePath('/dashboard/pos/mesero');
@@ -91,6 +103,17 @@ export async function closeCashSessionAction(
         }
     });
 
+    await logAudit({
+        userId: session.id,
+        userName: `${session.firstName} ${session.lastName}`,
+        userRole: session.role,
+        action: 'UPDATE',
+        entityType: 'CashSession',
+        entityId: activeSession.id,
+        description: `Cerró caja (sesión ${activeSession.businessDate})`,
+        module: 'CONFIG',
+        metadata: { businessDate: activeSession.businessDate },
+    });
     revalidatePath('/dashboard/pos/restaurante');
     revalidatePath('/dashboard/pos/sportbar');
     revalidatePath('/dashboard/pos/mesero');

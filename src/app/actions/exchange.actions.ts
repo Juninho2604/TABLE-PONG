@@ -3,6 +3,7 @@
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
+import { logAudit } from '@/lib/audit-log';
 
 export async function getCurrentExchangeRate() {
     const rate = await prisma.exchangeRate.findFirst({
@@ -47,6 +48,17 @@ export async function setExchangeRateAction(rate: number, effectiveDate: Date) {
                 effectiveDate,
                 source: 'BCV',
             },
+        });
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: 'UPDATE',
+            entityType: 'ExchangeRate',
+            entityId: `BCV-${effectiveDate.toISOString().slice(0, 10)}`,
+            description: `Actualizó tasa de cambio BCV a ${roundedRate} Bs/USD`,
+            module: 'CONFIG',
+            metadata: { rate: roundedRate, effectiveDate },
         });
         revalidatePath('/dashboard/config/tasa-cambio');
         revalidatePath('/dashboard/pos/restaurante');

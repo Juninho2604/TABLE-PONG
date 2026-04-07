@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit-log';
 
 // ============================================================================
 // INTERFACES
@@ -139,6 +140,17 @@ export async function createAuditAction(input: CreateAuditInput) {
             return audit;
         }, { timeout: 30000 });
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: 'CREATE',
+            entityType: 'InventoryAudit',
+            entityId: result.id,
+            description: `Creó auditoría "${input.name}" con ${input.items.length} items`,
+            module: 'AUDIT',
+            metadata: { name: input.name, itemCount: input.items.length, areaId: input.areaId },
+        });
         revalidatePath('/dashboard/inventario');
         revalidatePath('/dashboard/inventario/auditorias');
         return { success: true, message: 'Auditoría creada correctamente', auditId: result.id };
@@ -316,6 +328,17 @@ export async function approveAuditAction(input: ApproveAuditInput) {
             return audit;
         }, { timeout: 180000 }); // Increased from 30s to 180s (3 minutes)
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: 'APPROVE',
+            entityType: 'InventoryAudit',
+            entityId: input.auditId,
+            description: `Aprobó auditoría y aplicó ajustes de stock`,
+            module: 'AUDIT',
+            metadata: { auditId: input.auditId, areaId: targetAreaId },
+        });
         revalidatePath('/dashboard/inventario');
         revalidatePath('/dashboard/inventario/auditorias');
         revalidatePath('/dashboard');
@@ -335,6 +358,16 @@ export async function rejectAuditAction(auditId: string) {
         await prisma.inventoryAudit.update({
             where: { id: auditId },
             data: { status: 'REJECTED' }
+        });
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: 'REJECT',
+            entityType: 'InventoryAudit',
+            entityId: auditId,
+            description: `Rechazó auditoría`,
+            module: 'AUDIT',
         });
         revalidatePath('/dashboard/inventario/auditorias');
         return { success: true };
@@ -411,6 +444,16 @@ export async function voidAuditAction(auditId: string) {
             return audit;
         });
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: 'VOID',
+            entityType: 'InventoryAudit',
+            entityId: auditId,
+            description: `Anuló auditoría "${result.name}" y revirtió ajustes de stock`,
+            module: 'AUDIT',
+        });
         revalidatePath('/dashboard/inventario/auditorias');
         revalidatePath('/dashboard/inventario');
         revalidatePath('/dashboard');
@@ -433,12 +476,23 @@ export async function deleteAuditAction(auditId: string) {
             return { success: false, message: 'No se puede eliminar una auditoría aprobada. Use "Anular" en su lugar.' };
         }
 
+        const auditToDelete = await prisma.inventoryAudit.findUnique({ where: { id: auditId }, select: { name: true } });
         await prisma.inventoryAudit.update({
             where: { id: auditId },
             data: {
                 deletedAt: new Date(),
                 deletedById: session.id,
             },
+        });
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: 'DELETE',
+            entityType: 'InventoryAudit',
+            entityId: auditId,
+            description: `Eliminó auditoría "${auditToDelete?.name}"`,
+            module: 'AUDIT',
         });
         revalidatePath('/dashboard/inventario/auditorias');
         return { success: true, message: 'Auditoría eliminada (soft delete)' };
@@ -583,6 +637,17 @@ export async function createAuditDraftAction(input: {
             return audit;
         }, { timeout: 30000 });
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: 'CREATE',
+            entityType: 'InventoryAudit',
+            entityId: result.id,
+            description: `Creó borrador de auditoría "${input.name}" con ${inventoryItems.length} items`,
+            module: 'AUDIT',
+            metadata: { name: input.name, itemCount: inventoryItems.length, areaId: input.areaId, filters: input.filters },
+        });
         revalidatePath('/dashboard/inventario/auditorias');
         return { success: true, message: 'Borrador creado', auditId: result.id };
     } catch (error) {
