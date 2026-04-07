@@ -114,9 +114,12 @@ export async function deleteProductFamilyAction(id: string) {
     if (used > 0) return { success: false, message: 'Hay productos vinculados a esta familia' };
 
     await prisma.skuCreationTemplate.updateMany({ where: { familyId: id }, data: { familyId: null } });
-    await prisma.productFamily.delete({ where: { id } });
+    await prisma.productFamily.update({
+        where: { id },
+        data: { isActive: false },
+    });
     revalidatePath('/dashboard/config/sku-studio');
-    return { success: true as const };
+    return { success: true as const, message: 'Familia desactivada (soft delete)' };
 }
 
 // --- Plantillas ---

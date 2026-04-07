@@ -35,6 +35,7 @@ export interface ApproveAuditInput {
 export async function getAuditsAction() {
     try {
         const audits = await prisma.inventoryAudit.findMany({
+            where: { deletedAt: null },
             include: {
                 createdBy: { select: { firstName: true, lastName: true } },
                 resolvedBy: { select: { firstName: true, lastName: true } },
@@ -423,16 +424,27 @@ export async function voidAuditAction(auditId: string) {
 
 export async function deleteAuditAction(auditId: string) {
     const session = await getSession();
-    if (!session?.id) return { success: false };
+    if (!session?.id) return { success: false, message: 'No autorizado' };
 
     try {
-        await prisma.inventoryAudit.delete({
-            where: { id: auditId }
+        const audit = await prisma.inventoryAudit.findUnique({ where: { id: auditId } });
+        if (!audit) return { success: false, message: 'Auditoría no encontrada' };
+        if (audit.status === 'APPROVED') {
+            return { success: false, message: 'No se puede eliminar una auditoría aprobada. Use "Anular" en su lugar.' };
+        }
+
+        await prisma.inventoryAudit.update({
+            where: { id: auditId },
+            data: {
+                deletedAt: new Date(),
+                deletedById: session.id,
+            },
         });
         revalidatePath('/dashboard/inventario/auditorias');
-        return { success: true };
+        return { success: true, message: 'Auditoría eliminada (soft delete)' };
     } catch (error) {
-        return { success: false };
+        console.error('Error deleting audit:', error);
+        return { success: false, message: 'Error al eliminar auditoría' };
     }
 }
 
