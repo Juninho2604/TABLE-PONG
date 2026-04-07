@@ -4,9 +4,10 @@ const BCV_URL = 'https://www.bcv.org.ve/';
 import { TasaCambioView } from './tasa-cambio-view';
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { getTenantName } from '@/config/branding';
 
 export const metadata = {
-    title: 'Tasa de Cambio | Table Pong',
+    title: `Tasa de Cambio | ${getTenantName()}`,
     description: 'Configurar tasa USD/Bs según BCV. Los fines de semana se usa la tasa del lunes.',
 };
 

@@ -17,6 +17,7 @@ import { getExchangeRateValue } from '@/app/actions/exchange.actions';
 import { printKitchenCommand, printReceipt } from '@/lib/print-command';
 import { PriceDisplay } from '@/components/pos/PriceDisplay';
 import { CurrencyCalculator } from '@/components/pos/CurrencyCalculator';
+import { getTenantName } from '@/config/branding';
 
 // ============================================================================
 // TIPOS
@@ -1429,7 +1430,7 @@ export default function POSSportBarPage() {
                                         const fecha = new Date(d.date).toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' });
                                         const items = d.items.map(i => `• ${i.quantity}× ${i.name} — $${i.total.toFixed(2)}`).join('\n');
                                         const msg = [
-                                            `🎁 *CORTESÍA — Table Pong*`,
+                                            `🎁 *CORTESÍA — ${getTenantName()}*`,
                                             `📅 ${fecha}`,
                                             `🪑 Cuenta: ${d.tabCode}${d.customerLabel ? ` · ${d.customerLabel}` : ''}`,
                                             ``,

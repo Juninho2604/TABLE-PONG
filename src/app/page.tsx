@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { getTenantName, getTenantFullName } from '@/config/branding';
 
 export default function HomePage() {
     return (
@@ -22,11 +23,11 @@ export default function HomePage() {
 
                         {/* Title */}
                         <h1 className="mb-2 bg-gradient-to-r from-tablepong-navy via-tablepong-red to-tablepong-navy bg-clip-text text-5xl font-bold tracking-tight text-transparent sm:text-6xl lg:text-7xl">
-                            Table Pong
+                            {getTenantName()}
                         </h1>
 
                         <p className="mx-auto mb-2 max-w-2xl text-xl text-gray-800 font-medium dark:text-gray-200">
-                            ERP Sport Bar
+                            {getTenantFullName()}
                         </p>
 
                         <p className="mx-auto mb-2 max-w-2xl text-lg text-gray-600 dark:text-gray-300">
@@ -101,7 +102,7 @@ export default function HomePage() {
             {/* Footer */}
             <footer className="border-t border-primary/20 bg-white/50 py-6 backdrop-blur-sm dark:border-gray-700 dark:bg-gray-900/50">
                 <div className="mx-auto max-w-7xl px-4 text-center text-sm text-gray-500 dark:text-gray-400">
-                    <p>© 2026 Table Pong ERP</p>
+                    <p>© 2026 {getTenantFullName()} ERP</p>
                 </div>
             </footer>
         </div>

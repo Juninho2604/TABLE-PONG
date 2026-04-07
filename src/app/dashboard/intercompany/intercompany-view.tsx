@@ -8,6 +8,7 @@ import {
     type PartnerSalesReport,
     type PartnerSummary,
 } from '@/app/actions/intercompany.actions';
+import { getTenantName } from '@/config/branding';
 
 interface MenuItem {
     id: string;
@@ -183,7 +184,7 @@ export default function IntercompanyView({ partners: initialPartners, menuItems:
                             <div className="bg-slate-900 rounded-xl p-8 text-center text-slate-500">
                                 <div className="text-4xl mb-2">🤝</div>
                                 <p className="font-bold">No hay aliados configurados</p>
-                                <p className="text-sm mt-1">Crea el primero para empezar a registrar ventas Shanklish en Table Pong</p>
+                                <p className="text-sm mt-1">Crea el primero para empezar a registrar ventas de aliados en {getTenantName()}</p>
                             </div>
                         ) : (
                             <div className="grid gap-4 md:grid-cols-2">
@@ -414,9 +415,9 @@ export default function IntercompanyView({ partners: initialPartners, menuItems:
                                 <div className="bg-amber-950/30 border border-amber-800/40 rounded-xl p-4 text-sm text-amber-300">
                                     <div className="font-bold mb-1">Nota sobre el 10% de servicio</div>
                                     <p className="text-amber-400/80 text-xs">
-                                        El cargo de servicio (10% u otro) aplicado en las cuentas se registra a nivel de cada cobro (PaymentSplit) y <strong>queda íntegramente en Table Pong</strong>.
+                                        El cargo de servicio (10% u otro) aplicado en las cuentas se registra a nivel de cada cobro (PaymentSplit) y <strong>queda íntegramente en {getTenantName()}</strong>.
                                         El monto adeudado al aliado es el total de consumo bruto sin servicio.
-                                        Las propinas adicionales dejadas por clientes también quedan en Table Pong.
+                                        Las propinas adicionales dejadas por clientes también quedan en {getTenantName()}.
                                     </p>
                                 </div>
 

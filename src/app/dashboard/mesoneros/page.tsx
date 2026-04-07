@@ -7,6 +7,7 @@ import {
     getMesoneroTopItemsAction,
     getMesoneroMenuAvailabilityAction,
 } from '@/app/actions/mesonero.actions';
+import { getTenantFullName } from '@/config/branding';
 
 interface TopItem {
     name: string;
@@ -48,7 +49,7 @@ export default function MesonerosDashboardPage() {
                     ¡Bienvenido, {user?.firstName}!
                 </h1>
                 <p className="mt-1 text-orange-100 text-sm">
-                    Turno activo · Table Pong Santa Paula
+                    Turno activo · {getTenantFullName()}
                 </p>
                 <Link
                     href="/dashboard/pos/mesero"
