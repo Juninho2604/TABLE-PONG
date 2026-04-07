@@ -3,6 +3,7 @@
 import prisma from '@/server/db';
 import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit-log';
 
 // ============================================================================
 // TIPOS
@@ -87,6 +88,18 @@ export async function createMenuItemAction(data: MenuItemData): Promise<ActionRe
             }
         });
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+            userRole: session.role,
+            action: 'CREATE',
+            entityType: 'MenuItem',
+            entityId: newItem.id,
+            description: `Creó producto de menú: ${data.name} — $${data.price}`,
+            module: 'MENU',
+            metadata: { sku, price: data.price, categoryId: data.categoryId },
+        });
+
         revalidatePath('/dashboard/menu');
         revalidatePath('/dashboard/pos/restaurante');
         revalidatePath('/dashboard/pos/delivery');
@@ -108,9 +121,23 @@ export async function updateMenuItemPriceAction(id: string, newPrice: number): P
         }
         if (newPrice < 0) return { success: false, message: 'El precio no puede ser negativo.' };
 
+        const existing = await prisma.menuItem.findUnique({ where: { id }, select: { price: true, name: true } });
+
         await prisma.menuItem.update({
             where: { id },
             data: { price: parseFloat(newPrice.toString()) }
+        });
+
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+            userRole: session.role,
+            action: 'UPDATE',
+            entityType: 'MenuItem',
+            entityId: id,
+            description: `Cambió precio de ${existing?.name || id}: $${existing?.price} → $${newPrice}`,
+            module: 'MENU',
+            changes: { price: { from: existing?.price, to: newPrice } },
         });
 
         revalidatePath('/dashboard/menu');
@@ -135,6 +162,18 @@ export async function toggleMenuItemStatusAction(id: string, isActive: boolean):
         await prisma.menuItem.update({
             where: { id },
             data: { isActive }
+        });
+
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+            userRole: session.role,
+            action: 'UPDATE',
+            entityType: 'MenuItem',
+            entityId: id,
+            description: `${isActive ? 'Activó' : 'Desactivó'} producto de menú`,
+            module: 'MENU',
+            changes: { isActive: { from: !isActive, to: isActive } },
         });
 
         revalidatePath('/dashboard/menu');

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
 import { calculateRecipeCost } from '@/server/services/cost.service';
 import { UnitOfMeasure } from '@/types'; // Assuming this exists, otherwise we use string
+import { logAudit } from '@/lib/audit-log';
 
 /**
  * SHANKLISH CARACAS ERP - Recipe Actions
@@ -259,6 +260,18 @@ export async function createRecipeAction(input: CreateRecipeInput): Promise<Acti
             });
         }
 
+        await logAudit({
+            userId: input.userId,
+            userName: 'Sistema',
+            userRole: 'N/A',
+            action: 'CREATE',
+            entityType: 'Recipe',
+            entityId: result.recipe.id,
+            description: `Receta creada: ${input.name} — ${input.ingredients.length} ingredientes`,
+            module: 'RECIPE',
+            metadata: { ingredientCount: input.ingredients.length, outputUnit: input.outputUnit, type: input.type },
+        });
+
         revalidatePath('/dashboard/recetas');
         return { success: true, message: 'Receta creada exitosamente', data: { recipeId: result.recipe.id } };
 
@@ -345,6 +358,18 @@ export async function updateRecipeAction(input: UpdateRecipeInput): Promise<Acti
         } catch (e) {
             console.warn("Cost update failed after recipe update", e);
         }
+
+        await logAudit({
+            userId: input.userId,
+            userName: 'Sistema',
+            userRole: 'N/A',
+            action: 'UPDATE',
+            entityType: 'Recipe',
+            entityId: input.id,
+            description: `Receta actualizada: ${input.name}`,
+            module: 'RECIPE',
+            metadata: { ingredientCount: input.ingredients.length },
+        });
 
         revalidatePath('/dashboard/recetas');
         // Revalidate the detail page specifically

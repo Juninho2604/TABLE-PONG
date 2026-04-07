@@ -19,6 +19,8 @@ type AuditAction =
   | 'LOGIN'
   | 'LOGOUT'
   | 'TRANSFER'     // Requisición/transferencia
+  | 'DISPATCH'     // Despacho de requisición
+  | 'RECEIVE'      // Recepción de mercancía
   | 'PAYMENT'      // Registro de pago
   | 'ADJUSTMENT';  // Ajuste de inventario
 

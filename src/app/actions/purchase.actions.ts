@@ -14,6 +14,7 @@
 import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit-log';
 
 // ============================================================================
 // TIPOS
@@ -311,6 +312,18 @@ export async function createPurchaseOrderAction(
             }
         });
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+            userRole: session.role,
+            action: 'CREATE',
+            entityType: 'PurchaseOrder',
+            entityId: order.id,
+            description: `Creó orden de compra ${orderNumber} — ${input.items.length} items — $${subtotal.toFixed(2)}`,
+            module: 'PURCHASE',
+            metadata: { orderNumber, itemCount: input.items.length, subtotal },
+        });
+
         revalidatePath('/dashboard/compras');
         revalidatePath('/dashboard/inventario');
 
@@ -562,6 +575,18 @@ export async function receivePurchaseOrderItemsAction(
             });
         }
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+            userRole: session.role,
+            action: 'RECEIVE',
+            entityType: 'PurchaseOrder',
+            entityId: orderId,
+            description: `Recepción de mercancía — ${receivedCount} item(s) recibidos`,
+            module: 'PURCHASE',
+            metadata: { receivedCount, newStatus: updatedOrder?.status },
+        });
+
         revalidatePath('/dashboard/compras');
         revalidatePath('/dashboard/inventario');
 
@@ -601,6 +626,18 @@ export async function cancelPurchaseOrderAction(orderId: string): Promise<{ succ
         await prisma.purchaseOrder.update({
             where: { id: orderId },
             data: { status: 'CANCELLED' }
+        });
+
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+            userRole: session.role,
+            action: 'CANCEL',
+            entityType: 'PurchaseOrder',
+            entityId: orderId,
+            description: `Orden de compra ${order.orderNumber} cancelada`,
+            module: 'PURCHASE',
+            metadata: { orderNumber: order.orderNumber, previousStatus: order.status },
         });
 
         revalidatePath('/dashboard/compras');

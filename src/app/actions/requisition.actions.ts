@@ -2,6 +2,7 @@
 
 import prisma from '@/server/db';
 import { revalidatePath } from 'next/cache';
+import { logAudit, logAuditTx } from '@/lib/audit-log';
 
 // ============================================================================
 // TIPOS
@@ -119,6 +120,18 @@ export async function createRequisition(input: CreateRequisitionInput): Promise<
             }
         });
 
+        await logAudit({
+            userId: requesterId,
+            userName: 'Sistema',
+            userRole: 'N/A',
+            action: 'CREATE',
+            entityType: 'Requisition',
+            entityId: requisition.id,
+            description: `Requisición ${code} creada — ${input.items.length} items`,
+            module: 'REQUISITION',
+            metadata: { code, itemCount: input.items.length, targetAreaId: input.targetAreaId },
+        });
+
         revalidatePath('/dashboard/transferencias');
         return { success: true, message: `Solicitud ${code} creada exitosamente`, data: requisition };
 
@@ -182,6 +195,18 @@ export async function dispatchRequisition(input: {
                     }
                 });
             }
+        });
+
+        await logAudit({
+            userId: input.dispatchedById,
+            userName: 'Sistema',
+            userRole: 'N/A',
+            action: 'DISPATCH',
+            entityType: 'Requisition',
+            entityId: input.requisitionId,
+            description: `Requisición ${req.code} despachada — ${input.items.length} items`,
+            module: 'REQUISITION',
+            metadata: { code: req.code, itemCount: input.items.length },
         });
 
         revalidatePath('/dashboard/transferencias');
@@ -308,6 +333,18 @@ export async function approveRequisition(input: ApproveRequisitionInput): Promis
             }
         }, { timeout: 120000 });
 
+        await logAudit({
+            userId: processedById,
+            userName: 'Sistema',
+            userRole: 'N/A',
+            action: 'APPROVE',
+            entityType: 'Requisition',
+            entityId: input.requisitionId,
+            description: `Requisición ${req.code} aprobada y ejecutada — ${input.items.length} items transferidos`,
+            module: 'REQUISITION',
+            metadata: { code: req.code, itemCount: input.items.length },
+        });
+
         revalidatePath('/dashboard/inventario');
         return { success: true, message: 'Transferencia aprobada y ejecutada' };
 
@@ -338,6 +375,17 @@ export async function rejectRequisition(requisitionId: string, userId: string): 
                 processedById: processorId,
                 processedAt: new Date()
             }
+        });
+
+        await logAudit({
+            userId: processorId,
+            userName: 'Sistema',
+            userRole: 'N/A',
+            action: 'REJECT',
+            entityType: 'Requisition',
+            entityId: requisitionId,
+            description: `Requisición rechazada`,
+            module: 'REQUISITION',
         });
 
         revalidatePath('/dashboard/transferencias');

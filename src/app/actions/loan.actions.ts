@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
 import { UNIT_INFO, convertUnit, UnitOfMeasureType } from '@/lib/constants/units';
+import { logAuditTx } from '@/lib/audit-log';
 
 // Helper to safely map database units to our system units
 function normalizeUnit(unit: string): UnitOfMeasureType {
@@ -161,6 +162,18 @@ export async function createLoanAction(input: CreateLoanInput) {
                 }
             }
 
+            await logAuditTx(tx, {
+                userId: input.userId,
+                userName: 'Sistema',
+                userRole: 'N/A',
+                action: 'CREATE',
+                entityType: 'InventoryLoan',
+                entityId: loan.id,
+                description: `Préstamo a ${input.loaneeName} — ${input.quantity} ${input.unit} de ${item.name}`,
+                module: 'LOAN',
+                metadata: { loaneeName: input.loaneeName, quantity: input.quantity, unit: input.unit, type: input.type },
+            });
+
             return loan;
         });
 
@@ -245,6 +258,18 @@ export async function resolveLoanAction(input: ResolveLoanInput) {
 
             // If PAYMENT, we assume money is handled elsewhere (or we log a financial transaction later)
             // No stock coming back.
+
+            await logAuditTx(tx, {
+                userId: input.userId,
+                userName: 'Sistema',
+                userRole: 'N/A',
+                action: 'COMPLETE',
+                entityType: 'InventoryLoan',
+                entityId: input.loanId,
+                description: `Préstamo completado (${input.resolutionType}) — ${loan.loaneeName}`,
+                module: 'LOAN',
+                metadata: { loaneeName: loan.loaneeName, resolutionType: input.resolutionType },
+            });
 
             return loan;
         });

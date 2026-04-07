@@ -3,6 +3,7 @@
 import { prisma } from '@/server/db'; // Correct path from previous files
 import { getSession, hasPermission, PERMISSIONS } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
+import { logAudit } from '@/lib/audit-log';
 
 /**
  * Obtiene la lista de todos los usuarios
@@ -55,9 +56,23 @@ export async function updateUserRole(userId: string, newRole: string) {
     // o al menos advertir (aquí lo permitimos pero el frontend podría validarlo)
 
     try {
+        const userBefore = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, firstName: true, lastName: true } });
+
         await prisma.user.update({
             where: { id: userId },
             data: { role: newRole as any }, // Cast as any or import UserRole enum if available
+        });
+
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+            userRole: session.role,
+            action: 'UPDATE',
+            entityType: 'User',
+            entityId: userId,
+            description: `Cambió rol de ${userBefore?.firstName} ${userBefore?.lastName}: ${userBefore?.role} → ${newRole}`,
+            module: 'USER',
+            changes: { role: { from: userBefore?.role, to: newRole } },
         });
 
         revalidatePath('/dashboard/config/roles');
@@ -83,9 +98,23 @@ export async function toggleUserStatus(userId: string, isActive: boolean) {
     }
 
     try {
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+
         await prisma.user.update({
             where: { id: userId },
             data: { isActive },
+        });
+
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+            userRole: session.role,
+            action: isActive ? 'UPDATE' : 'DELETE',
+            entityType: 'User',
+            entityId: userId,
+            description: `${isActive ? 'Activó' : 'Desactivó'} usuario: ${user?.firstName} ${user?.lastName}`,
+            module: 'USER',
+            changes: { isActive: { from: !isActive, to: isActive } },
         });
 
         revalidatePath('/dashboard/config/roles');
@@ -148,6 +177,18 @@ export async function createUserAction(data: {
                 passwordHash: password,
                 pin: pin?.trim() || null,
             },
+        });
+
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+            userRole: session.role,
+            action: 'CREATE',
+            entityType: 'User',
+            entityId: emailTrim,
+            description: `Creó usuario: ${firstName} ${lastName} (${emailTrim}) — Rol: ${role}`,
+            module: 'USER',
+            metadata: { email: emailTrim, role },
         });
 
         revalidatePath('/dashboard/usuarios');

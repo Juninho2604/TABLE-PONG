@@ -9,6 +9,7 @@
 import { revalidatePath } from 'next/cache';
 import { prisma } from '@/server/db';
 import { getSession } from '@/lib/auth';
+import { logAudit, logAuditTx } from '@/lib/audit-log';
 
 // ============================================================================
 // TIPOS
@@ -305,6 +306,25 @@ export async function quickProductionAction(
                     notes: `Orden: ${orderNumber}`,
                     createdById: userId,
                 }
+            });
+
+            // AuditLog dentro de la transacción
+            await logAuditTx(tx, {
+                userId,
+                userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+                userRole: session.role,
+                action: 'CREATE',
+                entityType: 'ProductionOrder',
+                entityId: productionOrder.id,
+                description: `Producción rápida completada: ${recipe.name} — ${orderNumber} (${formData.actualQuantity} ${recipe.outputUnit})`,
+                module: 'PRODUCTION',
+                metadata: {
+                    orderNumber,
+                    recipeName: recipe.name,
+                    quantity: formData.actualQuantity,
+                    unit: recipe.outputUnit,
+                    ingredientsCount: ingredientsToConsume.length,
+                },
             });
 
             return productionOrder;
@@ -620,6 +640,26 @@ export async function manualProductionAction(
                 }
             });
 
+            // AuditLog dentro de la transacción
+            await logAuditTx(tx, {
+                userId,
+                userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+                userRole: session.role,
+                action: 'CREATE',
+                entityType: 'ProductionOrder',
+                entityId: productionOrder.id,
+                description: `Producción manual completada: ${outputItem.name} — ${orderNumber} (${formData.outputQuantity} ${formData.outputUnit})`,
+                module: 'PRODUCTION',
+                metadata: {
+                    orderNumber,
+                    outputItemName: outputItem.name,
+                    quantity: formData.outputQuantity,
+                    unit: formData.outputUnit,
+                    ingredientsCount: ingredientsToConsume.length,
+                    isManual: true,
+                },
+            });
+
             return productionOrder;
         });
 
@@ -703,6 +743,17 @@ export async function deleteProductionOrderAction(
                 status: 'CANCELLED',
                 notes: 'Cancelado por el usuario',
             }
+        });
+
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+            userRole: session.role,
+            action: 'CANCEL',
+            entityType: 'ProductionOrder',
+            entityId: orderId,
+            description: `Orden de producción cancelada`,
+            module: 'PRODUCTION',
         });
 
         revalidatePath('/dashboard/produccion');
