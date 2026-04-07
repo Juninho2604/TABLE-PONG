@@ -10,6 +10,7 @@ import { ROLE_INFO } from '@/lib/constants/roles';
 import { UserRole } from '@/types';
 import { logoutAction } from '@/app/actions/auth.actions';
 import { ChangePasswordDialog } from '@/components/users/ChangePasswordDialog';
+import { getTenantName } from '@/config/branding';
 
 interface NavItem {
     label: string;
@@ -104,6 +105,25 @@ const navigation: NavItem[] = [
         label: 'Aliados Comerciales',
         href: '/dashboard/intercompany',
         icon: '🤝',
+        roles: ['OWNER', 'ADMIN_MANAGER', 'AUDITOR'],
+    },
+    // ── Finanzas ──
+    {
+        label: 'Gastos',
+        href: '/dashboard/gastos',
+        icon: '💸',
+        roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'],
+    },
+    {
+        label: 'Cuentas por Pagar',
+        href: '/dashboard/cuentas-pagar',
+        icon: '📄',
+        roles: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'],
+    },
+    {
+        label: 'Finanzas P&L',
+        href: '/dashboard/finanzas',
+        icon: '📊',
         roles: ['OWNER', 'ADMIN_MANAGER', 'AUDITOR'],
     },
 ];
@@ -266,8 +286,8 @@ export function Sidebar({ initialUser, allowedModules }: SidebarProps) {
                         <span className="text-xl">🏓</span>
                     </div>
                     <div>
-                        <h1 className="font-bold text-gray-900 dark:text-white">Table Pong</h1>
-                        <p className="text-xs text-gray-500">ERP Sport Bar</p>
+                        <h1 className="font-bold text-gray-900 dark:text-white">{getTenantName()}</h1>
+                        <p className="text-xs text-gray-500">ERP</p>
                     </div>
                     {/* Close button for mobile */}
                     <button

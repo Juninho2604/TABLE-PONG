@@ -11,6 +11,7 @@ import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
 import { registerSale } from '@/server/services/inventory.service';
 import { getCaracasDateStamp, getCaracasDayRange } from '@/lib/datetime';
+import { logAudit } from '@/lib/audit-log';
 
 // ============================================================================
 // TIPOS
@@ -744,6 +745,17 @@ export async function createSalesOrderAction(
             // No fallamos la venta, solo logueamos
         }
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: 'CREATE',
+            entityType: 'SalesOrder',
+            entityId: newOrder.id,
+            description: `Creó orden ${newOrder.orderNumber} — $${total.toFixed(2)}`,
+            module: 'POS',
+            metadata: { orderType: data.orderType, total, paymentMethod: finalPaymentMethod, items: data.items.length },
+        });
         revalidatePath('/dashboard/pos/restaurante');
         revalidatePath('/dashboard/pos/delivery');
         revalidatePath('/dashboard/pos/sportbar');
@@ -875,6 +887,17 @@ export async function openTabAction(data: OpenTabInput): Promise<ActionResult> {
         }
         if (!tab) throw new Error('No se pudo generar un código único para la cuenta');
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: 'CREATE',
+            entityType: 'OpenTab',
+            entityId: tab.id,
+            description: `Abrió cuenta ${tab.tabCode} — ${tab.customerLabel || table.name}`,
+            module: 'POS',
+            metadata: { tabCode: tab.tabCode, tableId: data.tableOrStationId, guestCount: data.guestCount },
+        });
         revalidatePath('/dashboard/pos/sportbar');
 
         return {
@@ -1352,6 +1375,19 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
             return tab;
         });
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: newBalance === 0 ? 'COMPLETE' : 'PAYMENT',
+            entityType: 'OpenTab',
+            entityId: openTab.id,
+            description: newBalance === 0
+                ? `Cerró y cobró cuenta ${openTab.tabCode} — total $${openTab.runningTotal.toFixed(2)}`
+                : `Pago parcial en cuenta ${openTab.tabCode} — saldo restante $${newBalance.toFixed(2)}`,
+            module: 'POS',
+            metadata: { tabCode: openTab.tabCode, paymentMethod: data.paymentMethod, amount: totalAmount, newBalance },
+        });
         revalidatePath('/dashboard/pos/sportbar');
         revalidatePath('/dashboard/sales');
 
@@ -1417,6 +1453,17 @@ export async function closeOpenTabAction(openTabId: string): Promise<ActionResul
             }
         });
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: 'COMPLETE',
+            entityType: 'OpenTab',
+            entityId: openTabId,
+            description: `Cerró cuenta abierta ${openTab.tabCode}`,
+            module: 'POS',
+            metadata: { tabCode: openTab.tabCode },
+        });
         revalidatePath('/dashboard/pos/sportbar');
 
         return {
@@ -1515,6 +1562,17 @@ export async function removeItemFromOpenTabAction({
             });
         });
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: 'DELETE',
+            entityType: 'SalesOrderItem',
+            entityId: itemId,
+            description: `Eliminó "${item.itemName}" x${item.quantity} ($${removedAmount.toFixed(2)}) de cuenta ${openTabId} — justif: ${justification.trim()}`,
+            module: 'POS',
+            metadata: { openTabId, orderId, itemName: item.itemName, quantity: item.quantity, removedAmount, authorizerName, justification },
+        });
         revalidatePath('/dashboard/pos/sportbar');
         return {
             success: true,

@@ -85,6 +85,11 @@ model User {
   openedCashSessions CashSession[] @relation("CashSessionOpener")
   closedCashSessions CashSession[] @relation("CashSessionCloser")
 
+  // Módulo Financiero
+  createdExpenses        Expense[]        @relation("ExpenseCreator")
+  createdAccountsPayable AccountPayable[] @relation("AccountPayableCreator")
+  createdAccountPayments AccountPayment[] @relation("AccountPaymentCreator")
+
   @@index([email])
   @@index([role])
 }
@@ -1252,6 +1257,8 @@ model Supplier {
   settlements           IntercompanySettlement[]
   // Items del menú marcados como intercompany de este aliado
   intercompanyMenuItems MenuItem[]               @relation("IntercompanyMenuItems")
+  // Módulo Financiero
+  accountsPayable       AccountPayable[]
 
   @@index([name])
   @@index([supplierType])
@@ -1316,6 +1323,9 @@ model PurchaseOrder {
 
   // Items de la orden
   items PurchaseOrderItem[]
+
+  // Módulo Financiero
+  accountsPayable AccountPayable[]
 
   // Soft Delete
   deletedAt   DateTime?
@@ -1888,4 +1898,145 @@ model CashSession {
 
   @@index([status])
   @@index([businessDate])
+}
+
+// ============================================================================
+// MÓDULO FINANCIERO
+// ============================================================================
+
+/// Categorías de gasto operativo (alquiler, servicios, nómina, etc.)
+model ExpenseCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique // ej: "Alquiler", "Servicios Públicos", "Nómina"
+  description String?
+  color       String?  // hex color para UI, ej: "#3B82F6"
+  icon        String?  // emoji, ej: "🏠"
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  deletedById String?
+
+  expenses    Expense[]
+
+  @@index([isActive])
+}
+
+/// Registro de gastos operativos (no de compras de inventario)
+model Expense {
+  id          String @id @default(cuid())
+
+  description String   // Ej: "Pago alquiler local enero 2026"
+  notes       String?
+
+  categoryId  String
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id])
+
+  amountUsd    Float    // Monto en USD (moneda base)
+  amountBs     Float?   // Monto en Bs (opcional)
+  exchangeRate Float?
+
+  paymentMethod String   // CASH_USD, CASH_BS, ZELLE, BANK_TRANSFER, MOBILE_PAY, CHECK, OTHER
+  paymentRef    String?
+  paidAt        DateTime
+
+  status      String    @default("CONFIRMED") // CONFIRMED, VOID
+  voidReason  String?
+  voidedAt    DateTime?
+  voidedById  String?
+
+  periodMonth Int  // 1-12
+  periodYear  Int
+
+  createdById String
+  createdBy   User     @relation("ExpenseCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  deletedById String?
+
+  @@index([categoryId])
+  @@index([paidAt])
+  @@index([periodYear, periodMonth])
+  @@index([status])
+  @@index([createdById])
+}
+
+/// Cuentas por pagar — facturas/deudas pendientes con proveedores u otros acreedores
+model AccountPayable {
+  id            String @id @default(cuid())
+
+  description   String   // Ej: "Factura vegetales 15/03/2026"
+  invoiceNumber String?
+  invoiceUrl    String?
+
+  supplierId    String?
+  supplier      Supplier? @relation(fields: [supplierId], references: [id])
+  creditorName  String?
+
+  totalAmountUsd Float
+  paidAmountUsd  Float    @default(0)
+  remainingUsd   Float
+
+  invoiceDate  DateTime
+  dueDate      DateTime?
+  fullyPaidAt  DateTime?
+
+  status        String   @default("PENDING") // PENDING, PARTIAL, PAID, OVERDUE, DISPUTED, VOID
+
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+
+  createdById String
+  createdBy   User     @relation("AccountPayableCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  deletedById String?
+
+  payments AccountPayment[]
+
+  @@index([status])
+  @@index([dueDate])
+  @@index([supplierId])
+  @@index([purchaseOrderId])
+  @@index([createdById])
+}
+
+/// Pagos individuales aplicados a una cuenta por pagar
+model AccountPayment {
+  id               String         @id @default(cuid())
+  accountPayableId String
+  accountPayable   AccountPayable @relation(fields: [accountPayableId], references: [id], onDelete: Cascade)
+
+  amountUsd     Float
+  amountBs      Float?
+  exchangeRate  Float?
+  paymentMethod String   // CASH_USD, CASH_BS, ZELLE, BANK_TRANSFER, MOBILE_PAY, CHECK
+  paymentRef    String?
+  paidAt        DateTime
+
+  notes       String?
+
+  createdById String
+  createdBy   User     @relation("AccountPaymentCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([accountPayableId])
+  @@index([paidAt])
+}
+
+// ============================================================================
+// CONFIGURACIÓN DEL SISTEMA
+// Usada para guardar config de instalación sin depender de variables de entorno.
+// Clave: 'enabled_modules' → valor: JSON array de ids de módulos activos.
+// ============================================================================
+
+model SystemConfig {
+  key       String   @id          // 'enabled_modules', 'business_name', etc.
+  value     String               // JSON string o texto plano
+  updatedAt DateTime @updatedAt
+  updatedBy String?              // userId quien lo cambió
 }

@@ -3,6 +3,7 @@
 import { prisma } from '@/server/db';
 import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit-log';
 
 export async function createQuickItem(data: {
     name: string;
@@ -43,6 +44,18 @@ export async function createQuickItem(data: {
                 }
             });
         }
+
+        await logAudit({
+            userId: data.userId,
+            userName: 'Sistema',
+            userRole: 'N/A',
+            action: 'CREATE',
+            entityType: 'InventoryItem',
+            entityId: item.id,
+            description: `Creó item de inventario: ${data.name} (${sku})`,
+            module: 'INVENTORY',
+            metadata: { sku, type: data.type, unit: data.unit },
+        });
 
         revalidatePath('/dashboard/inventario/entrada');
         revalidatePath('/dashboard/transferencias');
@@ -114,6 +127,18 @@ export async function updateInventoryItemAction(id: string, data: any) {
                 reorderPoint: data.reorderPoint
             }
         });
+
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+            userRole: session.role,
+            action: 'UPDATE',
+            entityType: 'InventoryItem',
+            entityId: id,
+            description: `Actualizó item de inventario: ${data.name || id}`,
+            module: 'INVENTORY',
+        });
+
         revalidatePath('/dashboard/inventario');
         return { success: true, message: 'Ítem actualizado correctamente' };
     } catch (error) {
@@ -140,6 +165,17 @@ export async function deleteInventoryItemAction(id: string) {
         await prisma.inventoryItem.update({
             where: { id },
             data: { isActive: false }
+        });
+
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName || ''} ${session.lastName || ''}`.trim(),
+            userRole: session.role,
+            action: 'DELETE',
+            entityType: 'InventoryItem',
+            entityId: id,
+            description: `Eliminó item de inventario (soft delete)`,
+            module: 'INVENTORY',
         });
 
         revalidatePath('/dashboard/inventario');

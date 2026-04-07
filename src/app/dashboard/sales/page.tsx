@@ -5,6 +5,7 @@ import { getSalesHistoryAction, getDailyZReportAction, getOrderForReceiptAction,
 import { voidSalesOrderAction } from '@/app/actions/sales-entry.actions';
 import { printReceipt } from '@/lib/print-command';
 import { useAuthStore } from '@/stores/auth.store';
+import { getTenantName } from '@/config/branding';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import * as XLSX from 'xlsx';
 
@@ -598,7 +599,7 @@ export default function SalesHistoryPage() {
 
                         <div className="text-center mb-6 border-b-2 border-dashed border-black pb-4">
                             <h2 className="text-2xl font-black">REPORTE Z</h2>
-                            <p className="text-sm">TABLE PONG</p>
+                            <p className="text-sm">{getTenantName().toUpperCase()}</p>
                             <p className="text-sm">{new Date().toLocaleString()}</p>
                             <p className="text-sm mt-1 font-bold">CIERRE DE CAJA DIARIO</p>
                         </div>

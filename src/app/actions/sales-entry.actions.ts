@@ -12,6 +12,7 @@ import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
 import { registerSale, registerAdjustment } from '@/server/services/inventory.service';
+import { logAudit } from '@/lib/audit-log';
 
 // ============================================================================
 // TIPOS
@@ -228,6 +229,17 @@ export async function createSalesEntryAction(
             // No fallamos la venta, la registramos igual.
         }
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: 'CREATE',
+            entityType: 'SalesOrder',
+            entityId: result.id,
+            description: `Registró venta manual ${result.orderNumber} — $${total.toFixed(2)}`,
+            module: 'POS',
+            metadata: { orderType: input.orderType, total, items: input.items.length },
+        });
         revalidatePath('/dashboard/ventas');
         revalidatePath('/dashboard/pos');
         revalidatePath('/dashboard');
@@ -433,6 +445,17 @@ export async function voidSalesOrderAction(
             }
         });
 
+        await logAudit({
+            userId: session.id,
+            userName: `${session.firstName} ${session.lastName}`,
+            userRole: session.role,
+            action: 'VOID',
+            entityType: 'SalesOrder',
+            entityId: orderId,
+            description: `Anuló venta ${order.orderNumber} — motivo: ${reason.trim()}`,
+            module: 'POS',
+            metadata: { orderNumber: order.orderNumber, reason, authorizerId },
+        });
         revalidatePath('/dashboard/ventas');
         revalidatePath('/dashboard/ventas/cargar');
         revalidatePath('/dashboard/sales');

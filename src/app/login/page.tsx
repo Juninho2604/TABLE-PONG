@@ -1,6 +1,7 @@
 import LoginForm from './login-form-client';
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { getTenantFullName } from '@/config/branding';
 
 export default async function LoginPage() {
     // Si ya existe sesión, redirigir al dashboard
@@ -20,7 +21,7 @@ export default async function LoginPage() {
                         Iniciar Sesión
                     </h2>
                     <p className="mt-2 text-center text-sm font-medium text-gray-600 dark:text-gray-400">
-                        Table Pong ERP
+                        {getTenantFullName()} ERP
                     </p>
                 </div>
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { getTenantName } from '@/config/branding';
 import {
     createItemFromStudioAction,
     createProductFamilyAction,
@@ -208,7 +209,7 @@ export default function SkuStudioView({
             <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">SKU Studio</h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Creación guiada de productos con familias y plantillas. Solo dueño o admin Table Pong.
+                    Creación guiada de productos con familias y plantillas. Solo dueño o admin {getTenantName()}.
                     Pensado para restaurantes con alta rotación de carta.
                 </p>
             </div>

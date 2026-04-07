@@ -2,9 +2,10 @@ import { getAreasForConfig } from '@/app/actions/area.actions';
 import AlmacenesView from './almacenes-view';
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import { getTenantFullName } from '@/config/branding';
 
 export const metadata = {
-    title: 'Almacenes | Table Pong ERP',
+    title: `Almacenes | ${getTenantFullName()} ERP`,
     description: 'Gestión de almacenes y áreas',
 };
 

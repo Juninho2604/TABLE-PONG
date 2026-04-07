@@ -5,6 +5,8 @@
  * Tipografía estilo sistema de facturación venezolano
  */
 
+import { getReceiptHeader, getReceiptFooter } from '@/config/branding';
+
 interface ReceiptItem {
     name: string;
     quantity: number;
@@ -231,10 +233,7 @@ export function printReceipt(data: ReceiptData) {
 
 <!-- CABECERA -->
 <div class="header">
-  <div class="logo">TABLE PONG</div>
-  <div class="subtitle">- SPORT BAR -</div>
-  <div class="company">TABLE PONG, C.A.</div>
-  <div class="rif">RIF: J-XXXXXXXXX-X</div>
+  ${getReceiptHeader().map((line, i) => i === 0 ? `<div class="logo">${line}</div>` : i === 1 ? `<div class="subtitle">${line}</div>` : `<div class="company">${line}</div>`).join('\n  ')}
   <div class="doc-type">RECIBO DE PAGO</div>
 </div>
 
@@ -291,8 +290,7 @@ export function printReceipt(data: ReceiptData) {
 
 <!-- PIE -->
 <div class="footer">
-  <div class="gracias">¡GRACIAS POR SU VISITA!</div>
-  <div>Vuelva pronto · Table Pong</div>
+  ${getReceiptFooter().map(line => `<div>${line}</div>`).join('\n  ')}
   <div style="margin-top:6px; font-size:8px;">Este recibo no es una factura fiscal</div>
 </div>
 

@@ -24,6 +24,7 @@ import { getPOSConfig } from "@/lib/pos-settings";
 import { PriceDisplay } from "@/components/pos/PriceDisplay";
 import { CurrencyCalculator } from "@/components/pos/CurrencyCalculator";
 import { CashierShiftModal } from "@/components/pos/CashierShiftModal";
+import { getTenantName } from "@/config/branding";
 
 // ============================================================================
 // TIPOS
@@ -698,7 +699,7 @@ export default function POSSportBarPage() {
         @media print { button { display: none; } }
       </style></head><body>
       <div class="header">
-        <div style="font-size:16px;font-weight:bold">TABLE PONG</div>
+        <div style="font-size:16px;font-weight:bold">${getTenantName().toUpperCase()}</div>
         <div>Mesa: ${activeTab.tabCode}</div>
         <div>${activeTab.customerLabel || ''}</div>
         <div>${new Date().toLocaleString('es-VE')}</div>
@@ -2320,7 +2321,7 @@ export default function POSSportBarPage() {
                 const fecha = new Date(d.date).toLocaleString("es-VE", { dateStyle: "short", timeStyle: "short" });
                 const items = d.items.map(i => `• ${i.quantity}× ${i.name} — $${i.total.toFixed(2)}`).join("\n");
                 const msg = [
-                  `🎁 *CORTESÍA — Table Pong*`,
+                  `🎁 *CORTESÍA — ${getTenantName()}*`,
                   `📅 ${fecha}`,
                   `🪑 Cuenta: ${d.tabCode}${d.customerLabel ? ` · ${d.customerLabel}` : ""}`,
                   ``,
@@ -2361,7 +2362,7 @@ export default function POSSportBarPage() {
               onClick={() => {
                 const d = preBillWAAlert;
                 const msg = [
-                  `⚠️ *ALERTA ANTI-FRAUDE — Table Pong POS*`,
+                  `⚠️ *ALERTA ANTI-FRAUDE — ${getTenantName()} POS*`,
                   `📅 ${new Date().toLocaleString('es-VE', { dateStyle: 'short', timeStyle: 'short' })}`,
                   ``,
                   `Se imprimió el *Estado de Cuenta ${d.count} veces* antes de cobrar.`,

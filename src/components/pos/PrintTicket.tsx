@@ -2,6 +2,7 @@
 
 import { forwardRef } from 'react';
 import { usdToBs, formatBs } from '@/lib/currency';
+import { getReceiptHeader, getReceiptFooter } from '@/config/branding';
 
 interface TicketItem {
     name: string;
@@ -68,10 +69,9 @@ const PrintTicket = forwardRef<HTMLDivElement, PrintTicketProps>(({ data, exchan
         >
             {/* Header */}
             <div className="text-center mb-4">
-                <div className="text-3xl font-bold italic font-serif mb-1">TABLE PONG</div>
-                <div className="text-[10px] mb-2">- Sport Bar -</div>
-                <div className="font-bold text-[12px]">TABLE PONG, C.A.</div>
-                <div className="font-bold text-[12px]">RIF</div>
+                {getReceiptHeader().map((line, i) => (
+                    <div key={i} className={i === 0 ? 'text-3xl font-bold italic font-serif mb-1' : i === 1 ? 'text-[10px] mb-2' : 'font-bold text-[12px]'}>{line}</div>
+                ))}
                 <div className="font-bold text-[12px] mt-2">RECIBO DE PAGO</div>
             </div>
 
