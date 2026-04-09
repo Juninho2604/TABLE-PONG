@@ -560,7 +560,7 @@ export default function POSMeseroPage() {
               {layout?.serviceZones.map((z) => (
                 <button
                   key={z.id}
-                  onClick={() => { setSelectedZoneId(z.id); setSelectedTableId(""); }}
+                  onClick={() => { setSelectedZoneId(z.id); setSelectedTableId(""); setCart([]); }}
                   className={`flex-1 min-w-0 py-3 rounded-xl text-xs font-black transition-all active:scale-95 ${selectedZoneId === z.id ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20" : "bg-card border border-border text-foreground/60 hover:border-emerald-500/50"}`}
                 >
                   {z.zoneType === "BAR" ? "🍺" : "🌿"} {z.name}
@@ -587,6 +587,7 @@ export default function POSMeseroPage() {
                     onClick={() => {
                       setSelectedTableId(table.id);
                       setSelectedSubTabId(null);
+                      setCart([]); // Limpiar carrito al cambiar de mesa
                       // Solo ir al menú si la mesa ya tiene una cuenta abierta.
                       // Si no tiene cuenta, quedarse en "tables" para mostrar el botón "Abrir cuenta".
                       if (window.innerWidth < 1024 && table.openTabs.length > 0) setMobileTab("menu");
