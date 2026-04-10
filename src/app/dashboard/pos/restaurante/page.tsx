@@ -344,13 +344,15 @@ export default function POSSportBarPage() {
     return () => { if (lastPickupTimerRef.current) clearTimeout(lastPickupTimerRef.current); };
   }, [lastPickupOrder]);
 
-  // Reset divisas lock, pre-bill count y subcuenta al cambiar de mesa
+  // Reset de estado local al cambiar de mesa
   useEffect(() => {
     setIsDivisasLocked(false);
     setLocalPreBillCount(0);
     setPreBillWAAlert(null);
     setSelectedSubTabId(null);
     setShowSplitModal(false);
+    setCart([]);          // Limpiar carrito al cambiar de mesa
+    setProductSearch(""); // Limpiar búsqueda al cambiar de mesa
   }, [selectedTableId]);
 
   useEffect(() => {
@@ -1197,6 +1199,8 @@ export default function POSSportBarPage() {
                       setIsPickupMode(false);
                       setSelectedZoneId(z.id);
                       setSelectedTableId("");
+                      setCart([]);
+                      setProductSearch("");
                       setUseMultiPayment(false);
                       setPaymentLines([]);
                     }}
@@ -1233,7 +1237,7 @@ export default function POSSportBarPage() {
                 return (
                   <button
                     key={table.id}
-                    onClick={() => setSelectedTableId(table.id)}
+                    onClick={() => { setSelectedTableId(table.id); setCart([]); setProductSearch(""); }}
                     className={`relative aspect-square rounded-2xl flex flex-col items-center justify-center transition-all duration-200 active:scale-90 border-2 ${
                       isSelected
                         ? "border-primary bg-primary/10 shadow-lg shadow-primary/10 z-10"
