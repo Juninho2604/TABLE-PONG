@@ -335,6 +335,15 @@ export default function POSSportBarPage() {
     loadData();
   }, []);
 
+  // Auto-refresh del layout cada 45s para mantener el estado sincronizado entre
+  // múltiples dispositivos (cajero + mesero + otro equipo).
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!isProcessing) loadData();
+    }, 45_000);
+    return () => clearInterval(interval);
+  }, [isProcessing]);
+
   // Auto-clear lastPickupOrder después de 60s para no "pegar" entre clientes
   useEffect(() => {
     if (lastPickupOrder) {
@@ -599,6 +608,9 @@ export default function POSSportBarPage() {
     try {
       const result = await addItemsToOpenTabAction({ openTabId: activeTab.id, items: cart });
       if (!result.success) {
+        // Refrescar el layout antes de mostrar el error: si otro usuario cerró/cobró
+        // la cuenta en otro equipo, el frontend queda desfasado y el error persiste.
+        await loadData();
         alert(result.message);
         return;
       }

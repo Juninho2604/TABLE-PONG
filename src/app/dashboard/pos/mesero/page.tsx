@@ -221,6 +221,14 @@ export default function POSMeseroPage() {
 
   useEffect(() => { loadData(); }, []);
 
+  // Auto-refresh del layout cada 45s para sincronizar con otros dispositivos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!isProcessing) loadData();
+    }, 45_000);
+    return () => clearInterval(interval);
+  }, [isProcessing]);
+
   useEffect(() => {
     if (!selectedCategory || !categories.length) return;
     const cat = categories.find((c) => c.id === selectedCategory);
