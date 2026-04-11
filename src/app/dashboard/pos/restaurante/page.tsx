@@ -331,15 +331,28 @@ export default function POSSportBarPage() {
     }
   };
 
+  // Refresh silencioso: solo actualiza el layout de mesas/cuentas, sin mostrar loading.
+  // Usado por auto-refresh periódico y por recovery después de errores de cuenta.
+  const refreshLayout = async () => {
+    try {
+      const layoutResult = await getRestaurantLayoutAction();
+      if (layoutResult.success && layoutResult.data) {
+        const nextLayout = layoutResult.data as SportBarLayout;
+        setLayout(nextLayout);
+      }
+    } catch {
+      // silencioso — no interrumpir al usuario si falla
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
 
-  // Auto-refresh del layout cada 45s para mantener el estado sincronizado entre
-  // múltiples dispositivos (cajero + mesero + otro equipo).
+  // Auto-refresh silencioso del layout cada 45s para sincronizar entre dispositivos.
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!isProcessing) loadData();
+      if (!isProcessing) refreshLayout();
     }, 45_000);
     return () => clearInterval(interval);
   }, [isProcessing]);
@@ -608,9 +621,9 @@ export default function POSSportBarPage() {
     try {
       const result = await addItemsToOpenTabAction({ openTabId: activeTab.id, items: cart });
       if (!result.success) {
-        // Refrescar el layout antes de mostrar el error: si otro usuario cerró/cobró
-        // la cuenta en otro equipo, el frontend queda desfasado y el error persiste.
-        await loadData();
+        // Refresh silencioso antes del alert: si otro usuario cerró/cobró la cuenta
+        // en otro equipo, el frontend queda desfasado y el error persiste en loop.
+        await refreshLayout();
         alert(result.message);
         return;
       }

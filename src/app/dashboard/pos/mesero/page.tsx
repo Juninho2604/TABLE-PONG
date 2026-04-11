@@ -221,10 +221,20 @@ export default function POSMeseroPage() {
 
   useEffect(() => { loadData(); }, []);
 
-  // Auto-refresh del layout cada 45s para sincronizar con otros dispositivos
+  // Refresh silencioso: solo actualiza el layout de mesas/cuentas, sin loading.
+  const refreshLayout = async () => {
+    try {
+      const layoutResult = await getRestaurantLayoutAction();
+      if (layoutResult.success && layoutResult.data) {
+        setLayout(layoutResult.data as RestaurantLayout);
+      }
+    } catch { /* silencioso */ }
+  };
+
+  // Auto-refresh silencioso del layout cada 45s para sincronizar entre dispositivos.
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!isProcessing) loadData();
+      if (!isProcessing) refreshLayout();
     }, 45_000);
     return () => clearInterval(interval);
   }, [isProcessing]);
