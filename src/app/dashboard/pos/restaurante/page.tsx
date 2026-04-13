@@ -712,18 +712,18 @@ export default function POSSportBarPage() {
       });
     }
 
-    // 3. Calcular totales con/sin 10% de servicio
+    // 3. Calcular totales — la pre-cuenta siempre muestra el 10% de servicio
+    //    (es informativa para el cliente; el cobro real se controla con el checkbox al pagar)
     const base = activeTab.balanceDue;
-    const svcRate = serviceFeeIncluded ? 0.10 : 0;
 
     // Pago normal
-    const servicioNormal = base * svcRate;
+    const servicioNormal = base * 0.10;
     const totalNormal = base + servicioNormal;
 
-    // Pago en divisas: -33.33% sobre la base, luego +10% servicio si aplica
+    // Pago en divisas: -33.33% sobre la base, luego +10% servicio
     const descuentoDivisas = base / 3;
     const baseDivisas = base - descuentoDivisas;         // base * (2/3)
-    const servicioDivisas = baseDivisas * svcRate;
+    const servicioDivisas = baseDivisas * 0.10;
     const totalDivisas = baseDivisas + servicioDivisas;
 
     // 4. Imprimir estado de cuenta en ventana emergente
@@ -731,12 +731,8 @@ export default function POSSportBarPage() {
       (o.items || []).map((i: any) => `<tr><td>${i.quantity}× ${i.itemName}</td><td style="text-align:right">$${(i.lineTotal || 0).toFixed(2)}</td></tr>`)
     ).join('');
 
-    const svcRowNormal = serviceFeeIncluded
-      ? `<tr><td>10% Servicio</td><td style="text-align:right">$${servicioNormal.toFixed(2)}</td></tr>`
-      : '';
-    const svcRowDivisas = serviceFeeIncluded
-      ? `<tr><td>10% Servicio</td><td style="text-align:right">$${servicioDivisas.toFixed(2)}</td></tr>`
-      : '';
+    const svcRowNormal = `<tr><td>10% Servicio</td><td style="text-align:right">$${servicioNormal.toFixed(2)}</td></tr>`;
+    const svcRowDivisas = `<tr><td>10% Servicio</td><td style="text-align:right">$${servicioDivisas.toFixed(2)}</td></tr>`;
 
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (!printWindow) return;
