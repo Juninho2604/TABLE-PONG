@@ -190,8 +190,10 @@ export default function POSSportBarPage() {
   const [openTabGuests, setOpenTabGuests] = useState(2);
   const [openTabWaiter, setOpenTabWaiter] = useState("");
 
-  // ── Cart ──────────────────────────────────────────────────────────────────
-  const [cart, setCart] = useState<CartItem[]>([]);
+  // ── Carritos independientes por mesa y por pickup ─────────────────────────
+  // Clave: tableId para mesas, '__pickup__' para venta directa, '' = sin contexto.
+  // Navegar entre mesas NO borra el carrito de ninguna de ellas.
+  const [carts, setCarts] = useState<Record<string, CartItem[]>>({});
 
   // ── Payment ───────────────────────────────────────────────────────────────
   const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CASH_BS" | "CARD" | "TRANSFER" | "MOBILE_PAY" | "ZELLE">("CASH");
@@ -373,8 +375,7 @@ export default function POSSportBarPage() {
     setPreBillWAAlert(null);
     setSelectedSubTabId(null);
     setShowSplitModal(false);
-    setCart([]);          // Limpiar carrito al cambiar de mesa
-    setProductSearch(""); // Limpiar búsqueda al cambiar de mesa
+    setProductSearch(""); // Limpiar búsqueda al cambiar de mesa (carrito se mantiene)
   }, [selectedTableId]);
 
   useEffect(() => {
@@ -434,6 +435,11 @@ export default function POSSportBarPage() {
     const q = productSearch.toLowerCase();
     return allMenuItems.filter((i) => i.name.toLowerCase().includes(q) || i.sku?.toLowerCase().includes(q));
   }, [menuItems, productSearch, allMenuItems]);
+
+  // Clave del carrito activo según el contexto
+  const cartKey = isPickupMode ? '__pickup__' : selectedTableId;
+  // Carrito del contexto actual (mesa seleccionada o pickup)
+  const cart = cartKey ? (carts[cartKey] ?? []) : [];
 
   const cartTotal = cart.reduce((s, i) => s + i.lineTotal, 0);
   const paidAmount = parseFloat(amountReceived) || 0;
@@ -596,18 +602,22 @@ export default function POSSportBarPage() {
     const exploded = currentModifiers.flatMap((m) =>
       Array(m.quantity).fill({ modifierId: m.id, name: m.name, priceAdjustment: m.priceAdjustment }),
     );
-    setCart((prev) => [
+    if (!cartKey) return;
+    setCarts(prev => ({
       ...prev,
-      {
-        menuItemId: selectedItemForModifier.id,
-        name: selectedItemForModifier.name,
-        quantity: itemQuantity,
-        unitPrice: selectedItemForModifier.price,
-        modifiers: exploded,
-        notes: itemNotes || undefined,
-        lineTotal,
-      },
-    ]);
+      [cartKey]: [
+        ...(prev[cartKey] ?? []),
+        {
+          menuItemId: selectedItemForModifier.id,
+          name: selectedItemForModifier.name,
+          quantity: itemQuantity,
+          unitPrice: selectedItemForModifier.price,
+          modifiers: exploded,
+          notes: itemNotes || undefined,
+          lineTotal,
+        },
+      ],
+    }));
     setShowModifierModal(false);
   };
 
@@ -641,7 +651,8 @@ export default function POSSportBarPage() {
           createdAt: new Date(),
         });
       }
-      setCart([]);
+      // Limpiar SOLO el carrito de esta mesa (otros carritos no se tocan)
+      if (cartKey) setCarts(prev => ({ ...prev, [cartKey]: [] }));
       await loadData();
     } finally {
       setIsProcessing(false);
@@ -701,15 +712,31 @@ export default function POSSportBarPage() {
       });
     }
 
-    // 3. Calcular ambos totales
-    const totalNormal = activeTab.balanceDue;
-    const totalDivisas = totalNormal * (2 / 3);
-    const descuentoDivisas = totalNormal / 3;
+    // 3. Calcular totales con/sin 10% de servicio
+    const base = activeTab.balanceDue;
+    const svcRate = serviceFeeIncluded ? 0.10 : 0;
+
+    // Pago normal
+    const servicioNormal = base * svcRate;
+    const totalNormal = base + servicioNormal;
+
+    // Pago en divisas: -33.33% sobre la base, luego +10% servicio si aplica
+    const descuentoDivisas = base / 3;
+    const baseDivisas = base - descuentoDivisas;         // base * (2/3)
+    const servicioDivisas = baseDivisas * svcRate;
+    const totalDivisas = baseDivisas + servicioDivisas;
 
     // 4. Imprimir estado de cuenta en ventana emergente
     const allItems = activeTab.orders.flatMap(o =>
       (o.items || []).map((i: any) => `<tr><td>${i.quantity}× ${i.itemName}</td><td style="text-align:right">$${(i.lineTotal || 0).toFixed(2)}</td></tr>`)
     ).join('');
+
+    const svcRowNormal = serviceFeeIncluded
+      ? `<tr><td>10% Servicio</td><td style="text-align:right">$${servicioNormal.toFixed(2)}</td></tr>`
+      : '';
+    const svcRowDivisas = serviceFeeIncluded
+      ? `<tr><td>10% Servicio</td><td style="text-align:right">$${servicioDivisas.toFixed(2)}</td></tr>`
+      : '';
 
     const printWindow = window.open('', '_blank', 'width=400,height=600');
     if (!printWindow) return;
@@ -733,12 +760,14 @@ export default function POSSportBarPage() {
       </div>
       <div class="no-factura">★ ESTADO DE CUENTA — NO VÁLIDO COMO FACTURA ★</div>
       <table>${allItems}
-        <tr class="total-row"><td>TOTAL</td><td style="text-align:right">$${totalNormal.toFixed(2)}</td></tr>
+        ${svcRowNormal}
+        <tr class="total-row"><td>TOTAL A COBRAR</td><td style="text-align:right">$${totalNormal.toFixed(2)}</td></tr>
       </table>
       <div class="divisas-box">
         <div style="font-weight:bold;margin-bottom:4px">Pago en Divisas (USD/Zelle):</div>
         <table>
           <tr><td>Descuento -33.33%</td><td style="text-align:right">-$${descuentoDivisas.toFixed(2)}</td></tr>
+          ${svcRowDivisas}
           <tr class="total-row"><td>TOTAL CON DIVISAS</td><td style="text-align:right;font-size:14px;font-weight:bold">$${totalDivisas.toFixed(2)}</td></tr>
         </table>
       </div>
@@ -1021,7 +1050,7 @@ export default function POSSportBarPage() {
           customerName: pickupCustomerName || "Cliente en Caja",
         });
 
-        setCart([]);
+        setCarts(prev => ({ ...prev, '__pickup__': [] }));
         setPaymentMethod("CASH");
         setAmountReceived("");
         clearDiscount();
@@ -1224,7 +1253,6 @@ export default function POSSportBarPage() {
                       setIsPickupMode(false);
                       setSelectedZoneId(z.id);
                       setSelectedTableId("");
-                      setCart([]);
                       setProductSearch("");
                       setUseMultiPayment(false);
                       setPaymentLines([]);
@@ -1262,7 +1290,7 @@ export default function POSSportBarPage() {
                 return (
                   <button
                     key={table.id}
-                    onClick={() => { setSelectedTableId(table.id); setCart([]); setProductSearch(""); }}
+                    onClick={() => { setSelectedTableId(table.id); setProductSearch(""); }}
                     className={`relative aspect-square rounded-2xl flex flex-col items-center justify-center transition-all duration-200 active:scale-90 border-2 ${
                       isSelected
                         ? "border-primary bg-primary/10 shadow-lg shadow-primary/10 z-10"
@@ -1452,7 +1480,7 @@ export default function POSSportBarPage() {
                     <div className="text-right flex flex-col justify-between items-end">
                       <div className="font-bold text-sm leading-none">${item.lineTotal.toFixed(2)}</div>
                       <button
-                        onClick={() => setCart((p) => p.filter((_, i) => i !== idx))}
+                        onClick={() => { if (cartKey) setCarts(prev => ({ ...prev, [cartKey]: (prev[cartKey] ?? []).filter((_, i) => i !== idx) })); }}
                         className="text-red-400/80 text-xs hover:text-red-300 leading-none"
                       >
                         Borrar
@@ -1744,7 +1772,7 @@ export default function POSSportBarPage() {
                           <div className="flex items-center gap-1.5 ml-2 shrink-0">
                             <span className="text-amber-400 font-bold">${item.lineTotal.toFixed(2)}</span>
                             <button
-                              onClick={() => setCart((p) => p.filter((_, i) => i !== idx))}
+                              onClick={() => { if (cartKey) setCarts(prev => ({ ...prev, [cartKey]: (prev[cartKey] ?? []).filter((_, i) => i !== idx) })); }}
                               className="text-red-400 hover:text-red-300 text-base leading-none"
                             >
                               ×
