@@ -848,11 +848,14 @@ export default function POSSportBarPage() {
       let result;
       if (useMultiPayment && paymentLines.filter(l => parseFloat(l.amount) > 0).length > 1) {
         const splits = paymentLines.filter(l => parseFloat(l.amount) > 0).map(l => ({ method: l.method as any, amount: parseFloat(l.amount) }));
-        // Descuento total = cortesía (si aplica) + divisas parciales de las líneas CASH/ZELLE
+        // En mixto, el descuento divisas viene SOLO de las líneas CASH/ZELLE (33% sobre esa porción).
+        // Si discountType era DIVISAS_33 pero no se limpió (edge case), ignorarlo para evitar
+        // doble descuento: el tab-level (balanceDue/3) + el parcial (CASH*0.5) causaban cobros incorrectos.
         const partialDivisasDiscount = splits
           .filter(s => DIVISAS_METHODS_SET.has(s.method))
           .reduce((sum, s) => sum + s.amount * 0.5, 0);
-        const totalDiscount = discountAmount + partialDivisasDiscount;
+        const nonDivisasTabDiscount = discountType === "DIVISAS_33" ? 0 : discountAmount;
+        const totalDiscount = nonDivisasTabDiscount + partialDivisasDiscount;
         result = await registerOpenTabPaymentAction({
           openTabId: activeTab.id,
           amount: 0,
@@ -1517,7 +1520,15 @@ export default function POSSportBarPage() {
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-bold text-muted-foreground uppercase">Forma de pago</span>
                     <button
-                      onClick={() => { setUseMultiPayment(p => !p); setPaymentLines([]); }}
+                      onClick={() => {
+                        const next = !useMultiPayment;
+                        if (next && discountType === "DIVISAS_33") {
+                          setDiscountType("NONE");
+                          setIsDivisasLocked(false);
+                        }
+                        setUseMultiPayment(next);
+                        setPaymentLines([]);
+                      }}
                       className={`text-[10px] px-2 py-0.5 rounded font-bold transition ${useMultiPayment ? "bg-blue-600 text-white" : "bg-card border border-border text-foreground/50 hover:bg-muted"}`}
                     >
                       {useMultiPayment ? "✓ Pago Mixto" : "+ Pago Mixto"}
@@ -1917,7 +1928,15 @@ export default function POSSportBarPage() {
                     <div className="flex items-center justify-between mb-1">
                       <p className="text-[10px] font-bold text-muted-foreground uppercase">2. Forma de pago</p>
                       <button
-                        onClick={() => { setUseMultiPayment(p => !p); setPaymentLines([]); }}
+                        onClick={() => {
+                          const next = !useMultiPayment;
+                          if (next && discountType === "DIVISAS_33") {
+                            setDiscountType("NONE");
+                            setIsDivisasLocked(false);
+                          }
+                          setUseMultiPayment(next);
+                          setPaymentLines([]);
+                        }}
                         className={`text-[10px] px-2 py-0.5 rounded font-bold transition ${useMultiPayment ? "bg-blue-600 text-white" : "bg-card border border-border text-foreground/50 hover:bg-muted"}`}
                       >
                         {useMultiPayment ? "✓ Pago Mixto" : "+ Pago Mixto"}
