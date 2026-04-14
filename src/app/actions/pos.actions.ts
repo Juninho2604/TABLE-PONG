@@ -94,6 +94,8 @@ export interface RegisterOpenTabPaymentInput {
     changeReturned?: number;
     /** Pagos mixtos: varios métodos en una sola operación. Si se envía, amount/paymentMethod se ignoran. */
     paymentSplits?: { method: POSPaymentMethod; amount: number }[];
+    /** FK al cliente habitual registrado (vinculado al momento del cobro para trazabilidad fiscal). */
+    customerId?: string;
 }
 
 export interface ActionResult {
@@ -1161,6 +1163,9 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
         const nextOrderPaymentStatus = newBalance === 0 ? 'PAID' : 'PARTIAL';
         const nextPaymentMethod = openTab.paymentSplits.length > 0 || splitsToCreate.length > 1 ? 'MULTIPLE' : (splitsToCreate[0]?.method || data.paymentMethod);
 
+        // Determinar customerId efectivo: el que viene en el pago tiene prioridad sobre el que ya tenía la cuenta
+        const effectiveCustomerId = data.customerId || openTab.customerId || undefined;
+
         const updatedTab = await prisma.$transaction(async (tx) => {
             await assertOpenTabVersionUpdate({
                 tx,
@@ -1174,6 +1179,8 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                     closedAt: newBalance === 0 ? new Date() : null,
                     totalServiceCharge: { increment: serviceChargeAmount },
                     totalTip: { increment: finalTipAmount },
+                    // Si el cliente se vincula al cobrar, registrarlo en la cuenta
+                    ...(data.customerId ? { customerId: data.customerId } : {}),
                 }
             });
 
@@ -1264,6 +1271,7 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                         serviceZoneId: openTab.serviceZoneId,
                         tableOrStationId: openTab.tableOrStationId,
                         openTabId: openTab.id,
+                        customerId: effectiveCustomerId || null,
                         createdById: session.id,
                         closedAt: new Date(),
                         items: allItems.length > 0 ? {
