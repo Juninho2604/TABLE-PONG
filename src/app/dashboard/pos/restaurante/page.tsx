@@ -971,14 +971,18 @@ export default function POSSportBarPage() {
     if (cart.length === 0) return;
     if (useMultiPayment) {
       const validLines = paymentLines.filter(l => parseFloat(l.amount) > 0);
-      if (validLines.length < 2 || multiTotal < pickupTotal - 0.001) {
+      // Validar contra mixedPickupBase: el monto real a cobrar tras descuento divisas parcial
+      if (validLines.length < 2 || multiTotal < mixedPickupBase - 0.001) {
         alert("Pago mixto: asigne al menos 2 métodos y cubra el total");
         return;
       }
     }
     setIsProcessing(true);
     try {
-      const finalTotal = pickupTotal;
+      // El total efectivo siempre usa mixedPickupBase:
+      // - Sin mixto: mixedPickupBase = pickupTotal (divisas/cortesía ya aplicado)
+      // - Con mixto: mixedPickupBase = pickupTotal - descuento CASH/ZELLE parcial
+      const finalTotal = mixedPickupBase;
 
       const pickupSplits = useMultiPayment ? paymentLines.filter(l => parseFloat(l.amount) > 0).map(l => ({ method: l.method as any, amount: parseFloat(l.amount) })) : undefined;
       // Descuento divisas parciales: solo aplica si hay líneas CASH/ZELLE en pago mixto
@@ -1019,7 +1023,8 @@ export default function POSSportBarPage() {
         });
         }
         const subtotal = cart.reduce((s, i) => s + i.lineTotal, 0);
-        const discount = pickupDiscount;
+        // Descuento total = descuento tab-level (cortesía/divisas full) + divisas parciales mixto
+        const discount = pickupDiscount + pickupPartialDivisasDiscount;
         const discountReason = discount > 0 ? "Descuento aplicado" : undefined;
         const pickupReceiptItems = cart.map((i) => ({
           name: i.name,
@@ -1634,7 +1639,7 @@ export default function POSSportBarPage() {
                     disabled={cart.length === 0 || isProcessing || (useMultiPayment && !multiPickupValid)}
                     className="capsula-btn capsula-btn-primary w-full py-6 text-xl shadow-xl shadow-primary/20"
                   >
-                    {isProcessing ? "PROCESANDO..." : useMultiPayment ? `COBRAR MIXTO $${pickupTotal.toFixed(2)}` : `COBRAR $${pickupTotal.toFixed(2)}`}
+                    {isProcessing ? "PROCESANDO..." : useMultiPayment ? `COBRAR MIXTO $${mixedPickupBase.toFixed(2)}` : `COBRAR $${pickupTotal.toFixed(2)}`}
                   </button>
                 </div>
                 {lastPickupOrder && (
