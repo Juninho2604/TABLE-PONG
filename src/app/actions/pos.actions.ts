@@ -39,6 +39,7 @@ export interface CreateOrderData {
     customerName?: string;
     customerPhone?: string;
     customerAddress?: string;
+    customerId?: string; // FK al registro Customer habitual (opcional)
     items: CartItem[];
     paymentMethod?: POSPaymentMethod;
     amountPaid?: number;
@@ -59,6 +60,7 @@ export interface OpenTabInput {
     tableOrStationId: string;
     customerLabel?: string;
     customerPhone?: string;
+    customerId?: string; // FK al registro Customer habitual (opcional)
     guestCount?: number;
     assignedWaiterId?: string;
     waiterLabel?: string;
@@ -678,6 +680,7 @@ export async function createSalesOrderAction(
                         customerName: data.customerName,
                         customerPhone: data.customerPhone,
                         customerAddress: data.customerAddress,
+                        customerId: data.customerId || null,
                         status: 'CONFIRMED',
                         serviceFlow: 'DIRECT_SALE',
                         sourceChannel: data.orderType === 'DELIVERY' ? 'POS_DELIVERY' : 'POS_PICKUP',
@@ -855,6 +858,7 @@ export async function openTabAction(data: OpenTabInput): Promise<ActionResult> {
                             tabCode,
                             customerLabel: data.customerLabel || table.name,
                             customerPhone: data.customerPhone,
+                            customerId: data.customerId || null,
                             guestCount: data.guestCount || 1,
                             notes: data.notes,
                             openedById: session.id,

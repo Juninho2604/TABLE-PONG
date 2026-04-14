@@ -24,7 +24,10 @@ import { getPOSConfig } from "@/lib/pos-settings";
 import { PriceDisplay } from "@/components/pos/PriceDisplay";
 import { CurrencyCalculator } from "@/components/pos/CurrencyCalculator";
 import { CashierShiftModal } from "@/components/pos/CashierShiftModal";
+import { CustomerSelector } from "@/components/pos/CustomerSelector";
 import { getTenantName } from "@/config/branding";
+import { recordCustomerVisitAction } from "@/app/actions/customer.actions";
+import type { CustomerRecord } from "@/app/actions/customer.actions";
 
 // ============================================================================
 // TIPOS
@@ -189,6 +192,10 @@ export default function POSSportBarPage() {
   const [openTabPhone, setOpenTabPhone] = useState("");
   const [openTabGuests, setOpenTabGuests] = useState(2);
   const [openTabWaiter, setOpenTabWaiter] = useState("");
+  // Cliente habitual vinculado a la cuenta (opcional)
+  const [openTabCustomer, setOpenTabCustomer] = useState<CustomerRecord | null>(null);
+  // Cliente habitual vinculado al pickup (opcional)
+  const [pickupCustomer, setPickupCustomer] = useState<CustomerRecord | null>(null);
 
   // ── Carritos independientes por mesa y por pickup ─────────────────────────
   // Clave: tableId para mesas, '__pickup__' para venta directa, '' = sin contexto.
@@ -255,7 +262,6 @@ export default function POSSportBarPage() {
   const [layoutError, setLayoutError] = useState("");
 
   const [mobileTab, setMobileTab] = useState<"tables" | "menu" | "account">("tables");
-  const cartBadgeCount = cart.length;
 
   // ── Nueva Funcionalidad: Cajero y Pickup ──────────────────────────────────
   const [cashierName, setCashierName] = useState("");
@@ -440,6 +446,7 @@ export default function POSSportBarPage() {
   const cartKey = isPickupMode ? '__pickup__' : selectedTableId;
   // Carrito del contexto actual (mesa seleccionada o pickup)
   const cart = cartKey ? (carts[cartKey] ?? []) : [];
+  const cartBadgeCount = cart.length;
 
   const cartTotal = cart.reduce((s, i) => s + i.lineTotal, 0);
   const paidAmount = parseFloat(amountReceived) || 0;
@@ -511,6 +518,7 @@ export default function POSSportBarPage() {
         tableOrStationId: selectedTable.id,
         customerLabel: openTabName.trim(),
         customerPhone: openTabPhone.trim(),
+        customerId: openTabCustomer?.id || undefined,
         guestCount: openTabGuests,
         waiterLabel: openTabWaiter ? `Mesonero ${openTabWaiter}` : undefined,
       });
@@ -523,6 +531,7 @@ export default function POSSportBarPage() {
       setOpenTabPhone("");
       setOpenTabGuests(2);
       setOpenTabWaiter("");
+      setOpenTabCustomer(null);
       await loadData();
     } finally {
       setIsProcessing(false);
@@ -928,6 +937,10 @@ export default function POSSportBarPage() {
           date: new Date(),
         });
       }
+      // Registrar visita si el tab tenía cliente habitual vinculado
+      const tabCustomerId = (activeTab as any).customerId;
+      if (tabCustomerId) recordCustomerVisitAction(tabCustomerId);
+
       setAmountReceived("");
       setPaymentPin("");
       clearDiscount();
@@ -993,7 +1006,9 @@ export default function POSSportBarPage() {
       const pickupHasDivisasLines = pickupPartialDivisasDiscount > 0;
       const result = await createSalesOrderAction({
         orderType: "RESTAURANT",
-        customerName: pickupCustomerName || "Cliente en Caja",
+        customerName: pickupCustomerName || pickupCustomer?.name || "Cliente en Caja",
+        customerPhone: pickupCustomer?.phone || undefined,
+        customerId: pickupCustomer?.id || undefined,
         items: cart,
         paymentMethod: useMultiPayment ? "MULTIPLE" : paymentMethod,
         amountPaid: useMultiPayment ? multiTotal : (paidAmount || finalTotal),
@@ -1058,6 +1073,9 @@ export default function POSSportBarPage() {
           customerName: pickupCustomerName || "Cliente en Caja",
         });
 
+        // Registrar visita si hay cliente habitual vinculado
+        if (pickupCustomer?.id) recordCustomerVisitAction(pickupCustomer.id);
+
         setCarts(prev => ({ ...prev, '__pickup__': [] }));
         setPaymentMethod("CASH");
         setAmountReceived("");
@@ -1065,6 +1083,7 @@ export default function POSSportBarPage() {
         setUseMultiPayment(false);
         setPaymentLines([]);
         setPickupCustomerName("");
+        setPickupCustomer(null);
       } else {
         alert(result.message);
       }
@@ -1454,12 +1473,12 @@ export default function POSSportBarPage() {
                 <h2 className="font-black text-lg text-indigo-300 flex items-center gap-2">
                   🛍️ Pickup - Venta Directa
                 </h2>
-                <input
-                  type="text"
-                  value={pickupCustomerName}
-                  onChange={(e) => setPickupCustomerName(e.target.value)}
+                <CustomerSelector
+                  value={pickupCustomer}
+                  nameInput={pickupCustomerName}
+                  onNameChange={(n) => { setPickupCustomerName(n); if (!n) setPickupCustomer(null); }}
+                  onSelect={(c) => { setPickupCustomer(c); setPickupCustomerName(c?.name ?? ""); }}
                   placeholder="Nombre del Cliente..."
-                  className="w-full bg-background/50 border border-indigo-500/30 rounded py-2 px-3 text-sm focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
                 />
               </div>
 
@@ -2161,19 +2180,22 @@ export default function POSSportBarPage() {
             <div className="p-5 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-muted-foreground mb-1">
-                  Nombre del cliente <span className="text-red-400">*</span>
+                  Cliente <span className="text-red-400">*</span>
                 </label>
-                <input
-                  type="text"
-                  value={openTabName}
-                  onChange={(e) => setOpenTabName(e.target.value)}
-                  placeholder="Ej: Juan Pérez"
-                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none"
+                <CustomerSelector
+                  value={openTabCustomer}
+                  nameInput={openTabName}
+                  onNameChange={(n) => { setOpenTabName(n); if (!n) setOpenTabCustomer(null); }}
+                  onSelect={(c) => {
+                    setOpenTabCustomer(c);
+                    if (c) { setOpenTabName(c.name); setOpenTabPhone(c.phone ?? ""); }
+                  }}
+                  placeholder="Nombre del cliente..."
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-muted-foreground mb-1">
-                  Teléfono del cliente <span className="text-red-400">*</span>
+                  Teléfono <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="tel"

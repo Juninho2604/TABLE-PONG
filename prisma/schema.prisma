@@ -859,6 +859,8 @@ model SalesOrder {
   customerName    String?
   customerPhone   String?
   customerAddress String? // Para delivery
+  customerId      String?
+  customer        Customer? @relation(fields: [customerId], references: [id])
 
   // Estado
   status        String @default("PENDING") // PENDING, CONFIRMED, PREPARING, READY, DELIVERED, CANCELLED
@@ -945,6 +947,7 @@ model SalesOrder {
   @@index([serviceZoneId])
   @@index([tableOrStationId])
   @@index([openTabId])
+  @@index([customerId])
 }
 
 model SalesOrderItem {
@@ -1453,6 +1456,8 @@ model OpenTab {
   tabCode            String          @unique
   customerLabel      String?
   customerPhone      String?
+  customerId         String?
+  customer           Customer?       @relation(fields: [customerId], references: [id])
   guestCount         Int             @default(1)
   status             String          @default("OPEN") // OPEN, PARTIALLY_PAID, CLOSED, CANCELLED
   serviceType        String          @default("TABLE_SERVICE") // TABLE_SERVICE, BAR_TAB, EVENT
@@ -1501,6 +1506,7 @@ model OpenTab {
   @@index([branchId, status])
   @@index([tableOrStationId])
   @@index([parentTabId])
+  @@index([customerId])
 }
 
 model OpenTabOrder {
@@ -1740,6 +1746,32 @@ model ExchangeRate {
   salesOrders SalesOrder[]
 
   @@index([effectiveDate])
+}
+
+// ============================================================================
+// CLIENTES HABITUALES
+// ============================================================================
+// Cartera de clientes frecuentes para autocompletar en el POS.
+// Vinculados opcionalmente a SalesOrder y OpenTab.
+// ============================================================================
+
+model Customer {
+  id          String    @id @default(cuid())
+  name        String
+  phone       String?   @unique
+  email       String?
+  notes       String?
+  isActive    Boolean   @default(true)
+  visitCount  Int       @default(0)
+  lastVisitAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  salesOrders SalesOrder[]
+  openTabs    OpenTab[]
+
+  @@index([name])
+  @@index([phone])
 }
 
 // ============================================================================
