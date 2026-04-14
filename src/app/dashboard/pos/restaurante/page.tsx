@@ -845,6 +845,9 @@ export default function POSSportBarPage() {
         discountAmount = activeTab.balanceDue * (cortesiaPercentNum / 100);
         discountLabel = ` · Cortesía ${cortesiaPercentNum}%`;
       }
+      // effectiveDiscount = descuento real que se registró en el servidor.
+      // En pago mixto puede diferir de discountAmount (solo divisas parciales).
+      let effectiveDiscount = discountAmount;
       let result;
       if (useMultiPayment && paymentLines.filter(l => parseFloat(l.amount) > 0).length > 1) {
         const splits = paymentLines.filter(l => parseFloat(l.amount) > 0).map(l => ({ method: l.method as any, amount: parseFloat(l.amount) }));
@@ -856,6 +859,7 @@ export default function POSSportBarPage() {
           .reduce((sum, s) => sum + s.amount * 0.5, 0);
         const nonDivisasTabDiscount = discountType === "DIVISAS_33" ? 0 : discountAmount;
         const totalDiscount = nonDivisasTabDiscount + partialDivisasDiscount;
+        effectiveDiscount = totalDiscount; // para la factura impresa
         result = await registerOpenTabPaymentAction({
           openTabId: activeTab.id,
           amount: 0,
@@ -879,8 +883,8 @@ export default function POSSportBarPage() {
       }
       // Imprimir factura: correlativo fijo por mesa (tabCode), 10% servicio solo si el cliente lo pagó
       const subtotal = (activeTab as any).runningSubtotal ?? activeTab.orders.reduce((s, o) => s + o.items.reduce((si: number, i: any) => si + (i.lineTotal || 0), 0), 0);
-      const discount = discountAmount > 0 ? discountAmount : ((activeTab as any).runningDiscount ?? 0);
-      const totalAntesServicio = Math.max(0, activeTab.balanceDue - discountAmount);
+      const discount = effectiveDiscount > 0 ? effectiveDiscount : ((activeTab as any).runningDiscount ?? 0);
+      const totalAntesServicio = Math.max(0, activeTab.balanceDue - effectiveDiscount);
       const serviceFee = serviceFeeIncluded ? totalAntesServicio * 0.1 : 0;
       const allItems = activeTab.orders.flatMap((o) =>
         (o.items || []).map((i: any) => ({
