@@ -28,6 +28,8 @@ interface ReceiptData {
     discountReason?: string;
     total: number;
     serviceFee?: number;
+    /** Tasa de cambio BCV (Bs/USD). Si se provee, se imprime el equivalente en Bs del total final. */
+    exchangeRate?: number;
 }
 
 export function printReceipt(data: ReceiptData) {
@@ -51,6 +53,14 @@ export function printReceipt(data: ReceiptData) {
     const serviceFee = explicitService ? Math.max(0, data.serviceFee!) : netTotal * 0.10;
     const showServiceBlock = explicitService ? serviceFee > 0.001 : true;
     const totalConServicio = netTotal + serviceFee;
+
+    // ── Equivalente en Bs (BCV) ────────────────────────────────────────────────
+    // El monto a convertir es el total final que el cliente paga (incluye servicio si aplica)
+    const finalUsdForBs = showServiceBlock ? totalConServicio : netTotal;
+    const bsTotal = data.exchangeRate ? finalUsdForBs * data.exchangeRate : null;
+    const bsTotalFormatted = bsTotal !== null
+        ? bsTotal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : null;
 
     // Número corto de orden (últimos dígitos)
     const shortNum = data.orderNumber.split('-').pop() || data.orderNumber;
@@ -284,6 +294,11 @@ export function printReceipt(data: ReceiptData) {
   <div class="sep"></div>
   <div class="tot-row service"><span>${explicitService ? '+ 10% Servicio:' : '+ 10% Servicio (sugerido):'}</span><span>$${serviceFee.toFixed(2)}</span></div>
   <div class="tot-row grand"><span>TOTAL C/SERVICIO:</span><span>$${totalConServicio.toFixed(2)}</span></div>
+  ` : ''}
+  ${bsTotalFormatted !== null ? `
+  <div class="sep"></div>
+  <div class="tot-row" style="font-size:10px;color:#000;"><span>EQUIV. BCV (Bs):</span><span>Bs. ${bsTotalFormatted}</span></div>
+  <div class="tot-row" style="font-size:9px;color:#444;font-style:italic;"><span>Tasa: 1 USD = Bs. ${data.exchangeRate!.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span><span></span></div>
   ` : ''}
 </div>
 

@@ -722,6 +722,13 @@ export default function POSSportBarPage() {
     const servicioDivisas = baseDivisas * 0.10;
     const totalDivisas = baseDivisas + servicioDivisas;
 
+    // Equivalentes en Bs (BCV) — solo si hay tasa disponible
+    const fmtBs = (usd: number) =>
+      (usd * (exchangeRate ?? 0)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const bsNormal  = exchangeRate ? `<tr><td style="font-size:10px;font-style:italic;color:#444">Equiv. Bs (BCV):</td><td style="text-align:right;font-size:10px;font-style:italic;color:#444">Bs. ${fmtBs(totalNormal)}</td></tr>` : '';
+    const bsDivisas = exchangeRate ? `<tr><td style="font-size:10px;font-style:italic;color:#444">Equiv. Bs (BCV):</td><td style="text-align:right;font-size:10px;font-style:italic;color:#444">Bs. ${fmtBs(totalDivisas)}</td></tr>` : '';
+    const tasaRow   = exchangeRate ? `<div style="text-align:center;margin-top:4px;font-size:9px;color:#666">Tasa BCV: 1 USD = Bs. ${exchangeRate.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>` : '';
+
     // 4. Imprimir estado de cuenta en ventana emergente
     const allItems = activeTab.orders.flatMap(o =>
       (o.items || []).map((i: any) => `<tr><td>${i.quantity}× ${i.itemName}</td><td style="text-align:right">$${(i.lineTotal || 0).toFixed(2)}</td></tr>`)
@@ -730,7 +737,7 @@ export default function POSSportBarPage() {
     const svcRowNormal = `<tr><td>10% Servicio</td><td style="text-align:right">$${servicioNormal.toFixed(2)}</td></tr>`;
     const svcRowDivisas = `<tr><td>10% Servicio</td><td style="text-align:right">$${servicioDivisas.toFixed(2)}</td></tr>`;
 
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
+    const printWindow = window.open('', '_blank', 'width=400,height=650');
     if (!printWindow) return;
     printWindow.document.write(`
       <!DOCTYPE html><html><head><title>Estado de Cuenta</title>
@@ -754,13 +761,16 @@ export default function POSSportBarPage() {
       <table>${allItems}
         ${svcRowNormal}
         <tr class="total-row"><td>TOTAL A COBRAR</td><td style="text-align:right">$${totalNormal.toFixed(2)}</td></tr>
+        ${bsNormal}
       </table>
+      ${tasaRow}
       <div class="divisas-box">
         <div style="font-weight:bold;margin-bottom:4px">Pago en Divisas (USD/Zelle):</div>
         <table>
           <tr><td>Descuento -33.33%</td><td style="text-align:right">-$${descuentoDivisas.toFixed(2)}</td></tr>
           ${svcRowDivisas}
           <tr class="total-row"><td>TOTAL CON DIVISAS</td><td style="text-align:right;font-size:14px;font-weight:bold">$${totalDivisas.toFixed(2)}</td></tr>
+          ${bsDivisas}
         </table>
       </div>
       <div style="text-align:center;margin-top:12px;font-size:10px">Impresión #${newCount}${newCount > 2 ? ' ⚠️ MÚLTIPLES COPIAS' : ''}</div>
@@ -906,6 +916,7 @@ export default function POSSportBarPage() {
         discountReason: discountType === "DIVISAS_33" ? "Descuento aplicado" : undefined,
         total: totalAntesServicio,
         serviceFee,
+        exchangeRate: exchangeRate ?? undefined,
       });
       }
       // Capture WA report data before clearing state (cortesía only)
@@ -1053,6 +1064,7 @@ export default function POSSportBarPage() {
           discountReason,
           total: finalTotal,
           serviceFee: 0,
+          exchangeRate: exchangeRate ?? undefined,
         };
         if (getPOSConfig().printReceiptOnRestaurant) {
           printReceipt(pickupReceiptData);
@@ -1667,6 +1679,7 @@ export default function POSSportBarPage() {
                         discountReason: lastPickupOrder.discount > 0 ? "Descuento aplicado" : undefined,
                         total: lastPickupOrder.total,
                         serviceFee: 0,
+                        exchangeRate: exchangeRate ?? undefined,
                       });
                     }}
                     className="w-full py-3 bg-muted hover:bg-secondary/80 text-white rounded-xl font-bold flex items-center justify-center gap-2 border border-border text-sm"
