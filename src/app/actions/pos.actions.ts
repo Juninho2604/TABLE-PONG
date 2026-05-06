@@ -586,12 +586,13 @@ export async function validateManagerPinAction(pin: string): Promise<ActionResul
 // GENERAR CORRELATIVO ÚNICO
 // ============================================================================
 
-async function generateOrderNumber(orderType: POSOrderType): Promise<string> {
+async function generateOrderNumber(orderType: POSOrderType, tx?: any): Promise<string> {
+    const client = tx ?? prisma;
     const dateStr = getCaracasDateStamp();
     const prefix = orderType === 'RESTAURANT' ? 'REST' : 'DELV';
     const orderPrefix = `${prefix}-${dateStr}-`;
 
-    const lastOrder = await prisma.salesOrder.findFirst({
+    const lastOrder = await client.salesOrder.findFirst({
         where: { orderNumber: { startsWith: orderPrefix } },
         orderBy: { orderNumber: 'desc' },
         select: { orderNumber: true },
@@ -616,6 +617,16 @@ async function generateConsumptionOrderNumber(openTabId: string, tabCode: string
 }
 
 function isOrderNumberUniqueError(err: unknown): boolean {
+    // Detección robusta via código Prisma P2002
+    if (err && typeof err === 'object' && 'code' in err) {
+        const e = err as { code: string; meta?: { target?: unknown } };
+        if (e.code === 'P2002') {
+            const target = Array.isArray(e.meta?.target)
+                ? (e.meta!.target as string[])
+                : [String(e.meta?.target ?? '')];
+            return target.some(f => f.includes('orderNumber'));
+        }
+    }
     const msg = err instanceof Error ? err.message : String(err);
     return msg.includes('Unique constraint failed') && msg.includes('orderNumber');
 }
@@ -1166,7 +1177,13 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
         // Determinar customerId efectivo: el que viene en el pago tiene prioridad sobre el que ya tenía la cuenta
         const effectiveCustomerId = data.customerId || openTab.customerId || undefined;
 
-        const updatedTab = await prisma.$transaction(async (tx) => {
+        let updatedTab;
+        for (let attempt = 0; attempt < 5; attempt++) {
+            try {
+                if (attempt > 0) {
+                    await new Promise(r => setTimeout(r, Math.random() * 80 + 20));
+                }
+                updatedTab = await prisma.$transaction(async (tx) => {
             await assertOpenTabVersionUpdate({
                 tx,
                 openTabId: openTab.id,
@@ -1245,7 +1262,7 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                         });
                     }
                 }
-                const invoiceNumber = await generateOrderNumber('RESTAURANT');
+                const invoiceNumber = await generateOrderNumber('RESTAURANT', tx);
                 const itemsSubtotalGross = allItems.reduce((s, it) => s + it.lineTotal, 0);
                 const discountForInvoice = Math.max(0, itemsSubtotalGross - newRunningTotal);
                 const consolidatedOrder = await tx.salesOrder.create({
@@ -1318,7 +1335,13 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
             }
 
             return tab;
-        });
+                });
+                break;
+            } catch (err) {
+                if (isOrderNumberUniqueError(err) && attempt < 4) continue;
+                throw err;
+            }
+        }
 
         revalidatePath('/dashboard/pos/sportbar');
         revalidatePath('/dashboard/sales');
