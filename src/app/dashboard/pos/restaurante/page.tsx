@@ -729,10 +729,23 @@ export default function POSSportBarPage() {
     const bsDivisas = exchangeRate ? `<tr><td style="font-size:10px;font-style:italic;color:#444">Equiv. Bs (BCV):</td><td style="text-align:right;font-size:10px;font-style:italic;color:#444">Bs. ${fmtBs(totalDivisas)}</td></tr>` : '';
     const tasaRow   = exchangeRate ? `<div style="text-align:center;margin-top:4px;font-size:9px;color:#666">Tasa BCV: 1 USD = Bs. ${exchangeRate.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>` : '';
 
-    // 4. Imprimir estado de cuenta en ventana emergente
-    const allItems = activeTab.orders.flatMap(o =>
-      (o.items || []).map((i: any) => `<tr><td>${i.quantity}× ${i.itemName}</td><td style="text-align:right">$${(i.lineTotal || 0).toFixed(2)}</td></tr>`)
-    ).join('');
+    // 4. Consolidar ítems de todos los consumos y construir filas HTML
+    const rawItems = activeTab.orders.flatMap((o: any) => o.items || []);
+    const itemMap = new Map<string, { name: string; qty: number; total: number }>();
+    for (const it of rawItems) {
+      const mods = (it.modifiers || []).map((m: any) => (m.name ?? '')).sort().join('|');
+      const key = `${it.itemName}::${mods}`;
+      const existing = itemMap.get(key);
+      if (existing) {
+        existing.qty   += it.quantity;
+        existing.total += it.lineTotal || 0;
+      } else {
+        itemMap.set(key, { name: it.itemName, qty: it.quantity, total: it.lineTotal || 0 });
+      }
+    }
+    const allItems = Array.from(itemMap.values())
+      .map(it => `<tr><td>${it.qty}× ${it.name}</td><td style="text-align:right">$${it.total.toFixed(2)}</td></tr>`)
+      .join('');
 
     const svcRowNormal = `<tr><td>10% Servicio</td><td style="text-align:right">$${servicioNormal.toFixed(2)}</td></tr>`;
     const svcRowDivisas = `<tr><td>10% Servicio</td><td style="text-align:right">$${servicioDivisas.toFixed(2)}</td></tr>`;

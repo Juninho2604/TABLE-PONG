@@ -1262,8 +1262,28 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                         });
                     }
                 }
+                // Consolidar ítems duplicados (misma referencia + modificadores + nota)
+                type AllItem = typeof allItems[number];
+                const mergedItems: AllItem[] = [];
+                const mergeIndex = new Map<string, number>();
+                for (const it of allItems) {
+                    const modKey = it.modifiers.map(m => m.name).sort().join('|');
+                    const key = `${it.menuItemId}::${modKey}::${it.notes ?? ''}`;
+                    const idx = mergeIndex.get(key);
+                    if (idx !== undefined) {
+                        mergedItems[idx] = {
+                            ...mergedItems[idx],
+                            quantity: mergedItems[idx].quantity + it.quantity,
+                            lineTotal: mergedItems[idx].lineTotal + it.lineTotal,
+                        };
+                    } else {
+                        mergeIndex.set(key, mergedItems.length);
+                        mergedItems.push({ ...it });
+                    }
+                }
+
                 const invoiceNumber = await generateOrderNumber('RESTAURANT', tx);
-                const itemsSubtotalGross = allItems.reduce((s, it) => s + it.lineTotal, 0);
+                const itemsSubtotalGross = mergedItems.reduce((s, it) => s + it.lineTotal, 0);
                 const discountForInvoice = Math.max(0, itemsSubtotalGross - newRunningTotal);
                 const consolidatedOrder = await tx.salesOrder.create({
                     data: {
@@ -1291,8 +1311,8 @@ export async function registerOpenTabPaymentAction(data: RegisterOpenTabPaymentI
                         customerId: effectiveCustomerId || null,
                         createdById: session.id,
                         closedAt: new Date(),
-                        items: allItems.length > 0 ? {
-                            create: allItems.map(item => ({
+                        items: mergedItems.length > 0 ? {
+                            create: mergedItems.map(item => ({
                                 menuItemId: item.menuItemId,
                                 itemName: item.itemName,
                                 quantity: item.quantity,

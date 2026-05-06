@@ -658,7 +658,14 @@ export default function POSMeseroPage() {
                     <span className="font-bold text-foreground/80 truncate flex-1">
                       <span className="text-emerald-400 font-black">x{item.quantity}</span> {item.name}
                     </span>
-                    <span className="text-emerald-400 font-black ml-2">${item.lineTotal.toFixed(2)}</span>
+                    <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                      <span className="text-emerald-400 font-black">${item.lineTotal.toFixed(2)}</span>
+                      <button
+                        onClick={() => setCart(prev => prev.filter((_, idx) => idx !== i))}
+                        className="h-6 w-6 rounded-md hover:bg-red-500/20 text-red-400/50 hover:text-red-400 flex items-center justify-center text-xs transition-all"
+                        title="Quitar del pedido"
+                      >✕</button>
+                    </div>
                   </div>
                 ))}
               </div>
