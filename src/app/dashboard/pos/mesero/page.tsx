@@ -13,8 +13,6 @@ import {
 import { printKitchenCommand } from "@/lib/print-command";
 import { getPOSConfig } from "@/lib/pos-settings";
 import { useAuthStore } from "@/stores/auth.store";
-import { createSubTabAction } from "@/app/actions/subtab.actions";
-import { getActiveCashSessionAction, openCashSessionAction } from "@/app/actions/cash-session.actions";
 
 // ============================================================================
 // TIPOS
@@ -81,8 +79,6 @@ interface OpenTabSummary {
   runningTotal: number;
   balanceDue: number;
   openedAt: string;
-  parentTabId?: string | null;
-  splitIndex?: number | null;
   openedBy: UserSummary;
   assignedWaiter?: UserSummary | null;
   orders: SalesOrderSummary[];
@@ -170,17 +166,6 @@ export default function POSMeseroPage() {
   const [layoutError, setLayoutError] = useState("");
   const [sendSuccess, setSendSuccess] = useState(false);
 
-  // ── Subcuentas ────────────────────────────────────────────────────────────
-  const [selectedSubTabId, setSelectedSubTabId] = useState<string | null>(null);
-  const [showNewSubTabModal, setShowNewSubTabModal] = useState(false);
-  const [newSubTabName, setNewSubTabName] = useState("");
-  const [newSubTabPhone, setNewSubTabPhone] = useState("");
-
-  // ── Sesión de caja ────────────────────────────────────────────────────────
-  const [cashSession, setCashSession] = useState<any>(null);
-  const [cashSessionLoaded, setCashSessionLoaded] = useState(false);
-  const [isOpeningCash, setIsOpeningCash] = useState(false);
-
   // ── Navegación móvil ──────────────────────────────────────────────────────
   const [mobileTab, setMobileTab] = useState<"tables" | "menu" | "account">("tables");
 
@@ -192,14 +177,11 @@ export default function POSMeseroPage() {
     setIsLoading(true);
     setLayoutError("");
     try {
-      const [menuResult, layoutResult, usersResult, session] = await Promise.all([
+      const [menuResult, layoutResult, usersResult] = await Promise.all([
         getMenuForPOSAction(),
         getRestaurantLayoutAction(),
         getUsersForTabAction(),
-        getActiveCashSessionAction(),
       ]);
-      setCashSession(session);
-      setCashSessionLoaded(true);
       if (menuResult.success && menuResult.data) {
         setCategories(menuResult.data);
         setSelectedCategory((prev) => prev || menuResult.data[0]?.id || "");
@@ -221,24 +203,6 @@ export default function POSMeseroPage() {
 
   useEffect(() => { loadData(); }, []);
 
-  // Refresh silencioso: solo actualiza el layout de mesas/cuentas, sin loading.
-  const refreshLayout = async () => {
-    try {
-      const layoutResult = await getRestaurantLayoutAction();
-      if (layoutResult.success && layoutResult.data) {
-        setLayout(layoutResult.data as RestaurantLayout);
-      }
-    } catch { /* silencioso */ }
-  };
-
-  // Auto-refresh silencioso del layout cada 45s para sincronizar entre dispositivos.
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (!isProcessing) refreshLayout();
-    }, 45_000);
-    return () => clearInterval(interval);
-  }, [isProcessing]);
-
   useEffect(() => {
     if (!selectedCategory || !categories.length) return;
     const cat = categories.find((c) => c.id === selectedCategory);
@@ -257,20 +221,7 @@ export default function POSMeseroPage() {
     () => selectedZone?.tablesOrStations.find((t) => t.id === selectedTableId) || null,
     [selectedZone, selectedTableId],
   );
-  const parentTab = useMemo(
-    () => selectedTable?.openTabs.find((t) => !t.parentTabId) || null,
-    [selectedTable],
-  );
-  const tabSubTabs = useMemo(() => {
-    const tabs = selectedTable?.openTabs || [];
-    if (parentTab) return tabs.filter((t) => t.parentTabId === parentTab.id);
-    // Subcuentas huérfanas: padre cerrado pero subcuenta aún abierta
-    return tabs.filter((t) => t.parentTabId != null);
-  }, [selectedTable, parentTab]);
-  const activeTab = useMemo(
-    () => (selectedSubTabId ? tabSubTabs.find((t) => t.id === selectedSubTabId) : null) || parentTab || tabSubTabs[0] || null,
-    [parentTab, tabSubTabs, selectedSubTabId],
-  );
+  const activeTab = useMemo(() => selectedTable?.openTabs[0] || null, [selectedTable]);
 
   const allMenuItems = useMemo(() => categories.flatMap((c) => c.items || []), [categories]);
   const filteredMenuItems = useMemo(() => {
@@ -307,31 +258,6 @@ export default function POSMeseroPage() {
       setShowOpenTabModal(false);
       setOpenTabName(""); setOpenTabPhone(""); setOpenTabGuests(2); setOpenTabWaiter("");
       await loadData();
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // ============================================================================
-  // CREAR SUBCUENTA
-  // ============================================================================
-
-  const handleCreateSubTab = async () => {
-    if (!parentTab) return;
-    if (!newSubTabName.trim()) { alert("El nombre del cliente es obligatorio"); return; }
-    setIsProcessing(true);
-    try {
-      const result = await createSubTabAction({
-        parentTabId: parentTab.id,
-        customerLabel: newSubTabName.trim(),
-        customerPhone: newSubTabPhone.trim() || undefined,
-      });
-      if (!result.success) { alert(result.message); return; }
-      setShowNewSubTabModal(false);
-      setNewSubTabName(""); setNewSubTabPhone("");
-      await loadData();
-      // Auto-seleccionar la nueva subcuenta
-      if (result.data?.id) setSelectedSubTabId(result.data.id);
     } finally {
       setIsProcessing(false);
     }
@@ -467,56 +393,12 @@ export default function POSMeseroPage() {
   // RENDER
   // ============================================================================
 
-  const canOpenCash = user && ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'AREA_LEAD'].includes(user.role);
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4">🧑‍🍳</div>
           <div className="text-xl font-black text-foreground">Cargando POS Mesero...</div>
-        </div>
-      </div>
-    );
-  }
-
-  // Bloqueo por sesión de caja
-  if (cashSessionLoaded && !cashSession) {
-    if (canOpenCash) {
-      return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-          <div className="bg-card glass-panel w-full max-w-sm rounded-3xl p-8 space-y-6 text-center border border-border shadow-2xl">
-            <div className="text-5xl">🔐</div>
-            <div>
-              <h2 className="text-xl font-black">La caja no está abierta</h2>
-              <p className="text-sm text-muted-foreground mt-1">Debes abrir la caja para iniciar el día de facturación.</p>
-            </div>
-            <button
-              onClick={async () => {
-                setIsOpeningCash(true);
-                const r = await openCashSessionAction();
-                if (r.success) { setCashSession(r.data); }
-                else { alert(r.message); }
-                setIsOpeningCash(false);
-              }}
-              disabled={isOpeningCash}
-              className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-black text-white transition disabled:opacity-50"
-            >
-              {isOpeningCash ? "Abriendo..." : "🟢 Abrir Caja"}
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="bg-card glass-panel w-full max-w-sm rounded-3xl p-8 space-y-4 text-center border border-border shadow-2xl">
-          <div className="text-5xl">🔒</div>
-          <h2 className="text-xl font-black">Caja no disponible</h2>
-          <p className="text-sm text-muted-foreground">La caja no ha sido abierta. Contacta al cajero o gerente para iniciar el día.</p>
-          <button onClick={loadData} className="text-xs text-emerald-400 hover:text-emerald-300 font-bold">
-            Reintentar
-          </button>
         </div>
       </div>
     );
@@ -549,13 +431,8 @@ export default function POSMeseroPage() {
           >
             🔄
           </button>
-          <div className="px-3 py-2 bg-secondary/30 rounded-xl border border-border font-black text-xs tabular-nums text-foreground/60 text-center">
-            <div>{cashSession?.businessDate ?? new Date().toLocaleDateString("es-VE", { timeZone: "America/Caracas" })}</div>
-            {cashSession && (
-              <div className="text-[9px] text-emerald-400 font-bold truncate max-w-[120px]">
-                🟢 {cashSession.openedBy?.firstName}
-              </div>
-            )}
+          <div className="px-3 py-2 bg-secondary/30 rounded-xl border border-border font-black text-xs tabular-nums text-foreground/60">
+            {new Date().toLocaleDateString("es-VE", { timeZone: "America/Caracas" })}
           </div>
         </div>
       </div>
@@ -578,7 +455,7 @@ export default function POSMeseroPage() {
               {layout?.serviceZones.map((z) => (
                 <button
                   key={z.id}
-                  onClick={() => { setSelectedZoneId(z.id); setSelectedTableId(""); setCart([]); }}
+                  onClick={() => { setSelectedZoneId(z.id); setSelectedTableId(""); }}
                   className={`flex-1 min-w-0 py-3 rounded-xl text-xs font-black transition-all active:scale-95 ${selectedZoneId === z.id ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20" : "bg-card border border-border text-foreground/60 hover:border-emerald-500/50"}`}
                 >
                   {z.zoneType === "BAR" ? "🍺" : "🌿"} {z.name}
@@ -604,8 +481,6 @@ export default function POSMeseroPage() {
                     key={table.id}
                     onClick={() => {
                       setSelectedTableId(table.id);
-                      setSelectedSubTabId(null);
-                      setCart([]); // Limpiar carrito al cambiar de mesa
                       // Solo ir al menú si la mesa ya tiene una cuenta abierta.
                       // Si no tiene cuenta, quedarse en "tables" para mostrar el botón "Abrir cuenta".
                       if (window.innerWidth < 1024 && table.openTabs.length > 0) setMobileTab("menu");
@@ -783,7 +658,14 @@ export default function POSMeseroPage() {
                     <span className="font-bold text-foreground/80 truncate flex-1">
                       <span className="text-emerald-400 font-black">x{item.quantity}</span> {item.name}
                     </span>
-                    <span className="text-emerald-400 font-black ml-2">${item.lineTotal.toFixed(2)}</span>
+                    <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                      <span className="text-emerald-400 font-black">${item.lineTotal.toFixed(2)}</span>
+                      <button
+                        onClick={() => setCart(prev => prev.filter((_, idx) => idx !== i))}
+                        className="h-6 w-6 rounded-md hover:bg-red-500/20 text-red-400/50 hover:text-red-400 flex items-center justify-center text-xs transition-all"
+                        title="Quitar del pedido"
+                      >✕</button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -801,46 +683,6 @@ export default function POSMeseroPage() {
                 }`}
               >
                 {sendSuccess ? "✓ ¡Enviado a cocina!" : isProcessing ? "Enviando..." : `🍳 Enviar a cocina · $${cartTotal.toFixed(2)}`}
-              </button>
-            </div>
-          )}
-
-          {/* Subcuentas: pills de selección + crear nueva */}
-          {(tabSubTabs.length > 0 || parentTab) && parentTab && (
-            <div className="px-4 py-2 border-b border-border bg-card/50 flex flex-wrap gap-1.5 items-center">
-              <button
-                onClick={() => setSelectedSubTabId(null)}
-                className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition border ${
-                  selectedSubTabId === null
-                    ? "bg-emerald-500 text-black border-emerald-500"
-                    : "bg-card text-foreground/60 border-border hover:border-emerald-500/50"
-                }`}
-              >
-                Principal ${parentTab.balanceDue.toFixed(2)}
-              </button>
-              {tabSubTabs.map((st) => (
-                <button
-                  key={st.id}
-                  onClick={() => setSelectedSubTabId(st.id)}
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition border ${
-                    selectedSubTabId === st.id
-                      ? "bg-emerald-500 text-black border-emerald-500"
-                      : st.status === "CLOSED"
-                      ? "bg-green-900/30 text-green-400 border-green-800/50"
-                      : "bg-card text-foreground/60 border-border hover:border-emerald-500/50"
-                  }`}
-                >
-                  {st.customerLabel || `Sub ${st.splitIndex}`} ${st.balanceDue.toFixed(2)}
-                  {st.status === "CLOSED" && " ✓"}
-                </button>
-              ))}
-              {/* Botón crear nueva subcuenta — solo desde cuenta padre */}
-              <button
-                onClick={() => { setNewSubTabName(""); setNewSubTabPhone(""); setShowNewSubTabModal(true); }}
-                className="px-2.5 py-1 rounded-full text-[10px] font-bold border border-dashed border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 transition"
-                title="Nueva subcuenta"
-              >
-                ＋ Nueva subcuenta
               </button>
             </div>
           )}
@@ -1010,45 +852,6 @@ export default function POSMeseroPage() {
                 className="capsula-btn capsula-btn-primary flex-[2] py-3 disabled:opacity-40"
               >
                 {isProcessing ? "Abriendo..." : "✓ Abrir cuenta"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══ MODAL: NUEVA SUBCUENTA ═══════════════════════════════════════ */}
-      {showNewSubTabModal && parentTab && (
-        <div className="fixed inset-0 z-[100] bg-background/90 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-card glass-panel w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 space-y-4 shadow-2xl border border-border">
-            <h3 className="font-black text-lg">Nueva subcuenta — {selectedTable?.name}</h3>
-            <p className="text-xs text-muted-foreground">Se creará una subcuenta bajo la cuenta de <b>{parentTab.customerLabel}</b>. Podrás agregarle ítems de forma independiente.</p>
-            <div className="space-y-3">
-              <input
-                type="text"
-                placeholder="Nombre del cliente *"
-                value={newSubTabName}
-                onChange={(e) => setNewSubTabName(e.target.value)}
-                className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-emerald-500 focus:outline-none"
-                autoFocus
-              />
-              <input
-                type="tel"
-                placeholder="Teléfono (opcional)"
-                value={newSubTabPhone}
-                onChange={(e) => setNewSubTabPhone(e.target.value)}
-                className="w-full bg-secondary border border-border rounded-xl px-4 py-3 text-sm font-bold focus:border-emerald-500 focus:outline-none"
-              />
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setShowNewSubTabModal(false)} className="capsula-btn capsula-btn-secondary flex-1 py-3">
-                Cancelar
-              </button>
-              <button
-                onClick={handleCreateSubTab}
-                disabled={isProcessing || !newSubTabName.trim()}
-                className="capsula-btn capsula-btn-primary flex-[2] py-3 disabled:opacity-40"
-              >
-                {isProcessing ? "Creando..." : "✓ Crear subcuenta"}
               </button>
             </div>
           </div>
