@@ -3,63 +3,7 @@
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
-
-// ============================================================================
-// TIPOS
-// ============================================================================
-
-export type DocType =
-    | 'CEDULA_V'   // Cédula venezolana (V-12345678)
-    | 'CEDULA_E'   // Cédula extranjero (E-87654321)
-    | 'RIF_J'      // RIF empresa (J-123456789)
-    | 'RIF_V'      // RIF persona natural (V-12345678-0)
-    | 'RIF_G'      // RIF gobierno / entidad pública (G-20000001-0)
-    | 'RIF_C'      // RIF cooperativa (C-...)
-    | 'RIF_E'      // RIF extranjero (E-...)
-    | 'PASAPORTE'; // Pasaporte (formato libre)
-
-export interface CustomerRecord {
-    id: string;
-    name: string;
-    docType: DocType | null;
-    docNumber: string | null;  // Número limpio sin prefijo de tipo
-    phone: string | null;
-    email: string | null;
-    notes: string | null;
-    isActive: boolean;
-    visitCount: number;
-    totalSpent: number;
-    lastVisitAt: Date | null;
-}
-
-// Prefijos para mostrar en UI
-export const DOC_TYPE_LABELS: Record<DocType, string> = {
-    CEDULA_V:  'V-',
-    CEDULA_E:  'E-',
-    RIF_J:     'J-',
-    RIF_V:     'V-',
-    RIF_G:     'G-',
-    RIF_C:     'C-',
-    RIF_E:     'E-',
-    PASAPORTE: 'PAS-',
-};
-
-export const DOC_TYPE_DISPLAY: Record<DocType, string> = {
-    CEDULA_V:  'Cédula V',
-    CEDULA_E:  'Cédula E',
-    RIF_J:     'RIF J',
-    RIF_V:     'RIF V',
-    RIF_G:     'RIF G',
-    RIF_C:     'RIF C',
-    RIF_E:     'RIF E',
-    PASAPORTE: 'Pasaporte',
-};
-
-/** Devuelve el documento formateado para mostrar: "V-12345678" */
-export function formatDocId(docType: DocType | null, docNumber: string | null): string {
-    if (!docType || !docNumber) return '';
-    return `${DOC_TYPE_LABELS[docType]}${docNumber}`;
-}
+import type { DocType, CustomerRecord } from '@/lib/customer-types';
 
 // ─── Campos a seleccionar en todas las consultas ─────────────────────────────
 const CUSTOMER_SELECT = {

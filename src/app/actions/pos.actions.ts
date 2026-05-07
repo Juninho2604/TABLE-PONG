@@ -31,7 +31,7 @@ export interface CartItem {
 }
 
 export type POSOrderType = 'RESTAURANT' | 'DELIVERY';
-export type POSPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'MULTIPLE' | 'ZELLE';
+export type POSPaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'MOBILE_PAY' | 'MULTIPLE' | 'ZELLE' | 'CASH_BS';
 
 export interface CreateOrderData {
     orderType: POSOrderType;
@@ -52,6 +52,7 @@ export interface CreateOrderData {
     /** Descuento en monto fijo (override de discountType). Usado en pago mixto con divisas parciales. */
     discountAmountOverride?: number;
     discountReasonOverride?: string;
+    customerId?: string;
 }
 
 export interface OpenTabInput {
@@ -715,6 +716,7 @@ export async function createSalesOrderAction(
 
                         createdById: session.id,
                         areaId: areaId,
+                        customerId: data.customerId || undefined,
 
                         items: {
                             create: data.items.map(item => ({

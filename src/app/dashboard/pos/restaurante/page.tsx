@@ -27,7 +27,7 @@ import { CashierShiftModal } from "@/components/pos/CashierShiftModal";
 import { CustomerSelector } from "@/components/pos/CustomerSelector";
 import { getTenantName } from "@/config/branding";
 import { recordCustomerVisitAction } from "@/app/actions/customer.actions";
-import type { CustomerRecord } from "@/app/actions/customer.actions";
+import type { CustomerRecord } from "@/lib/customer-types";
 
 // ============================================================================
 // TIPOS

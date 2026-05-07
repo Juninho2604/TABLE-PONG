@@ -12,11 +12,13 @@ import { createPortal } from 'react-dom';
 import {
     searchCustomersAction,
     createCustomerAction,
+} from '@/app/actions/customer.actions';
+import {
     formatDocId,
     DOC_TYPE_DISPLAY,
     type CustomerRecord,
     type DocType,
-} from '@/app/actions/customer.actions';
+} from '@/lib/customer-types';
 
 // ─── Opciones de tipo de documento (UI) ──────────────────────────────────────
 
