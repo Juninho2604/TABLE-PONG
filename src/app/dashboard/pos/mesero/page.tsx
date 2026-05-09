@@ -165,6 +165,7 @@ export default function POSMeseroPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [layoutError, setLayoutError] = useState("");
   const [sendSuccess, setSendSuccess] = useState(false);
+  const [targetTabId, setTargetTabId] = useState<string | null>(null);
 
   // ── Navegación móvil ──────────────────────────────────────────────────────
   const [mobileTab, setMobileTab] = useState<"tables" | "menu" | "account">("tables");
@@ -209,6 +210,8 @@ export default function POSMeseroPage() {
     setMenuItems(cat?.items || []);
   }, [selectedCategory, categories]);
 
+  useEffect(() => { setTargetTabId(null); }, [selectedTableId]);
+
   // ============================================================================
   // DERIVED STATE
   // ============================================================================
@@ -222,6 +225,11 @@ export default function POSMeseroPage() {
     [selectedZone, selectedTableId],
   );
   const activeTab = useMemo(() => selectedTable?.openTabs[0] || null, [selectedTable]);
+  const targetTab = useMemo(() => {
+    if (!selectedTable) return null;
+    if (targetTabId) return selectedTable.openTabs.find((t) => t.id === targetTabId) ?? activeTab;
+    return activeTab;
+  }, [selectedTable, targetTabId, activeTab]);
 
   const allMenuItems = useMemo(() => categories.flatMap((c) => c.items || []), [categories]);
   const filteredMenuItems = useMemo(() => {
@@ -268,7 +276,7 @@ export default function POSMeseroPage() {
   // ============================================================================
 
   const handleAddToCart = (item: MenuItem) => {
-    if (!activeTab) return;
+    if (!targetTab) return;
     setSelectedItemForModifier(item);
     setCurrentModifiers([]);
     setItemQuantity(1);
@@ -335,17 +343,17 @@ export default function POSMeseroPage() {
   // ============================================================================
 
   const handleSendToTab = async () => {
-    if (!activeTab || cart.length === 0) return;
+    if (!targetTab || cart.length === 0) return;
     setIsProcessing(true);
     try {
-      const result = await addItemsToOpenTabAction({ openTabId: activeTab.id, items: cart });
+      const result = await addItemsToOpenTabAction({ openTabId: targetTab.id, items: cart });
       if (!result.success) { alert(result.message); return; }
       if (result.data?.kitchenStatus === "SENT" && getPOSConfig().printComandaOnRestaurant) {
         printKitchenCommand({
           orderNumber: result.data.orderNumber,
           orderType: "RESTAURANT",
           tableName: selectedTable?.name ?? null,
-          customerName: activeTab.customerLabel || null,
+          customerName: targetTab.customerLabel || null,
           items: cart.map((i) => ({ name: i.name, quantity: i.quantity, modifiers: i.modifiers.map((m) => m.name), notes: i.notes })),
           createdAt: new Date(),
         });
@@ -370,12 +378,12 @@ export default function POSMeseroPage() {
   };
 
   const handleRemoveItem = async () => {
-    if (!removeTarget || !activeTab) return;
+    if (!removeTarget || !targetTab) return;
     if (!removeJustification.trim()) { setRemoveError("La justificación es obligatoria"); return; }
     setIsProcessing(true); setRemoveError("");
     try {
       const result = await removeItemFromOpenTabAction({
-        openTabId: activeTab.id,
+        openTabId: targetTab.id,
         orderId: removeTarget.orderId,
         itemId: removeTarget.itemId,
         cashierPin: removePin,
@@ -549,13 +557,13 @@ export default function POSMeseroPage() {
           {/* Search + Categories */}
           <div className="p-3 border-b border-border space-y-2 shrink-0">
             {/* Active tab banner */}
-            {activeTab ? (
+            {targetTab ? (
               <div className="bg-emerald-900/30 border border-emerald-500/30 rounded-xl px-3 py-2 text-xs flex items-center justify-between">
                 <span className="text-emerald-200">
-                  <b>{selectedTable?.name}</b> · {activeTab.customerLabel}
+                  <b>{selectedTable?.name}</b> · {targetTab.customerLabel}
                 </span>
                 <span className="text-emerald-400 font-black text-xs">
-                  ${activeTab.balanceDue.toFixed(2)}
+                  ${targetTab.balanceDue.toFixed(2)}
                 </span>
               </div>
             ) : selectedTable ? (
@@ -607,7 +615,7 @@ export default function POSMeseroPage() {
                 <button
                   key={item.id}
                   onClick={() => handleAddToCart(item)}
-                  disabled={!activeTab}
+                  disabled={!targetTab}
                   className="capsula-card group flex flex-col justify-between p-3 md:p-4 text-left disabled:opacity-30 disabled:grayscale h-28 md:h-32 border-primary/5 hover:border-emerald-500/40 active:scale-95 transition-transform"
                 >
                   <div className="text-sm font-black text-foreground group-hover:text-emerald-400 transition-colors leading-tight line-clamp-2 uppercase tracking-tight">
@@ -634,6 +642,36 @@ export default function POSMeseroPage() {
 
         {/* ══ RIGHT: PEDIDO PANEL (sin cobro) ═════════════════════════════ */}
         <aside className={`w-full lg:w-80 xl:w-96 shrink-0 bg-card/80 flex flex-col overflow-hidden ${mobileTab === "account" ? "flex" : "hidden"} lg:flex absolute lg:relative inset-0 z-10 lg:z-auto`}>
+
+          {/* Sub-tab selector — visible cuando hay cuentas divididas */}
+          {selectedTable && selectedTable.openTabs.length > 1 && (
+            <div className="border-b border-amber-900/50 bg-amber-950/20 p-3 shrink-0">
+              <p className="text-[10px] font-black uppercase text-amber-400 tracking-widest mb-2 flex items-center gap-1.5">
+                ⚡ Cuentas divididas — ¿A cuál cuenta va este pedido?
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {selectedTable.openTabs.map((tab) => {
+                  const isSelected = targetTabId ? targetTabId === tab.id : tab.id === activeTab?.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setTargetTabId(tab.id)}
+                      className={`flex-1 min-w-0 py-2 px-3 rounded-xl text-xs font-black transition-all active:scale-95 text-left ${
+                        isSelected
+                          ? "bg-amber-500 text-black shadow-lg shadow-amber-500/20"
+                          : "bg-card border border-border text-foreground/60 hover:border-amber-500/50"
+                      }`}
+                    >
+                      <div className="truncate">{tab.customerLabel || tab.tabCode}</div>
+                      <div className={`text-[10px] font-bold mt-0.5 ${isSelected ? "text-black/70" : "text-muted-foreground"}`}>
+                        ${tab.balanceDue.toFixed(2)}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Carrito pendiente */}
           {cart.length > 0 && (
@@ -675,7 +713,7 @@ export default function POSMeseroPage() {
               </div>
               <button
                 onClick={() => { handleSendToTab(); if (window.innerWidth < 1024) setMobileTab("tables"); }}
-                disabled={!activeTab || isProcessing}
+                disabled={!targetTab || isProcessing}
                 className={`w-full mt-3 py-4 rounded-xl font-black text-sm transition-all active:scale-95 ${
                   sendSuccess
                     ? "bg-emerald-500 text-black"
@@ -689,14 +727,14 @@ export default function POSMeseroPage() {
 
           {/* Cuenta activa — items enviados */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {!activeTab ? (
+            {!targetTab ? (
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground/40 py-10">
                 <span className="text-5xl mb-3">🪑</span>
                 <p className="text-xs font-black uppercase tracking-widest text-center">
                   Selecciona una mesa<br />para ver la cuenta
                 </p>
               </div>
-            ) : activeTab.orders.length === 0 ? (
+            ) : targetTab.orders.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground/40 py-10">
                 <span className="text-5xl mb-3">📋</span>
                 <p className="text-xs font-black uppercase tracking-widest text-center">
@@ -708,7 +746,7 @@ export default function POSMeseroPage() {
                 <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">
                   Pedidos enviados
                 </p>
-                {activeTab.orders.map((order) => (
+                {targetTab.orders.map((order) => (
                   <div key={order.id} className="glass-panel rounded-2xl overflow-hidden border-emerald-900/20">
                     <div className="flex items-center justify-between px-3 py-2 bg-emerald-900/20 border-b border-emerald-900/30">
                       <span className="text-[10px] font-black text-emerald-400 uppercase">#{order.orderNumber}</span>
@@ -757,7 +795,7 @@ export default function POSMeseroPage() {
                 <div className="capsula-card p-4 border-emerald-900/30 mt-2">
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-black text-muted-foreground uppercase tracking-widest">Total cuenta</span>
-                    <span className="text-xl font-black text-emerald-400">${activeTab.balanceDue.toFixed(2)}</span>
+                    <span className="text-xl font-black text-emerald-400">${targetTab.balanceDue.toFixed(2)}</span>
                   </div>
                   <p className="text-[9px] text-muted-foreground/60 mt-1 font-bold uppercase tracking-widest">
                     El cobro lo gestiona el cajero
