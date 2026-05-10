@@ -53,6 +53,7 @@ interface OrderItemSummary {
   id: string;
   itemName: string;
   quantity: number;
+  unitPrice: number;
   lineTotal: number;
   modifiers?: { name: string }[];
 }
@@ -1018,11 +1019,10 @@ export default function POSMeseroPage() {
             id: t.id,
             tabCode: t.tabCode,
             customerLabel: t.customerLabel,
-            balanceDue: t.balanceDue,
             splitIndex: t.splitIndex ?? null,
           }))}
           onClose={() => setShowSplitModal(false)}
-          onDone={async () => { await loadData(); setShowSplitModal(false); }}
+          onDone={() => { loadData(); setShowSplitModal(false); }}
         />
       )}
 
