@@ -10,6 +10,7 @@ import {
   removeItemFromOpenTabAction,
   type CartItem,
 } from "@/app/actions/pos.actions";
+import { SplitTabModal } from "@/app/dashboard/pos/restaurante/SplitTabModal";
 import { printKitchenCommand } from "@/lib/print-command";
 import { getPOSConfig } from "@/lib/pos-settings";
 import { useAuthStore } from "@/stores/auth.store";
@@ -82,6 +83,8 @@ interface OpenTabSummary {
   openedBy: UserSummary;
   assignedWaiter?: UserSummary | null;
   orders: SalesOrderSummary[];
+  parentTabId?: string | null;
+  splitIndex?: number | null;
 }
 interface TableSummary {
   id: string;
@@ -166,6 +169,7 @@ export default function POSMeseroPage() {
   const [layoutError, setLayoutError] = useState("");
   const [sendSuccess, setSendSuccess] = useState(false);
   const [targetTabId, setTargetTabId] = useState<string | null>(null);
+  const [showSplitModal, setShowSplitModal] = useState(false);
 
   // ── Navegación móvil ──────────────────────────────────────────────────────
   const [mobileTab, setMobileTab] = useState<"tables" | "menu" | "account">("tables");
@@ -225,6 +229,17 @@ export default function POSMeseroPage() {
     [selectedZone, selectedTableId],
   );
   const activeTab = useMemo(() => selectedTable?.openTabs[0] || null, [selectedTable]);
+
+  // parentTab = la cuenta raíz (sin parentTabId); subTabs = sub-cuentas creadas por división
+  const parentTab = useMemo(
+    () => selectedTable?.openTabs.find((t) => !t.parentTabId) || null,
+    [selectedTable],
+  );
+  const subTabs = useMemo(
+    () => selectedTable?.openTabs.filter((t) => !!t.parentTabId) || [],
+    [selectedTable],
+  );
+
   const targetTab = useMemo(() => {
     if (!selectedTable) return null;
     if (targetTabId) return selectedTable.openTabs.find((t) => t.id === targetTabId) ?? activeTab;
@@ -647,11 +662,14 @@ export default function POSMeseroPage() {
           {selectedTable && selectedTable.openTabs.length > 1 && (
             <div className="border-b border-amber-900/50 bg-amber-950/20 p-3 shrink-0">
               <p className="text-[10px] font-black uppercase text-amber-400 tracking-widest mb-2 flex items-center gap-1.5">
-                ⚡ Cuentas divididas — ¿A cuál cuenta va este pedido?
+                ⚡ Cuenta dividida — ¿A cuál sub-cuenta va este pedido?
               </p>
               <div className="flex gap-2 flex-wrap">
                 {selectedTable.openTabs.map((tab) => {
                   const isSelected = targetTabId ? targetTabId === tab.id : tab.id === activeTab?.id;
+                  const label = tab.parentTabId
+                    ? (tab.customerLabel || `Sub-cuenta ${tab.splitIndex ?? ""}`)
+                    : (tab.customerLabel || "Cuenta principal");
                   return (
                     <button
                       key={tab.id}
@@ -662,7 +680,7 @@ export default function POSMeseroPage() {
                           : "bg-card border border-border text-foreground/60 hover:border-amber-500/50"
                       }`}
                     >
-                      <div className="truncate">{tab.customerLabel || tab.tabCode}</div>
+                      <div className="truncate">{label}</div>
                       <div className={`text-[10px] font-bold mt-0.5 ${isSelected ? "text-black/70" : "text-muted-foreground"}`}>
                         ${tab.balanceDue.toFixed(2)}
                       </div>
@@ -800,6 +818,14 @@ export default function POSMeseroPage() {
                   <p className="text-[9px] text-muted-foreground/60 mt-1 font-bold uppercase tracking-widest">
                     El cobro lo gestiona el cajero
                   </p>
+                  {parentTab && (
+                    <button
+                      onClick={() => setShowSplitModal(true)}
+                      className="mt-3 w-full py-2.5 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-xs font-black uppercase tracking-widest transition-all active:scale-95"
+                    >
+                      ⚡ Dividir cuenta
+                    </button>
+                  )}
                 </div>
               </>
             )}
@@ -980,6 +1006,24 @@ export default function POSMeseroPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ══ MODAL: DIVIDIR CUENTA ═════════════════════════════════════════ */}
+      {showSplitModal && parentTab && (
+        <SplitTabModal
+          parentTabId={parentTab.id}
+          parentTabCode={parentTab.tabCode}
+          orders={parentTab.orders}
+          existingSubTabs={subTabs.map((t) => ({
+            id: t.id,
+            tabCode: t.tabCode,
+            customerLabel: t.customerLabel,
+            balanceDue: t.balanceDue,
+            splitIndex: t.splitIndex ?? null,
+          }))}
+          onClose={() => setShowSplitModal(false)}
+          onDone={async () => { await loadData(); setShowSplitModal(false); }}
+        />
       )}
 
       {/* ══ MODAL: ANULAR ÍTEM (requiere PIN supervisor) ══════════════════ */}
