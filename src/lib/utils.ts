@@ -62,3 +62,13 @@ export function getStockStatus(current: number, minimum: number, reorderPoint?: 
 
     return { status: 'ok', label: 'OK', percentage: Math.min(percentage, 100) };
 }
+
+/** Escapa texto libre antes de insertarlo en HTML generado a mano (tickets, ventanas de impresión). */
+export function escapeHtml(value: unknown): string {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}

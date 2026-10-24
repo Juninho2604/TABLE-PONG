@@ -2,11 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import { getSession } from '@/lib/auth';
+
+// La extensión se deriva del tipo validado, nunca del nombre enviado por el cliente
+const EXTENSION_BY_TYPE: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+    'application/pdf': 'pdf',
+};
 
 // Directorio donde se guardan los uploads
 const UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads', 'notas-entrega');
 
 export async function POST(request: NextRequest) {
+    const session = await getSession();
+    if (!session) {
+        return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 });
+    }
     try {
         const formData = await request.formData();
         const file = formData.get('file') as File | null;
@@ -20,8 +33,8 @@ export async function POST(request: NextRequest) {
         }
 
         // Validar tipo de archivo
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-        if (!allowedTypes.includes(file.type)) {
+        const extension = EXTENSION_BY_TYPE[file.type];
+        if (!extension) {
             return NextResponse.json(
                 { success: false, error: 'Tipo de archivo no permitido. Use JPG, PNG, WebP o PDF.' },
                 { status: 400 }
@@ -44,8 +57,7 @@ export async function POST(request: NextRequest) {
 
         // Generar nombre único
         const timestamp = Date.now();
-        const extension = file.name.split('.').pop() || 'jpg';
-        const sanitizedRef = referenceNumber?.replace(/[^a-zA-Z0-9]/g, '-') || 'sin-ref';
+        const sanitizedRef = referenceNumber?.replace(/[^a-zA-Z0-9]/g, '-').slice(0, 40) || 'sin-ref';
         const fileName = `nota-${sanitizedRef}-${timestamp}.${extension}`;
         const filePath = path.join(UPLOAD_DIR, fileName);
 

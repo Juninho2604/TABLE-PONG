@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth';
 import { getCaracasDateStamp } from '@/lib/datetime';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit-log';
+import { verifyAuthorizerPin } from '@/lib/security';
 
 const AUTHORIZED_OPEN_ROLES = ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'CASHIER_RESTAURANT', 'AREA_LEAD'];
 
@@ -87,10 +88,13 @@ export async function closeCashSessionAction(
         if (!managerPin) {
             return { success: false, message: 'Se requiere PIN de gerente para cerrar una caja abierta por otro usuario.' };
         }
-        const manager = await prisma.user.findFirst({
-            where: { pin: managerPin, role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] }, isActive: true }
-        });
-        if (!manager) return { success: false, message: 'PIN de gerente inválido.' };
+        const check = await verifyAuthorizerPin(session.id, managerPin, (pins) =>
+            prisma.user.findFirst({
+                where: { pin: { in: pins }, role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] }, isActive: true },
+                select: { id: true, pin: true }
+            })
+        );
+        if (!check.ok) return { success: false, message: check.message === 'PIN inválido' ? 'PIN de gerente inválido.' : check.message };
     }
 
     await prisma.cashSession.update({

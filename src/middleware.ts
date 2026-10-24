@@ -1,24 +1,38 @@
-
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { decrypt } from './lib/auth';
 
+// Rutas accesibles sin sesión
+const PUBLIC_PATHS = ['/', '/login', '/api/auth/session'];
+
 export async function middleware(request: NextRequest) {
     const sessionCookie = request.cookies.get('session')?.value;
-    const session = await decrypt(sessionCookie || '');
+    const session = sessionCookie ? await decrypt(sessionCookie) : null;
     const path = request.nextUrl.pathname;
+    const isPublic = PUBLIC_PATHS.includes(path);
 
-    // 1. Protección Base: Login requerido
-    if (path.startsWith('/dashboard') && !session) {
+    // 0. Server Actions: cualquier POST con cabecera Next-Action es un endpoint
+    //    invocable directamente. Sin sesión solo se permite el login.
+    if (request.headers.has('next-action') && !session && path !== '/login') {
+        return new NextResponse('No autorizado', { status: 401 });
+    }
+
+    // 1. API: sesión obligatoria salvo endpoints públicos
+    if (path.startsWith('/api') && !isPublic && !session) {
+        return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
+
+    // 2. Páginas protegidas: login requerido
+    if ((path.startsWith('/dashboard') || path.startsWith('/kitchen')) && !session) {
         return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    // 2. Redirección Login -> Dashboard
+    // 3. Redirección Login -> Dashboard
     if (path.startsWith('/login') && session) {
         return NextResponse.redirect(new URL('/dashboard', request.url));
     }
 
-    // 3. Control de Accesos (RBAC)
+    // 4. Control de Accesos (RBAC)
     if (session) {
         const userRole = session.role;
 
@@ -77,5 +91,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ['/dashboard/:path*', '/login'],
+    // Todo excepto assets estáticos de Next
+    matcher: ['/((?!_next/static|_next/image|favicon.ico|uploads/).*)'],
 };

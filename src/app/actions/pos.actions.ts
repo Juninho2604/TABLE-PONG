@@ -10,6 +10,7 @@ import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
 import { getSession } from '@/lib/auth';
 import { registerSale } from '@/server/services/inventory.service';
+import { verifyAuthorizerPin } from '@/lib/security';
 import { getCaracasDateStamp, getCaracasDayRange } from '@/lib/datetime';
 
 // ============================================================================
@@ -269,6 +270,46 @@ async function resolveSalesAreaForBranch(branchId?: string) {
     }
 
     return ensureBaseSalesArea();
+}
+
+/**
+ * Recalcula precios desde la BD: nunca se confía en unitPrice/lineTotal/priceAdjustment
+ * enviados por el navegador. Misma fórmula que el carrito: (precio + modificadores) × cantidad.
+ */
+async function repriceCartItems(items: CartItem[]): Promise<{ ok: true; items: CartItem[] } | { ok: false; message: string }> {
+    if (!Array.isArray(items) || items.length === 0) return { ok: false, message: 'No hay items' };
+
+    const menuIds = Array.from(new Set(items.map((i) => i.menuItemId)));
+    const modifierIds = Array.from(new Set(items.flatMap((i) => (i.modifiers || []).map((m) => m.modifierId)).filter(Boolean)));
+
+    const [menuItems, modifiers] = await Promise.all([
+        prisma.menuItem.findMany({ where: { id: { in: menuIds } }, select: { id: true, name: true, price: true } }),
+        modifierIds.length
+            ? prisma.menuModifier.findMany({ where: { id: { in: modifierIds } }, select: { id: true, name: true, priceAdjustment: true } })
+            : Promise.resolve([] as { id: string; name: string; priceAdjustment: number }[]),
+    ]);
+    const menuById = new Map(menuItems.map((m) => [m.id, m]));
+    const modById = new Map(modifiers.map((m) => [m.id, m]));
+
+    const repriced: CartItem[] = [];
+    for (const item of items) {
+        const menu = menuById.get(item.menuItemId);
+        if (!menu) return { ok: false, message: `Producto no encontrado: ${item.name}` };
+        const quantity = Number(item.quantity);
+        if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 1000) {
+            return { ok: false, message: `Cantidad inválida para ${menu.name}` };
+        }
+        const mods = (item.modifiers || []).map((m) => {
+            const dbMod = modById.get(m.modifierId);
+            return { modifierId: m.modifierId, name: dbMod?.name ?? m.name, priceAdjustment: dbMod?.priceAdjustment ?? 0 };
+        });
+        // Los modificadores llegan "explotados" (repetidos según su propia cantidad):
+        // su suma es el ajuste por unidad del producto, igual que en el carrito.
+        const modTotal = mods.reduce((s, m) => s + m.priceAdjustment, 0);
+        const lineTotal = Math.round((menu.price + modTotal) * quantity * 100) / 100;
+        repriced.push({ ...item, name: menu.name, quantity, unitPrice: menu.price, modifiers: mods, lineTotal });
+    }
+    return { ok: true, items: repriced };
 }
 
 function calculateCartTotals(data: Pick<CreateOrderData, 'items' | 'discountType' | 'discountPercent' | 'amountPaid' | 'serviceChargeAmount' | 'discountAmountOverride' | 'discountReasonOverride'>) {
@@ -547,16 +588,22 @@ export async function getMenuForPOSAction() {
 
 export async function validateManagerPinAction(pin: string): Promise<ActionResult> {
     try {
-        const manager = await prisma.user.findFirst({
-            where: {
-                pin: pin,
-                role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] },
-                isActive: true
-            },
-            select: { id: true, firstName: true, lastName: true, role: true }
-        });
+        const session = await getSession();
+        if (!session) return { success: false, message: 'No autorizado' };
 
-        if (manager) {
+        const check = await verifyAuthorizerPin(session.id, pin, (pins) =>
+            prisma.user.findFirst({
+                where: {
+                    pin: { in: pins },
+                    role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'] },
+                    isActive: true
+                },
+                select: { id: true, firstName: true, lastName: true, role: true, pin: true }
+            })
+        );
+
+        if (check.ok) {
+            const manager = check.user;
             return {
                 success: true,
                 message: 'Autorización exitosa',
@@ -568,15 +615,7 @@ export async function validateManagerPinAction(pin: string): Promise<ActionResul
             };
         }
 
-        if (pin === '1234') {
-            return {
-                success: true,
-                message: 'Autorización Demo (Master)',
-                data: { managerId: 'demo-master-id', managerName: 'MASTER USER', role: 'OWNER' }
-            };
-        }
-
-        return { success: false, message: 'PIN inválido o permisos insuficientes' };
+        return { success: false, message: check.message === 'PIN inválido' ? 'PIN inválido o permisos insuficientes' : check.message };
 
     } catch (error) {
         console.error('Error validando PIN:', error);
@@ -645,6 +684,10 @@ export async function createSalesOrderAction(
         if (!session) {
             return { success: false, message: 'No autorizado' };
         }
+
+        const priced = await repriceCartItems(data.items);
+        if (!priced.ok) return { success: false, message: priced.message };
+        data = { ...data, items: priced.items };
 
         const salesArea = await ensureBaseSalesArea();
         const areaId = salesArea.id;
@@ -917,6 +960,10 @@ export async function addItemsToOpenTabAction(data: AddItemsToOpenTabInput): Pro
         if (!data.items.length) {
             return { success: false, message: 'No hay items para agregar' };
         }
+
+        const priced = await repriceCartItems(data.items);
+        if (!priced.ok) return { success: false, message: priced.message };
+        data = { ...data, items: priced.items };
 
         const openTab = await prisma.openTab.findUnique({
             where: { id: data.openTabId },
@@ -1472,17 +1519,20 @@ export async function removeItemFromOpenTabAction({
         }
 
         // Validar PIN contra cualquier usuario con rol autorizado
-        const authorizer = await prisma.user.findFirst({
-            where: {
-                pin: cashierPin,
-                role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD'] },
-                isActive: true
-            },
-            select: { id: true, firstName: true, lastName: true, role: true }
-        });
-        if (!authorizer) {
-            return { success: false, message: 'PIN incorrecto o sin permisos de cajera' };
+        const check = await verifyAuthorizerPin(session.id, cashierPin, (pins) =>
+            prisma.user.findFirst({
+                where: {
+                    pin: { in: pins },
+                    role: { in: ['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AREA_LEAD'] },
+                    isActive: true
+                },
+                select: { id: true, firstName: true, lastName: true, role: true, pin: true }
+            })
+        );
+        if (!check.ok) {
+            return { success: false, message: check.message === 'PIN inválido' ? 'PIN incorrecto o sin permisos de cajera' : check.message };
         }
+        const authorizer = check.user;
 
         // Cargar el item con su orden
         const item = await prisma.salesOrderItem.findUnique({

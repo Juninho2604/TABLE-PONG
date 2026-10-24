@@ -4,6 +4,8 @@ import { prisma } from '@/server/db'; // Correct path from previous files
 import { getSession, hasPermission, PERMISSIONS } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import { logAudit } from '@/lib/audit-log';
+import { canManageUserRole } from '@/lib/permissions';
+import { hashPassword, hashPin, verifyPassword } from '@/lib/security';
 
 /**
  * Obtiene la lista de todos los usuarios
@@ -57,6 +59,11 @@ export async function updateUserRole(userId: string, newRole: string) {
 
     try {
         const userBefore = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, firstName: true, lastName: true } });
+        if (!userBefore) return { success: false, message: 'Usuario no encontrado' };
+
+        if ((userId === session.id && session.role !== 'OWNER') || !canManageUserRole(session.role, userBefore.role, newRole)) {
+            return { success: false, message: 'No puedes asignar un rol igual o superior al tuyo' };
+        }
 
         await prisma.user.update({
             where: { id: userId },
@@ -98,7 +105,11 @@ export async function toggleUserStatus(userId: string, isActive: boolean) {
     }
 
     try {
-        const user = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+        const user = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true, role: true } });
+        if (!user) return { success: false, message: 'Usuario no encontrado' };
+        if (userId === session.id || !canManageUserRole(session.role, user.role)) {
+            return { success: false, message: 'No puedes modificar esta cuenta' };
+        }
 
         await prisma.user.update({
             where: { id: userId },
@@ -160,6 +171,14 @@ export async function createUserAction(data: {
         return { success: false, message: 'El email debe ser @tablepong.com' };
     }
 
+    if (!canManageUserRole(session.role, null, role)) {
+        return { success: false, message: 'No puedes crear usuarios con un rol igual o superior al tuyo' };
+    }
+
+    if (pin && !/^\d{4,6}$/.test(pin.trim())) {
+        return { success: false, message: 'El PIN debe tener entre 4 y 6 dígitos' };
+    }
+
     try {
         const existing = await prisma.user.findUnique({
             where: { email: emailTrim },
@@ -174,8 +193,8 @@ export async function createUserAction(data: {
                 firstName: firstName.trim(),
                 lastName: lastName.trim(),
                 role: role as any,
-                passwordHash: password,
-                pin: pin?.trim() || null,
+                passwordHash: await hashPassword(password),
+                pin: pin?.trim() ? hashPin(pin) : null,
             },
         });
 
@@ -267,19 +286,19 @@ export async function changePasswordAction(currentPassword: string, newPassword:
         }
 
         // 2. Verificar contraseña actual (Comparación simple por ahora, igual que login)
-        if (user.passwordHash !== currentPassword) {
+        if (!(await verifyPassword(currentPassword, user.passwordHash)).ok) {
             return { success: false, message: 'La contraseña actual es incorrecta' };
         }
 
         // 3. Validar nueva contraseña (longitud mínima)
-        if (newPassword.length < 6) {
-            return { success: false, message: 'La nueva contraseña debe tener al menos 6 caracteres' };
+        if (newPassword.length < 8) {
+            return { success: false, message: 'La nueva contraseña debe tener al menos 8 caracteres' };
         }
 
         // 4. Actualizar contraseña
         await prisma.user.update({
             where: { id: session.id },
-            data: { passwordHash: newPassword },
+            data: { passwordHash: await hashPassword(newPassword) },
         });
 
         return { success: true, message: 'Contraseña actualizada correctamente' };

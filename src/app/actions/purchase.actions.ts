@@ -692,9 +692,21 @@ export async function createSupplierAction(input: {
     address?: string;
     notes?: string;
 }): Promise<{ success: boolean; message: string; supplierId?: string }> {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' };
+    if (!input.name?.trim()) return { success: false, message: 'El nombre es obligatorio' };
     try {
+        // Campos explícitos: no pasar el objeto del cliente directo a Prisma
         const supplier = await prisma.supplier.create({
-            data: input
+            data: {
+                name: input.name.trim(),
+                code: input.code,
+                contactName: input.contactName,
+                phone: input.phone,
+                email: input.email,
+                address: input.address,
+                notes: input.notes,
+            }
         });
 
         revalidatePath('/dashboard/compras');

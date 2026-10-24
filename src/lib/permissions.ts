@@ -1,5 +1,4 @@
-export function hasPermission(userRole: string | undefined, requiredRoleLevel: number) {
-    const roleLevels: Record<string, number> = {
+const roleLevels: Record<string, number> = {
         'OWNER': 100,
         'AUDITOR': 90,
         'ADMIN_MANAGER': 80,
@@ -8,10 +7,30 @@ export function hasPermission(userRole: string | undefined, requiredRoleLevel: n
         'CHEF': 50,
         'AREA_LEAD': 40,
         'STAFF': 10
-    };
+};
 
-    const userLevel = roleLevels[userRole || 'STAFF'] || 0;
-    return userLevel >= requiredRoleLevel;
+export function getRoleLevel(role: string | undefined): number {
+    return roleLevels[role || 'STAFF'] || 0;
+}
+
+export function hasPermission(userRole: string | undefined, requiredRoleLevel: number) {
+    return getRoleLevel(userRole) >= requiredRoleLevel;
+}
+
+/**
+ * Un usuario solo puede gestionar cuentas y asignar roles por debajo de su propio nivel.
+ * OWNER puede todo. Nadie salvo OWNER modifica su propio rol.
+ */
+export function canManageUserRole(
+    actorRole: string,
+    targetCurrentRole: string | null | undefined,
+    newRole?: string,
+): boolean {
+    if (actorRole === 'OWNER') return true;
+    const actorLevel = getRoleLevel(actorRole);
+    if (targetCurrentRole != null && getRoleLevel(targetCurrentRole) >= actorLevel) return false;
+    if (newRole != null && (newRole === 'OWNER' || getRoleLevel(newRole) >= actorLevel)) return false;
+    return true;
 }
 
 export const PERMISSIONS = {

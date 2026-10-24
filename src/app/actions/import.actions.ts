@@ -455,6 +455,7 @@ export async function processImportAction(
 ) {
     const session = await getSession();
     if (!session?.id) return { success: false, message: 'No autorizado' };
+    if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'].includes(session.role)) return { success: false, message: 'No tienes permisos para esta acción' } as any;
     const userId = session.id;
 
     // 1. Input Validation

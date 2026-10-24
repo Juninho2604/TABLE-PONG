@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getSession } from '@/lib/auth';
+
+// La cocina solo puede mover órdenes entre estos estados
+const KITCHEN_STATUSES = ['PREPARING', 'READY'];
 
 // GET: Obtener órdenes pendientes para cocina
 export async function GET() {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     try {
         const orders = await prisma.salesOrder.findMany({
             where: {
@@ -53,20 +59,23 @@ export async function GET() {
 
 // PATCH: Actualizar estado de orden
 export async function PATCH(request: NextRequest) {
+    const session = await getSession();
+    if (!session) return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     try {
         const body = await request.json();
         const { orderId, status } = body;
 
-        if (!orderId || !status) {
-            return NextResponse.json({ error: 'Faltan parámetros' }, { status: 400 });
+        if (typeof orderId !== 'string' || !KITCHEN_STATUSES.includes(status)) {
+            return NextResponse.json({ error: 'Parámetros inválidos' }, { status: 400 });
         }
 
-        const order = await prisma.salesOrder.update({
+        await prisma.salesOrder.update({
             where: { id: orderId },
-            data: { status }
+            data: { status },
+            select: { id: true },
         });
 
-        return NextResponse.json({ success: true, order });
+        return NextResponse.json({ success: true });
     } catch (error) {
         console.error('Error updating order:', error);
         return NextResponse.json({ error: 'Error interno' }, { status: 500 });

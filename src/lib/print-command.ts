@@ -7,6 +7,17 @@
 
 import { getReceiptHeader, getReceiptFooter } from '@/config/branding';
 
+/** Escapa texto libre (nombres, notas) antes de insertarlo en el HTML del ticket. */
+function esc(value: unknown): string {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+
 interface ReceiptItem {
     name: string;
     quantity: number;
@@ -59,15 +70,15 @@ export function printReceipt(data: ReceiptData) {
 
     const itemRows = data.items.map((item) => {
         const modText = item.modifiers.length > 0
-            ? `<div class="mod">  + ${item.modifiers.join(', ')}</div>`
+            ? `<div class="mod">  + ${item.modifiers.map(esc).join(', ')}</div>`
             : '';
         const noteText = item.notes
-            ? `<div class="note">  * ${item.notes}</div>`
+            ? `<div class="note">  * ${esc(item.notes)}</div>`
             : '';
         return `
         <tr>
           <td class="col-item">
-            <span class="item-name">${item.name.toUpperCase()}</span>
+            <span class="item-name">${esc(item.name.toUpperCase())}</span>
             ${modText}${noteText}
           </td>
           <td class="col-qty">${item.quantity.toFixed(2)}</td>
@@ -243,7 +254,7 @@ export function printReceipt(data: ReceiptData) {
 <div class="info-row"><span class="lbl">NUMERO:</span><span>${shortNum}</span></div>
 <div class="info-row"><span class="lbl">FECHA :</span><span>${formattedDate}</span></div>
 <div class="info-row"><span class="lbl">HORA  :</span><span>${formattedTime}</span></div>
-<div class="info-row"><span class="lbl">CAJA  :</span><span>${data.cashierName.toUpperCase()}</span></div>
+<div class="info-row"><span class="lbl">CAJA  :</span><span>${esc(data.cashierName.toUpperCase())}</span></div>
 <div class="info-row"><span class="lbl">TIPO  :</span><span>${data.orderType === 'RESTAURANT' ? 'RESTAURANTE' : 'DELIVERY'}</span></div>
 
 <div class="sep"></div>
@@ -251,8 +262,8 @@ export function printReceipt(data: ReceiptData) {
 <!-- CLIENTE -->
 <div class="cliente-block">
   <div class="lbl">CLIENTE:</div>
-  <div class="val">${(data.customerName && data.customerName.trim()) ? data.customerName.trim() : 'CONSUMIDOR FINAL'}</div>
-  ${data.customerAddress ? `<div style="font-size:9px;margin-top:1px;">DIR: ${data.customerAddress}</div>` : ''}
+  <div class="val">${(data.customerName && data.customerName.trim()) ? esc(data.customerName.trim()) : 'CONSUMIDOR FINAL'}</div>
+  ${data.customerAddress ? `<div style="font-size:9px;margin-top:1px;">DIR: ${esc(data.customerAddress)}</div>` : ''}
 </div>
 
 <div class="sep2"></div>
@@ -375,16 +386,16 @@ export function printKitchenCommand(data: any) {
   <div class="title">◆ COMANDA COCINA ◆</div>
   <div class="num">#${shortNum}</div>
   <div class="meta">${formattedTime} &nbsp;·&nbsp; ${data.orderType === 'RESTAURANT' ? 'SALA' : 'DELIVERY'}</div>
-  ${data.customerName ? `<div style="font-size:13px;margin-top:3px;">${data.customerName.toUpperCase()}</div>` : ''}
+  ${data.customerName ? `<div style="font-size:13px;margin-top:3px;">${esc(data.customerName.toUpperCase())}</div>` : ''}
 </div>
 
 ${(data.items || []).map((item: any) => `
 <div class="item">
   <div class="qty-box">${item.quantity}</div>
   <div class="details">
-    <div class="name">${item.name.toUpperCase()}</div>
-    ${item.modifiers && item.modifiers.length > 0 ? `<div class="mods">+ ${item.modifiers.join('<br>+ ')}</div>` : ''}
-    ${item.notes ? `<div class="note">📝 ${item.notes}</div>` : ''}
+    <div class="name">${esc(item.name.toUpperCase())}</div>
+    ${item.modifiers && item.modifiers.length > 0 ? `<div class="mods">+ ${item.modifiers.map(esc).join('<br>+ ')}</div>` : ''}
+    ${item.notes ? `<div class="note">📝 ${esc(item.notes)}</div>` : ''}
   </div>
 </div>`).join('')}
 

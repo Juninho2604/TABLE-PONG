@@ -2072,3 +2072,12 @@ model SystemConfig {
   updatedAt DateTime @updatedAt
   updatedBy String?              // userId quien lo cambió
 }
+
+// Control de intentos fallidos (login / PIN) para frenar fuerza bruta
+model AuthThrottle {
+  key         String    @id // ej: "login:user@mail.com", "pin:<userId>"
+  count       Int       @default(0)
+  windowStart DateTime  @default(now())
+  lockedUntil DateTime?
+  updatedAt   DateTime  @updatedAt
+}

@@ -13,6 +13,10 @@ export async function createQuickItem(data: {
     userId: string;
     cost?: number; // Optional initial cost
 }) {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' } as any;
+    // Nunca confiar en el usuario enviado por el cliente
+    data.userId = session.id;
     try {
         // Generate a SKU
         const skuPrefix = data.name.substring(0, 3).toUpperCase();

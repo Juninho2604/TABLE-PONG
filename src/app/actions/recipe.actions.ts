@@ -1,5 +1,6 @@
 'use server';
 
+import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
 import { calculateRecipeCost } from '@/server/services/cost.service';
@@ -189,6 +190,10 @@ export async function getIngredientOptionsAction() {
  * Creates a new recipe and its corresponding Output InventoryItem (if needed)
  */
 export async function createRecipeAction(input: CreateRecipeInput): Promise<ActionResult> {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' } as any;
+    // Nunca confiar en el usuario enviado por el cliente
+    input.userId = session.id;
     try {
         // Validation
         if (!input.name || input.ingredients.length === 0) {
@@ -289,6 +294,10 @@ export interface UpdateRecipeInput extends CreateRecipeInput {
 }
 
 export async function updateRecipeAction(input: UpdateRecipeInput): Promise<ActionResult> {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' } as any;
+    // Nunca confiar en el usuario enviado por el cliente
+    input.userId = session.id;
     try {
         if (!input.id || !input.name || input.ingredients.length === 0) {
             return { success: false, message: 'Faltan datos requeridos' };
@@ -393,6 +402,10 @@ export async function updateRecipeCostAction(
     recipeId: string,
     userId: string
 ): Promise<ActionResult> {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' } as any;
+    // Nunca confiar en el usuario enviado por el cliente
+    userId = session.id;
     try {
         console.log(`Calculando costo para receta ${recipeId}...`);
 

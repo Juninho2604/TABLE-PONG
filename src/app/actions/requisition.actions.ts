@@ -1,5 +1,6 @@
 'use server';
 
+import { getSession } from '@/lib/auth';
 import prisma from '@/server/db';
 import { revalidatePath } from 'next/cache';
 import { logAudit, logAuditTx } from '@/lib/audit-log';
@@ -80,6 +81,10 @@ export async function getRequisitions(filter: 'ALL' | 'PENDING' | 'COMPLETED' = 
 
 // 1. CREAR SOLICITUD
 export async function createRequisition(input: CreateRequisitionInput): Promise<ActionResult> {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' } as any;
+    // Nunca confiar en el usuario enviado por el cliente
+    input.requestedById = session.id;
     try {
         const count = await prisma.requisition.count();
         const code = `REQ-${(count + 1).toString().padStart(4, '0')}`;
@@ -150,6 +155,10 @@ export async function dispatchRequisition(input: {
     dispatchedById: string;
     items: { inventoryItemId: string; sentQuantity: number }[];
 }): Promise<ActionResult> {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' } as any;
+    // Nunca confiar en el usuario enviado por el cliente
+    input.dispatchedById = session.id;
     try {
         const req = await prisma.requisition.findUnique({
             where: { id: input.requisitionId },
@@ -219,6 +228,10 @@ export async function dispatchRequisition(input: {
 
 // 2b. APROBAR Y COMPLETAR (Gerente)
 export async function approveRequisition(input: ApproveRequisitionInput): Promise<ActionResult> {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' } as any;
+    // Nunca confiar en el usuario enviado por el cliente
+    input.processedById = session.id;
     try {
         // Buscar la requisición para validar
         const req = await prisma.requisition.findUnique({
@@ -359,6 +372,10 @@ export async function approveRequisition(input: ApproveRequisitionInput): Promis
 
 // 3. RECHAZAR SOLICITUD
 export async function rejectRequisition(requisitionId: string, userId: string): Promise<ActionResult> {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' } as any;
+    // Nunca confiar en el usuario enviado por el cliente
+    userId = session.id;
     try {
         // Validar usuario (Fallback)
         let processorId = userId;
@@ -403,6 +420,10 @@ export async function receiveRequisition(input: {
     items: { inventoryItemId: string; receivedQuantity: number }[];
     notes?: string;
 }): Promise<ActionResult> {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' } as any;
+    // Nunca confiar en el usuario enviado por el cliente
+    input.receivedById = session.id;
     try {
         const req = await prisma.requisition.findUnique({
             where: { id: input.requisitionId },
@@ -559,6 +580,10 @@ export async function executeBulkTransferAction(
     userId: string,
     excludedItemIds: string[] = []
 ): Promise<ActionResult> {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' } as any;
+    // Nunca confiar en el usuario enviado por el cliente
+    userId = session.id;
     try {
         if (sourceAreaId === targetAreaId) {
             return { success: false, message: 'Origen y destino no pueden ser iguales' };

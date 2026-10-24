@@ -67,6 +67,10 @@ export async function incrementPreBillPrintAction(tabId: string) {
  * Se llama automáticamente desde registerOpenTabPaymentAction al cerrar.
  */
 export async function resetPreBillPrintCountAction(tabId: string) {
+    const session = await getSession();
+    if (!session || !['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER'].includes(session.role)) {
+        return { success: false };
+    }
     try {
         await prisma.openTab.update({
             where: { id: tabId },

@@ -1,5 +1,6 @@
 'use server';
 
+import { getSession } from '@/lib/auth';
 import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
 import { UNIT_INFO, convertUnit, UnitOfMeasureType } from '@/lib/constants/units';
@@ -83,6 +84,10 @@ export async function getLoansAction() {
  * Deducts inventory immediately.
  */
 export async function createLoanAction(input: CreateLoanInput) {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' } as any;
+    // Nunca confiar en el usuario enviado por el cliente
+    input.userId = session.id;
     try {
         if (!input.inventoryItemId || !input.loaneeName || !input.quantity) {
             return { success: false, message: 'Faltan datos requeridos' };
@@ -195,6 +200,10 @@ export async function createLoanAction(input: CreateLoanInput) {
  * Resolve a loan (Complete/Pay/Return)
  */
 export async function resolveLoanAction(input: ResolveLoanInput) {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' } as any;
+    // Nunca confiar en el usuario enviado por el cliente
+    input.userId = session.id;
     try {
         const result = await prisma.$transaction(async (tx) => {
             const loan = await tx.inventoryLoan.findUnique({

@@ -1,5 +1,6 @@
 "use client";
 
+import { escapeHtml } from "@/lib/utils";
 import { useEffect, useMemo, useState, useRef } from "react";
 import {
   addItemsToOpenTabAction,
@@ -750,7 +751,7 @@ export default function POSSportBarPage() {
       }
     }
     const allItems = Array.from(itemMap.values())
-      .map(it => `<tr><td>${it.qty}× ${it.name}</td><td style="text-align:right">$${it.total.toFixed(2)}</td></tr>`)
+      .map(it => `<tr><td>${it.qty}× ${escapeHtml(it.name)}</td><td style="text-align:right">$${it.total.toFixed(2)}</td></tr>`)
       .join('');
 
     const svcRowNormal = `<tr><td>10% Servicio</td><td style="text-align:right">$${servicioNormal.toFixed(2)}</td></tr>`;
@@ -772,8 +773,8 @@ export default function POSSportBarPage() {
       </style></head><body>
       <div class="header">
         <div style="font-size:16px;font-weight:bold">${getTenantName().toUpperCase()}</div>
-        <div>Mesa: ${activeTab.tabCode}</div>
-        <div>${activeTab.customerLabel || ''}</div>
+        <div>Mesa: ${escapeHtml(activeTab.tabCode)}</div>
+        <div>${escapeHtml(activeTab.customerLabel || '')}</div>
         <div>${new Date().toLocaleString('es-VE')}</div>
       </div>
       <div class="no-factura">★ ESTADO DE CUENTA — NO VÁLIDO COMO FACTURA ★</div>

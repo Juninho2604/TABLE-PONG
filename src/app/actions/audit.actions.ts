@@ -191,6 +191,7 @@ export async function updateAuditItemAction(input: UpdateAuditItemInput) {
 export async function approveAuditAction(input: ApproveAuditInput) {
     const session = await getSession();
     if (!session?.id) return { success: false, message: 'No autorizado' };
+    if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'].includes(session.role)) return { success: false, message: 'No tienes permisos para esta acción' } as any;
     const userId = session.id;
 
     try {
@@ -353,6 +354,7 @@ export async function approveAuditAction(input: ApproveAuditInput) {
 export async function rejectAuditAction(auditId: string) {
     const session = await getSession();
     if (!session?.id) return { success: false };
+    if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'].includes(session.role)) return { success: false, message: 'No tienes permisos para esta acción' } as any;
 
     try {
         await prisma.inventoryAudit.update({
@@ -468,6 +470,7 @@ export async function voidAuditAction(auditId: string) {
 export async function deleteAuditAction(auditId: string) {
     const session = await getSession();
     if (!session?.id) return { success: false, message: 'No autorizado' };
+    if (!['OWNER', 'ADMIN_MANAGER', 'OPS_MANAGER', 'AUDITOR'].includes(session.role)) return { success: false, message: 'No tienes permisos para esta acción' } as any;
 
     try {
         const audit = await prisma.inventoryAudit.findUnique({ where: { id: auditId } });

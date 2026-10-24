@@ -10,6 +10,7 @@
 
 import { revalidatePath } from 'next/cache';
 import prisma from '@/server/db';
+import { verifyAuthorizerPin } from '@/lib/security';
 import { getSession } from '@/lib/auth';
 import { registerSale, registerAdjustment } from '@/server/services/inventory.service';
 import { logAudit } from '@/lib/audit-log';
@@ -367,20 +368,23 @@ export async function voidSalesOrderAction(
     }
 
     // Validar PIN contra usuario con rol autorizado
-    const authorizer = await prisma.user.findFirst({
-        where: {
-            pin: authorizerPin.trim(),
-            role: { in: VOID_PIN_ROLES },
-            isActive: true
-        },
-        select: { id: true, firstName: true, lastName: true, role: true }
-    });
+    const check = await verifyAuthorizerPin(session.id, authorizerPin, (pins) =>
+        prisma.user.findFirst({
+            where: {
+                pin: { in: pins },
+                role: { in: VOID_PIN_ROLES },
+                isActive: true
+            },
+            select: { id: true, firstName: true, lastName: true, role: true, pin: true }
+        })
+    );
 
-    if (!authorizer && authorizerPin !== '1234') {
-        return { success: false, message: 'PIN incorrecto o sin permisos para anular ventas' };
+    if (!check.ok) {
+        return { success: false, message: check.message === 'PIN inválido' ? 'PIN incorrecto o sin permisos para anular ventas' : check.message };
     }
 
-    const authorizerId = authorizer?.id ?? session.id;
+    const authorizer = check.user;
+    const authorizerId = authorizer.id;
 
     try {
         const order = await prisma.salesOrder.findUnique({

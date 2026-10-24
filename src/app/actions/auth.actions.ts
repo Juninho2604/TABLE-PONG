@@ -3,31 +3,57 @@
 import prisma from '@/server/db';
 import { createSession, deleteSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
+import {
+    LOGIN_THROTTLE,
+    clearThrottle,
+    getLockMinutes,
+    hashPassword,
+    registerFailure,
+    verifyPassword,
+} from '@/lib/security';
+
+const INVALID_CREDENTIALS = 'Email o contraseña incorrectos';
 
 export async function loginAction(prevState: any, formData: FormData) {
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
+    const email = String(formData.get('email') || '').trim().toLowerCase();
+    const password = String(formData.get('password') || '');
 
     if (!email || !password) {
         return { success: false, message: 'Falta email o contraseña' };
     }
 
-    try {
-        const user = await prisma.user.findUnique({
-            where: { email },
-        });
+    const throttleKey = `login:${email}`;
 
-        if (!user) {
-            return { success: false, message: 'Credenciales inválidas (usuario no existe)' };
+    try {
+        const lock = await getLockMinutes(throttleKey);
+        if (lock > 0) {
+            return { success: false, message: `Demasiados intentos fallidos. Intenta en ${lock} min.` };
         }
 
-        // Validación simple (en prod usar bcrypt)
-        if (user.passwordHash !== password) {
-            return { success: false, message: 'Contraseña incorrecta' };
+        const user = await prisma.user.findFirst({
+            where: { email: { equals: email, mode: 'insensitive' } },
+        });
+
+        const { ok, needsRehash } = await verifyPassword(password, user?.passwordHash);
+
+        // Mismo mensaje si el usuario no existe o la clave es incorrecta (no revelar emails)
+        if (!user || !ok || user.deletedAt) {
+            await registerFailure(throttleKey, LOGIN_THROTTLE);
+            return { success: false, message: INVALID_CREDENTIALS };
         }
 
         if (!user.isActive) {
             return { success: false, message: 'Cuenta desactivada. Contacta al admin.' };
+        }
+
+        await clearThrottle(throttleKey);
+
+        // Migración transparente: contraseñas legadas en texto plano pasan a bcrypt
+        if (needsRehash) {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { passwordHash: await hashPassword(password) },
+            });
         }
 
         // Crear sesión segura

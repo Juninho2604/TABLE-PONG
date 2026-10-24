@@ -1,5 +1,6 @@
 'use server';
 
+import { getSession } from '@/lib/auth';
 /**
  * SHANKLISH CARACAS ERP - Inventory Actions (Versión Real con Prisma)
  * 
@@ -67,6 +68,10 @@ function getConversionRate(itemId: string, itemSku: string, fromUnit: string): n
 export async function registrarEntradaMercancia(
     input: EntradaMercanciaInput
 ): Promise<ActionResult> {
+    const session = await getSession();
+    if (!session) return { success: false, message: 'No autorizado' } as any;
+    // Nunca confiar en el usuario enviado por el cliente
+    input.userId = session.id;
     try {
         // 1. Obtener item y validar
         const item = await prisma.inventoryItem.findUnique({
