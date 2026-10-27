@@ -1,4 +1,4 @@
 {
     "framework": "nextjs",
-    "buildCommand": "prisma generate && npx prisma db push --skip-generate --accept-data-loss && next build"
+    "buildCommand": "prisma generate && if [ \"$VERCEL_ENV\" = \"production\" ]; then npx prisma db push --skip-generate --accept-data-loss; else echo 'Preview: se omite prisma db push para no tocar la BD de producción'; fi && next build"
 }
